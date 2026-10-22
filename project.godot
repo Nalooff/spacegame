@@ -10,8 +10,9 @@ config_version=5
 
 [application]
 
-config/name="Vertex Ships"
+config/name="VertexShip"
 config/description="Multiplayer spaceship game with vertex-built modular ships"
+config/version="0.0.1"
 run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
 
