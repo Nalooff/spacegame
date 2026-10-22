@@ -1,0 +1,226 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_s"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_s")
+
+[node name="HudRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="FlightStatusPanel" type="PanelContainer" parent="HudRoot"]
+layout_mode = 1
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 360.0
+offset_bottom = 270.0
+
+[node name="StatusColumn" type="VBoxContainer" parent="HudRoot/FlightStatusPanel"]
+layout_mode = 2
+
+[node name="FlightLabel" type="Label" parent="HudRoot/FlightStatusPanel/StatusColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+
+[node name="HullLabel" type="Label" parent="HudRoot/FlightStatusPanel/StatusColumn"]
+layout_mode = 2
+text = "Hull"
+
+[node name="HullBar" type="ProgressBar" parent="HudRoot/FlightStatusPanel/StatusColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+show_percentage = false
+value = 100.0
+custom_minimum_size = Vector2(0, 14)
+
+[node name="CommanderLabel" type="Label" parent="HudRoot/FlightStatusPanel/StatusColumn"]
+layout_mode = 2
+text = "Commander module"
+
+[node name="CommanderBar" type="ProgressBar" parent="HudRoot/FlightStatusPanel/StatusColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+show_percentage = false
+value = 100.0
+custom_minimum_size = Vector2(0, 14)
+
+[node name="PowerLabel" type="Label" parent="HudRoot/FlightStatusPanel/StatusColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+
+[node name="PowerBar" type="ProgressBar" parent="HudRoot/FlightStatusPanel/StatusColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+show_percentage = false
+value = 100.0
+custom_minimum_size = Vector2(0, 14)
+
+[node name="RcsLabel" type="Label" parent="HudRoot/FlightStatusPanel/StatusColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+
+[node name="BannerLabel" type="Label" parent="HudRoot"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 30.0
+offset_right = 300.0
+offset_bottom = 80.0
+grow_horizontal = 2
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 30
+modulate = Color(1, 0.8, 0.3, 1)
+
+[node name="PlayersPanel" type="PanelContainer" parent="HudRoot"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -220.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 160.0
+grow_horizontal = 0
+
+[node name="PlayersColumn" type="VBoxContainer" parent="HudRoot/PlayersPanel"]
+layout_mode = 2
+
+[node name="PlayersLabel" type="Label" parent="HudRoot/PlayersPanel/PlayersColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+
+[node name="LeaveButton" type="Button" parent="HudRoot/PlayersPanel/PlayersColumn"]
+layout_mode = 2
+text = "Leave game"
+
+[node name="AutopilotPanel" type="PanelContainer" parent="HudRoot"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -430.0
+offset_top = -170.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="AutopilotColumn" type="VBoxContainer" parent="HudRoot/AutopilotPanel"]
+layout_mode = 2
+
+[node name="AutopilotTitleLabel" type="Label" parent="HudRoot/AutopilotPanel/AutopilotColumn"]
+layout_mode = 2
+text = "COORDINATE AUTOPILOT  (flies there and stops)"
+autowrap_mode = 3
+
+[node name="CoordinatesRow" type="HBoxContainer" parent="HudRoot/AutopilotPanel/AutopilotColumn"]
+layout_mode = 2
+
+[node name="XLabel" type="Label" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
+layout_mode = 2
+text = "X"
+
+[node name="XSpin" type="SpinBox" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -100000
+max_value = 100000
+step = 0.1
+value = 0
+size_flags_horizontal = 3
+allow_greater = true
+allow_lesser = true
+update_on_text_changed = true
+
+[node name="YLabel" type="Label" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
+layout_mode = 2
+text = "Y"
+
+[node name="YSpin" type="SpinBox" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -100000
+max_value = 100000
+step = 0.1
+value = 0
+size_flags_horizontal = 3
+allow_greater = true
+allow_lesser = true
+update_on_text_changed = true
+
+[node name="ZLabel" type="Label" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
+layout_mode = 2
+text = "Z"
+
+[node name="ZSpin" type="SpinBox" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -100000
+max_value = 100000
+step = 0.1
+value = 0
+size_flags_horizontal = 3
+allow_greater = true
+allow_lesser = true
+update_on_text_changed = true
+
+[node name="AutopilotButtonsRow" type="HBoxContainer" parent="HudRoot/AutopilotPanel/AutopilotColumn"]
+layout_mode = 2
+
+[node name="GoButton" type="Button" parent="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow"]
+layout_mode = 2
+text = "GO"
+
+[node name="BrakeButton" type="Button" parent="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow"]
+layout_mode = 2
+text = "Brake (X)"
+
+[node name="CancelButton" type="Button" parent="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow"]
+layout_mode = 2
+text = "Cancel"
+
+[node name="HereButton" type="Button" parent="HudRoot/AutopilotPanel/AutopilotColumn"]
+layout_mode = 2
+text = "Use my position"
+
+[node name="ControlsHelpLabel" type="Label" parent="HudRoot"]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -150.0
+offset_right = 600.0
+offset_bottom = -10.0
+grow_vertical = 0
+vertical_alignment = 2
+modulate = Color(1, 1, 1, 0.6)
+text = "W/S forward/back  A/D strafe  Space/C up/down  Arrows pitch/yaw  Q/E roll\nLMB fire at cursor   RMB drag orbit camera   Wheel zoom\nX brake   T flight-assist on/off   Any manual key cancels the autopilot"
+
+[node name="BannerTimer" type="Timer" parent="HudRoot"]
+unique_name_in_owner = true
+wait_time = 3.0
+one_shot = true
+
+[connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow/GoButton" to="." method="_on_go_pressed"]
+[connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow/BrakeButton" to="." method="_on_brake_pressed"]
+[connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow/CancelButton" to="." method="_on_cancel_pressed"]
+[connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/HereButton" to="." method="_on_here_pressed"]
+[connection signal="pressed" from="HudRoot/PlayersPanel/PlayersColumn/LeaveButton" to="." method="_on_leave_pressed"]
+[connection signal="timeout" from="HudRoot/BannerTimer" to="." method="_on_banner_timer_timeout"]

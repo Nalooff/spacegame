@@ -1,0 +1,195 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/lobby_browser.gd" id="1_s"]
+
+[node name="LobbyBrowser" type="Control"]
+script = ExtResource("1_s")
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BackgroundColor" type="ColorRect" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.03, 0.04, 0.07, 1)
+
+[node name="BrowserMargin" type="MarginContainer" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 30
+
+[node name="BrowserColumns" type="HBoxContainer" parent="BrowserMargin"]
+layout_mode = 2
+theme_override_constants/separation = 30
+
+[node name="HostColumn" type="VBoxContainer" parent="BrowserMargin/BrowserColumns"]
+layout_mode = 2
+theme_override_constants/separation = 8
+custom_minimum_size = Vector2(380, 0)
+
+[node name="PlayTitleLabel" type="Label" parent="BrowserMargin/BrowserColumns/HostColumn"]
+layout_mode = 2
+text = "PLAY"
+theme_override_font_sizes/font_size = 28
+
+[node name="PilotNameRow" type="HBoxContainer" parent="BrowserMargin/BrowserColumns/HostColumn"]
+layout_mode = 2
+
+[node name="PilotNameLabel" type="Label" parent="BrowserMargin/BrowserColumns/HostColumn/PilotNameRow"]
+layout_mode = 2
+text = "Pilot name"
+
+[node name="PilotNameEdit" type="LineEdit" parent="BrowserMargin/BrowserColumns/HostColumn/PilotNameRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Pilot"
+size_flags_horizontal = 3
+
+[node name="HostSeparator" type="HSeparator" parent="BrowserMargin/BrowserColumns/HostColumn"]
+layout_mode = 2
+
+[node name="HostHeading" type="Label" parent="BrowserMargin/BrowserColumns/HostColumn"]
+layout_mode = 2
+text = "HOST A LOBBY"
+theme_override_font_sizes/font_size = 20
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="LobbyNameLabel" type="Label" parent="BrowserMargin/BrowserColumns/HostColumn"]
+layout_mode = 2
+text = "Lobby name"
+
+[node name="LobbyNameEdit" type="LineEdit" parent="BrowserMargin/BrowserColumns/HostColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+size_flags_horizontal = 3
+placeholder_text = "My lobby"
+
+[node name="VisibilityPicker" type="OptionButton" parent="BrowserMargin/BrowserColumns/HostColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+item_count = 2
+selected = 0
+popup/item_0/text = "Public (anyone can join)"
+popup/item_0/id = 0
+popup/item_1/text = "Private (password)"
+popup/item_1/id = 1
+
+[node name="PasswordRow" type="HBoxContainer" parent="BrowserMargin/BrowserColumns/HostColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+
+[node name="PasswordLabel" type="Label" parent="BrowserMargin/BrowserColumns/HostColumn/PasswordRow"]
+layout_mode = 2
+text = "Password"
+
+[node name="PasswordEdit" type="LineEdit" parent="BrowserMargin/BrowserColumns/HostColumn/PasswordRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+size_flags_horizontal = 3
+secret = true
+placeholder_text = "Password"
+
+[node name="CreateLobbyButton" type="Button" parent="BrowserMargin/BrowserColumns/HostColumn"]
+layout_mode = 2
+text = "Create lobby"
+custom_minimum_size = Vector2(0, 48)
+
+[node name="HostStatusLabel" type="Label" parent="BrowserMargin/BrowserColumns/HostColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+
+[node name="BrowseColumn" type="VBoxContainer" parent="BrowserMargin/BrowserColumns"]
+layout_mode = 2
+theme_override_constants/separation = 8
+size_flags_horizontal = 3
+
+[node name="BrowseHeading" type="Label" parent="BrowserMargin/BrowserColumns/BrowseColumn"]
+layout_mode = 2
+text = "OPEN LOBBIES  (lock = private)"
+theme_override_font_sizes/font_size = 20
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="LobbyTree" type="Tree" parent="BrowserMargin/BrowserColumns/BrowseColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+columns = 3
+column_titles_visible = true
+hide_root = true
+select_mode = 0
+
+[node name="BrowseStatusLabel" type="Label" parent="BrowserMargin/BrowserColumns/BrowseColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Looking for lobbies on your network..."
+autowrap_mode = 3
+
+[node name="BrowseButtonsRow" type="HBoxContainer" parent="BrowserMargin/BrowserColumns/BrowseColumn"]
+layout_mode = 2
+
+[node name="RefreshButton" type="Button" parent="BrowserMargin/BrowserColumns/BrowseColumn/BrowseButtonsRow"]
+layout_mode = 2
+text = "Refresh"
+
+[node name="JoinLobbyButton" type="Button" parent="BrowserMargin/BrowserColumns/BrowseColumn/BrowseButtonsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Join selected lobby"
+disabled = true
+
+[node name="BackButton" type="Button" parent="BrowserMargin/BrowserColumns/BrowseColumn/BrowseButtonsRow"]
+layout_mode = 2
+text = "Back to menu"
+
+[node name="PasswordDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Private lobby"
+ok_button_text = "Join"
+size = Vector2i(360, 140)
+
+[node name="PasswordDialogColumn" type="VBoxContainer" parent="PasswordDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 352.0
+offset_bottom = 91.0
+
+[node name="PasswordPromptLabel" type="Label" parent="PasswordDialog/PasswordDialogColumn"]
+layout_mode = 2
+text = "This lobby needs a password:"
+
+[node name="JoinPasswordEdit" type="LineEdit" parent="PasswordDialog/PasswordDialogColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+size_flags_horizontal = 3
+secret = true
+placeholder_text = "Password"
+
+[connection signal="text_changed" from="BrowserMargin/BrowserColumns/HostColumn/PilotNameRow/PilotNameEdit" to="." method="_on_pilot_name_changed"]
+[connection signal="item_selected" from="BrowserMargin/BrowserColumns/HostColumn/VisibilityPicker" to="." method="_on_visibility_selected"]
+[connection signal="pressed" from="BrowserMargin/BrowserColumns/HostColumn/CreateLobbyButton" to="." method="_on_create_pressed"]
+[connection signal="pressed" from="BrowserMargin/BrowserColumns/BrowseColumn/BrowseButtonsRow/RefreshButton" to="." method="_on_refresh_pressed"]
+[connection signal="pressed" from="BrowserMargin/BrowserColumns/BrowseColumn/BrowseButtonsRow/JoinLobbyButton" to="." method="_on_join_pressed"]
+[connection signal="pressed" from="BrowserMargin/BrowserColumns/BrowseColumn/BrowseButtonsRow/BackButton" to="." method="_on_back_pressed"]
+[connection signal="item_selected" from="BrowserMargin/BrowserColumns/BrowseColumn/LobbyTree" to="." method="_on_lobby_selected"]
+[connection signal="item_activated" from="BrowserMargin/BrowserColumns/BrowseColumn/LobbyTree" to="." method="_on_join_pressed"]
+[connection signal="confirmed" from="PasswordDialog" to="." method="_on_password_confirmed"]

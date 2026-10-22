@@ -1,0 +1,747 @@
+class_name ShipDesign
+extends RefCounted
+## A ship blueprint.
+##
+##  * `vertices` is ONE shared pool of points.
+##  * Every external module owns a FaceSet (flat polygon faces made of vertex ids, wound outward).
+##    Two modules that use the same vertex id are LINKED (Flyout-style): moving it moves both shells.
+##  * Edges are not stored, they are the sides of the faces (see module_edges()).
+##  * Internal modules (electricity / gyroscope / RCS) have no shell; here they are only scale factors.
+##
+## Module dictionary layout:
+##   { "type": "hull"|"armor"|"thruster"|"turret"|"commander",
+##     "fs": FaceSet,
+##     "material": String ("" = default of the type),  "crew": int (commander only)
+##     "dir": Vector3, "power": float }                (thrusters only)
+##   runtime only (never saved by JSON): "sums": PackedFloat64Array, see module_sums()
+##
+## SCALE: every function here is linear in the size of the module (no nested scans over all vertices),
+## so a ship with millions of vertices loads in seconds. Small editing helpers (faces_array / set_faces_array)
+## convert to plain arrays: fine for editing, not meant for the flight loop.
+##
+## Shapes should be roughly convex: collision uses a (decimated) convex hull of each module.
+
+const PRETTY_JSON_MAX_VERTICES := 20000  # bigger ships are saved as compressed binary (.ship)
+const BINARY_MAGIC := "VSHP"
+
+var ship_name: String = "New Ship"
+var vertices: PackedVector3Array = PackedVector3Array()
+var modules: Array[Dictionary] = []
+var reactor_scale: float = 1.0 # electricity output vs. recommended
+var gyro_scale: float = 1.0    # gyroscope torque vs. recommended
+
+
+# =====================================================================
+#  Adding / removing modules
+# =====================================================================
+## Adds a primitive ("box", "cylinder", ...) scaled by `half_size`, centred on `center`.
+func add_module(type: String, primitive: String, center: Vector3, half_size: Vector3, segments: int = 12) -> int:
+	var p: Dictionary = Primitives.make(primitive, segments)
+	var local_verts: Array[Vector3] = []
+	for v in p["verts"]:
+		local_verts.append(center + (v as Vector3) * half_size)
+	return add_module_from_mesh(type, local_verts, p["faces"])
+
+
+## Adds a module from raw data. `local_faces` index into `local_verts`.
+func add_module_from_mesh(type: String, local_verts: Array[Vector3], local_faces: Array) -> int:
+	var first := vertices.size()
+	for v in local_verts:
+		vertices.append(v)
+	var fs := FaceSet.new()
+	for f in local_faces:
+		var loop := PackedInt32Array()
+		for i in (f as PackedInt32Array):
+			loop.append(first + i)
+		fs.append(loop)
+	modules.append({"type": type, "fs": fs, "dir": Vector3(0, 0, -1),
+		"power": ModuleCatalog.THRUSTER_DEFAULT_POWER, "material": "", "crew": 1})
+	fix_winding(modules.size() - 1)
+	return modules.size() - 1
+
+
+func remove_module(mi: int) -> void:
+	modules.remove_at(mi)
+	prune_vertices()
+
+
+## Copy of module `mi` with its own (unlinked) vertices.
+func duplicate_module(mi: int, offset: Vector3 = Vector3.ZERO) -> int:
+	var remap_ids := PackedInt32Array()
+	remap_ids.resize(vertices.size())
+	remap_ids.fill(-1)
+	var src: FaceSet = modules[mi]["fs"]
+	src.compact()
+	var fs := src.duplicate()
+	for k in fs.ids.size():
+		var id := fs.ids[k]
+		if remap_ids[id] < 0:
+			vertices.append(vertices[id] + offset)
+			remap_ids[id] = vertices.size() - 1
+		fs.ids[k] = remap_ids[id]
+	modules.append({"type": modules[mi]["type"], "fs": fs, "dir": modules[mi]["dir"], "power": modules[mi]["power"],
+		"material": modules[mi].get("material", ""), "crew": modules[mi].get("crew", 1)})
+	return modules.size() - 1
+
+
+## Material id of module `mi` (its own, or the default of its type).
+func material_of(mi: int) -> String:
+	var m: String = modules[mi].get("material", "")
+	return m if MaterialCatalog.MATERIALS.has(m) else MaterialCatalog.default_for(modules[mi]["type"])
+
+
+## How many people (pilot included) this ship holds. Set on the COMMANDER module.
+func crew_capacity() -> int:
+	for m in modules:
+		if m["type"] == ModuleCatalog.COMMANDER:
+			return clampi(int(m.get("crew", 1)), ModuleCatalog.CREW_MIN, ModuleCatalog.CREW_MAX)
+	return 1
+
+
+## Mirror copy of module `mi` across the YZ plane (x -> -x).
+func mirror_module(mi: int) -> int:
+	var n := duplicate_module(mi)
+	for id in module_vertex_ids(n):
+		vertices[id] = Vector3(-vertices[id].x, vertices[id].y, vertices[id].z)
+	var d: Vector3 = modules[n]["dir"]
+	modules[n]["dir"] = Vector3(-d.x, d.y, d.z)
+	fix_winding(n) # mirroring flips the winding
+	return n
+
+
+# ---- editing helpers: faces as plain arrays (builder / MeshOps work on these) -------------
+func faces_array(mi: int) -> Array[PackedInt32Array]:
+	var fs: FaceSet = modules[mi]["fs"]
+	fs.compact()
+	return fs.to_array()
+
+
+func set_faces_array(mi: int, faces: Array) -> void:
+	modules[mi]["fs"] = FaceSet.from_array(faces)
+	modules[mi].erase("sums")
+
+
+## Move every vertex (and keep the cached physical sums valid, so nothing has to be recomputed).
+func translate_all(offset: Vector3) -> void:
+	vertices = Transform3D(Basis.IDENTITY, offset) * vertices
+	for m in modules:
+		if m.has("sums"):
+			var s: PackedFloat64Array = m["sums"]
+			var vol := s[0]
+			var vp := Vector3(s[1], s[2], s[3])
+			var vp2 := Vector3(s[4], s[5], s[6])
+			var o := offset
+			var nvp := vp + o * vol
+			var nvp2 := vp2 + 2.0 * o * vp + o * o * vol
+			s[1] = nvp.x; s[2] = nvp.y; s[3] = nvp.z
+			s[4] = nvp2.x; s[5] = nvp2.y; s[6] = nvp2.z
+			s[8] += o.x; s[9] += o.y; s[10] += o.z
+			m["sums"] = s
+
+
+## Forget cached physical sums (call after moving vertices by hand).
+func invalidate() -> void:
+	for m in modules:
+		m.erase("sums")
+
+
+# =====================================================================
+#  Vertex pool: linking
+# =====================================================================
+## Merge several vertices into ONE shared vertex (the lowest id, placed at their average).
+## Returns the id of the merged vertex.
+func merge_vertices(ids: Array[int]) -> int:
+	if ids.is_empty():
+		return -1
+	var target: int = ids[0]
+	var centre := Vector3.ZERO
+	for id in ids:
+		target = mini(target, id)
+		centre += vertices[id]
+	vertices[target] = centre / ids.size()
+	for id in ids:
+		if id != target:
+			_replace_vertex_id(id, target)
+	prune_vertices()
+	return target
+
+
+## Merge vertex `b` into `a` (both modules now share one point).
+func link_vertices(a: int, b: int) -> void:
+	if a == b:
+		return
+	_replace_vertex_id(b, a)
+	prune_vertices()
+
+
+func _replace_vertex_id(old_id: int, new_id: int) -> void:
+	for m in modules:
+		var fs: FaceSet = m["fs"]
+		for k in fs.ids.size():
+			if fs.ids[k] == old_id:
+				fs.ids[k] = new_id
+
+
+## Give module `mi` its own copy of vertex `id` (undo a link). Returns the new id.
+func unlink_vertex(mi: int, id: int) -> int:
+	vertices.append(vertices[id])
+	var new_id := vertices.size() - 1
+	var fs: FaceSet = modules[mi]["fs"]
+	for k in fs.ids.size():
+		if fs.ids[k] == id:
+			fs.ids[k] = new_id
+	return new_id
+
+
+## How many modules use each vertex (index = vertex id). 2+ means the vertex is linked.
+func vertex_user_counts() -> PackedInt32Array:
+	var counts := PackedInt32Array()
+	counts.resize(vertices.size())
+	for i in modules.size():
+		var mark := _vertex_mask(i)
+		for id in mark.size():
+			if mark[id] != 0:
+				counts[id] += 1
+	return counts
+
+
+func vertex_users(id: int) -> Array[int]:
+	var out: Array[int] = []
+	for i in modules.size():
+		if (modules[i]["fs"] as FaceSet).ids.has(id):
+			out.append(i)
+	return out
+
+
+## Remove unused vertices and renumber the rest (also drops duplicate ids inside a face).
+func prune_vertices() -> void:
+	var used := PackedByteArray()
+	used.resize(vertices.size())
+	for m in modules:
+		var fs: FaceSet = m["fs"]
+		for fi in fs.count():
+			var s := fs.starts[fi]
+			for k in fs.sizes[fi]:
+				used[fs.ids[s + k]] = 1
+	var remap_ids := PackedInt32Array()
+	remap_ids.resize(vertices.size())
+	var new_pool := PackedVector3Array()
+	for id in vertices.size():
+		if used[id] != 0:
+			remap_ids[id] = new_pool.size()
+			new_pool.append(vertices[id])
+	for m in modules:
+		var fs: FaceSet = m["fs"]
+		var cleaned := FaceSet.new()
+		for fi in fs.count():
+			if fs.sizes[fi] == 0:
+				continue
+			var loop := PackedInt32Array()
+			for id in fs.face(fi):
+				var nid := remap_ids[id]
+				if loop.is_empty() or loop[loop.size() - 1] != nid:
+					loop.append(nid)
+			if loop.size() > 1 and loop[0] == loop[loop.size() - 1]:
+				loop.remove_at(loop.size() - 1)
+			if loop.size() >= 3:
+				cleaned.append(loop)
+		m["fs"] = cleaned
+		m.erase("sums")
+	vertices = new_pool
+
+
+# =====================================================================
+#  Geometry queries (all linear)
+# =====================================================================
+## 1 for every vertex id the module uses (size = vertices.size()).
+func _vertex_mask(mi: int) -> PackedByteArray:
+	var mark := PackedByteArray()
+	mark.resize(vertices.size())
+	var fs: FaceSet = modules[mi]["fs"]
+	if fs.dead == 0:
+		for id in fs.ids:
+			mark[id] = 1
+	else:
+		for fi in fs.count():
+			var s := fs.starts[fi]
+			for k in fs.sizes[fi]:
+				mark[fs.ids[s + k]] = 1
+	return mark
+
+
+## Sorted list of the vertex ids a module uses.
+func module_vertex_ids(mi: int) -> PackedInt32Array:
+	var mark := _vertex_mask(mi)
+	var out := PackedInt32Array()
+	for id in mark.size():
+		if mark[id] != 0:
+			out.append(id)
+	return out
+
+
+func module_points(mi: int) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for id in module_vertex_ids(mi):
+		out.append(vertices[id])
+	return out
+
+
+## Average of the module's (unique) vertices.
+func module_centroid(mi: int) -> Vector3:
+	var mark := _vertex_mask(mi)
+	var c := Vector3.ZERO
+	var n := 0
+	for id in mark.size():
+		if mark[id] != 0:
+			c += vertices[id]
+			n += 1
+	return c / maxf(n, 1)
+
+
+## Unique edges (a < b) of a module = the sides of its faces.
+func module_edges(mi: int) -> Array[Vector2i]:
+	var seen := {}
+	var out: Array[Vector2i] = []
+	var fs: FaceSet = modules[mi]["fs"]
+	for fi in fs.count():
+		var n := fs.sizes[fi]
+		if n == 0:
+			continue
+		var s := fs.starts[fi]
+		for k in n:
+			var a := fs.ids[s + k]
+			var b := fs.ids[s + (k + 1) % n]
+			var key := (mini(a, b) << 32) | maxi(a, b)
+			if not seen.has(key):
+				seen[key] = true
+				out.append(Vector2i(mini(a, b), maxi(a, b)))
+	return out
+
+
+func face_center(mi: int, fi: int) -> Vector3:
+	var ids := (modules[mi]["fs"] as FaceSet).face(fi)
+	var c := Vector3.ZERO
+	for id in ids:
+		c += vertices[id]
+	return c / maxf(ids.size(), 1)
+
+
+## Faces are always stored wound outward, so this is just the face itself.
+func face_outward(mi: int, fi: int) -> PackedInt32Array:
+	return (modules[mi]["fs"] as FaceSet).face(fi)
+
+
+static func newell_normal(vs: PackedVector3Array, loop: PackedInt32Array) -> Vector3:
+	var n := Vector3.ZERO
+	for k in loop.size():
+		var a := vs[loop[k]]
+		var b := vs[loop[(k + 1) % loop.size()]]
+		n += Vector3((a.y - b.y) * (a.z + b.z), (a.z - b.z) * (a.x + b.x), (a.x - b.x) * (a.y + b.y))
+	return n
+
+
+## Turn every face so it looks OUTWARD from the module's centre. Run after anything that can flip winding.
+func fix_winding(mi: int) -> void:
+	var fs: FaceSet = modules[mi]["fs"]
+	var centroid := module_centroid(mi)
+	for fi in fs.count():
+		var n := fs.sizes[fi]
+		if n < 3:
+			continue
+		var s := fs.starts[fi]
+		var nrm := Vector3.ZERO
+		var fc := Vector3.ZERO
+		for k in n:
+			var a := vertices[fs.ids[s + k]]
+			var b := vertices[fs.ids[s + (k + 1) % n]]
+			nrm += Vector3((a.y - b.y) * (a.z + b.z), (a.z - b.z) * (a.x + b.x), (a.x - b.x) * (a.y + b.y))
+			fc += a
+		if nrm.dot(fc / n - centroid) < 0.0:
+			fs.reverse(fi)
+	modules[mi].erase("sums")
+
+
+## Triangle list (3 points per triangle), every face fanned. `tri_face` (optional out) gets each triangle's face index.
+func module_tris(mi: int, tri_face: PackedInt32Array = PackedInt32Array()) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var fs: FaceSet = modules[mi]["fs"]
+	for fi in fs.count():
+		var n := fs.sizes[fi]
+		if n < 3:
+			continue
+		var s := fs.starts[fi]
+		var v0 := vertices[fs.ids[s]]
+		for k in range(1, n - 1):
+			out.append(v0)
+			out.append(vertices[fs.ids[s + k]])
+			out.append(vertices[fs.ids[s + k + 1]])
+			tri_face.append(fi)
+	return out
+
+
+func module_volume(mi: int) -> float:
+	return module_sums(mi)[0]
+
+
+func face_count_total() -> int:
+	var n := 0
+	for m in modules:
+		n += (m["fs"] as FaceSet).alive_count()
+	return n
+
+
+# =====================================================================
+#  Physical sums (mass, centre of mass, inertia) - cached per module
+# =====================================================================
+## Add one face's contribution to `acc` (8 numbers) using `apex` as the tetrahedron tip:
+##   acc[0] = volume,  acc[1..3] = sum(volume * position),  acc[4..6] = sum(volume * position^2),  acc[7] = self term
+## Because the apex is fixed, a dent only has to subtract the old faces and add the new ones.
+static func accumulate_face(vs: PackedVector3Array, ids: PackedInt32Array, start: int, n: int, apex: Vector3,
+		acc: PackedFloat64Array, factor: float = 1.0) -> void:
+	var v0 := vs[ids[start]]
+	for k in range(1, n - 1):
+		var v1 := vs[ids[start + k]]
+		var v2 := vs[ids[start + k + 1]]
+		var tv := (v0 - apex).dot((v1 - apex).cross(v2 - apex)) / 6.0 * factor # signed: faces are wound outward
+		var tp := (v0 + v1 + v2 + apex) * 0.25
+		acc[0] += tv
+		acc[1] += tv * tp.x
+		acc[2] += tv * tp.y
+		acc[3] += tv * tp.z
+		acc[4] += tv * tp.x * tp.x
+		acc[5] += tv * tp.y * tp.y
+		acc[6] += tv * tp.z * tp.z
+		acc[7] += tv * 0.2 * pow(absf(tv), 2.0 / 3.0)
+
+
+## Cached sums of a module: [volume, vp.x, vp.y, vp.z, vp2.x, vp2.y, vp2.z, self, apex.x, apex.y, apex.z]
+func module_sums(mi: int) -> PackedFloat64Array:
+	var m: Dictionary = modules[mi]
+	if m.has("sums"):
+		return m["sums"]
+	var apex := module_centroid(mi)
+	var acc := PackedFloat64Array()
+	acc.resize(11)
+	var fs: FaceSet = m["fs"]
+	for fi in fs.count():
+		if fs.sizes[fi] >= 3:
+			accumulate_face(vertices, fs.ids, fs.starts[fi], fs.sizes[fi], apex, acc)
+	acc[8] = apex.x
+	acc[9] = apex.y
+	acc[10] = apex.z
+	m["sums"] = acc
+	return acc
+
+
+## Returns {mass, shell_mass, com, inertia: Vector3, modules: [{centroid, volume, mass, hp, type, material}],
+##          thrusters: [{pos, dir, power, module}], turrets: [{pos, module}], commander_pos}
+## Positions are in design space (origin = design origin).
+func compute_props() -> Dictionary:
+	var total_m := 0.0
+	var mom := Vector3.ZERO
+	var s2 := Vector3.ZERO
+	var self_sum := 0.0
+	var mod_info: Array = []
+	var thr: Array = []
+	var tur: Array = []
+	var cmd_pos := Vector3.ZERO
+	for i in modules.size():
+		var type: String = modules[i]["type"]
+		var info: Dictionary = ModuleCatalog.TYPE_INFO[type]
+		var density: float = float(info["density"]) * float(MaterialCatalog.info(material_of(i))["density_mult"])
+		var sums := module_sums(i)
+		var c := Vector3(sums[8], sums[9], sums[10])
+		var vol: float = sums[0]
+		total_m += vol * density
+		mom += Vector3(sums[1], sums[2], sums[3]) * density
+		s2 += Vector3(sums[4], sums[5], sums[6]) * density
+		self_sum += sums[7] * density
+		mod_info.append({
+			"centroid": c, "volume": vol, "mass": vol * density, "type": type, "material": material_of(i),
+			"hp": maxf(ModuleCatalog.MIN_HP, vol * info["hp_per_m3"]),
+		})
+		if type == ModuleCatalog.THRUSTER:
+			var d: Vector3 = modules[i]["dir"]
+			thr.append({"pos": c, "dir": d.normalized() if d.length() > 0.0001 else Vector3(0, 0, -1),
+				"power": float(modules[i]["power"]), "module": i})
+		elif type == ModuleCatalog.TURRET:
+			tur.append({"pos": c, "module": i})
+		elif type == ModuleCatalog.COMMANDER:
+			cmd_pos = c
+	var com := mom / total_m if total_m > 0.0 else Vector3.ZERO
+	# inertia about the CoM, diagonal only (Godot RigidBody3D takes a Vector3)
+	var ixx := s2.y + s2.z - total_m * (com.y * com.y + com.z * com.z) + self_sum
+	var iyy := s2.x + s2.z - total_m * (com.x * com.x + com.z * com.z) + self_sum
+	var izz := s2.x + s2.y - total_m * (com.x * com.x + com.y * com.y) + self_sum
+	var internal_mass := 120.0 * reactor_scale + 80.0 * gyro_scale # internal systems only add mass
+	var mass_all := total_m + internal_mass
+	var floor_i := 0.02 * mass_all
+	return {
+		"mass": maxf(mass_all, 1.0), "shell_mass": total_m, "com": com,
+		"inertia": Vector3(maxf(ixx, floor_i), maxf(iyy, floor_i), maxf(izz, floor_i)),
+		"modules": mod_info, "thrusters": thr, "turrets": tur, "commander_pos": cmd_pos,
+	}
+
+
+# =====================================================================
+#  Checks
+# =====================================================================
+func validate() -> Array[String]:
+	var errors: Array[String] = []
+	var commanders := 0
+	var thrusters := 0
+	for i in modules.size():
+		var t: String = modules[i]["type"]
+		if t == ModuleCatalog.COMMANDER:
+			commanders += 1
+		elif t == ModuleCatalog.THRUSTER:
+			thrusters += 1
+		if (modules[i]["fs"] as FaceSet).alive_count() < 4 or module_volume(i) < 0.001:
+			errors.append("Module %d (%s) is flat or has no volume." % [i, t])
+	if commanders != 1:
+		errors.append("A ship needs exactly ONE Commander module (it has %d)." % commanders)
+	if thrusters < 1:
+		errors.append("A ship needs at least one thruster.")
+	return errors
+
+
+# =====================================================================
+#  Meshing for the BUILDER (flat shaded, vertex colours). The game uses HullRenderer instead.
+# =====================================================================
+## `health_ratio[i]` in 0..1 (<= 0 = destroyed, skipped). `highlight` = module indices drawn lighter.
+func build_mesh(health_ratio: PackedFloat32Array = PackedFloat32Array(), highlight: Array = []) -> ArrayMesh:
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var cols := PackedColorArray()
+	for i in modules.size():
+		var ratio := 1.0
+		if i < health_ratio.size():
+			ratio = health_ratio[i]
+		if ratio <= 0.0:
+			continue
+		var col := ModuleCatalog.color_of(modules[i]["type"]).lerp(Color(0.12, 0.05, 0.04), (1.0 - ratio) * 0.8)
+		if highlight.has(i):
+			col = col.lightened(0.4)
+		var tris := module_tris(i)
+		var count := tris.size()
+		var first := verts.size()
+		verts.append_array(tris)
+		norms.resize(first + count)
+		cols.resize(first + count)
+		for t in range(0, count, 3):
+			var n := (tris[t + 1] - tris[t]).cross(tris[t + 2] - tris[t]).normalized()
+			norms[first + t] = n
+			norms[first + t + 1] = n
+			norms[first + t + 2] = n
+		for t in count:
+			cols[first + t] = col
+	var mesh := ArrayMesh.new()
+	if verts.is_empty():
+		return mesh
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = norms
+	arrays[Mesh.ARRAY_COLOR] = cols
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+# =====================================================================
+#  Save / load:  readable JSON for normal ships, compressed binary for huge ones
+# =====================================================================
+func to_dict() -> Dictionary:
+	var vs: Array = []
+	for v in vertices:
+		vs.append([v.x, v.y, v.z])
+	var ms: Array = []
+	for m in modules:
+		var faces: Array = []
+		for f in (m["fs"] as FaceSet).to_array():
+			faces.append(Array(f))
+		var entry := {"type": m["type"], "faces": faces}
+		if m.get("material", "") != "":
+			entry["material"] = m["material"]
+		if m["type"] == ModuleCatalog.COMMANDER:
+			entry["crew"] = int(m.get("crew", 1))
+		if m["type"] == ModuleCatalog.THRUSTER:
+			var d: Vector3 = m["dir"]
+			entry["dir"] = [d.x, d.y, d.z]
+			entry["power"] = m["power"]
+		ms.append(entry)
+	return {"name": ship_name, "reactor_scale": reactor_scale, "gyro_scale": gyro_scale,
+		"vertices": vs, "modules": ms}
+
+
+static func from_dict(data: Dictionary) -> ShipDesign:
+	var s := ShipDesign.new()
+	s.ship_name = str(data.get("name", "Ship"))
+	s.reactor_scale = float(data.get("reactor_scale", 1.0))
+	s.gyro_scale = float(data.get("gyro_scale", 1.0))
+	for v in data.get("vertices", []):
+		s.vertices.append(Vector3(v[0], v[1], v[2]))
+	for m in data.get("modules", []):
+		var fs := FaceSet.new()
+		if m.has("faces"):
+			for f in m["faces"]:
+				var ids := PackedInt32Array()
+				for id in f:
+					ids.append(int(id))
+				fs.append(ids)
+		else: # old format: {"shape": "box", "v": [ids]} -> expand through the primitive
+			var prim: Dictionary = Primitives.make(str(m["shape"]))
+			var v_ids: Array = m["v"]
+			for lf in prim["faces"]:
+				var ids := PackedInt32Array()
+				for li in (lf as PackedInt32Array):
+					ids.append(int(v_ids[li]))
+				fs.append(ids)
+		var d: Array = m.get("dir", [0, 0, -1])
+		s.modules.append({"type": str(m["type"]), "fs": fs,
+			"dir": Vector3(d[0], d[1], d[2]), "power": float(m.get("power", ModuleCatalog.THRUSTER_DEFAULT_POWER)),
+			"material": str(m.get("material", "")), "crew": int(m.get("crew", 1))})
+	# older / hand-made files may have any winding: make it canonical once
+	for i in s.modules.size():
+		s.fix_winding(i)
+	return s
+
+
+## Compact JSON (small ships, tests).
+func to_json() -> String:
+	return JSON.stringify(to_dict())
+
+
+## Human-readable JSON: one vertex per line, one face per line, one module per block.
+func to_pretty_json() -> String:
+	var d := to_dict()
+	var out := "{\n"
+	out += "\t\"name\": %s,\n" % JSON.stringify(d["name"])
+	out += "\t\"reactor_scale\": %s,\n" % str(d["reactor_scale"])
+	out += "\t\"gyro_scale\": %s,\n" % str(d["gyro_scale"])
+	out += "\t\"vertices\": [\n"
+	var vlines: Array[String] = []
+	for v in d["vertices"]:
+		vlines.append("\t\t[%s, %s, %s]" % [str(snappedf(v[0], 0.0001)), str(snappedf(v[1], 0.0001)), str(snappedf(v[2], 0.0001))])
+	out += ",\n".join(vlines) + "\n\t],\n"
+	out += "\t\"modules\": [\n"
+	var mblocks: Array[String] = []
+	for m in d["modules"]:
+		var b := "\t\t{\n\t\t\t\"type\": %s,\n" % JSON.stringify(m["type"])
+		if m.has("material"):
+			b += "\t\t\t\"material\": %s,\n" % JSON.stringify(m["material"])
+		if m.has("crew"):
+			b += "\t\t\t\"crew\": %d,\n" % int(m["crew"])
+		if m.has("dir"):
+			b += "\t\t\t\"dir\": %s,\n\t\t\t\"power\": %s,\n" % [JSON.stringify(m["dir"]), str(m["power"])]
+		b += "\t\t\t\"faces\": [\n"
+		var flines: Array[String] = []
+		for f in m["faces"]:
+			flines.append("\t\t\t\t" + JSON.stringify(f))
+		b += ",\n".join(flines) + "\n\t\t\t]\n\t\t}"
+		mblocks.append(b)
+	out += ",\n".join(mblocks) + "\n\t]\n}\n"
+	return out
+
+
+static func from_json(text: String) -> ShipDesign:
+	var parsed: Variant = JSON.parse_string(text)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return null
+	return from_dict(parsed)
+
+
+## Compressed binary form (huge ships, network). Includes the cached physical sums so loading is instant.
+func to_bytes() -> PackedByteArray:
+	var mods: Array = []
+	for i in modules.size():
+		var m: Dictionary = modules[i]
+		var fs: FaceSet = m["fs"]
+		fs.compact()
+		mods.append({"type": m["type"], "material": m.get("material", ""), "crew": int(m.get("crew", 1)),
+			"dir": m["dir"], "power": m["power"], "ids": fs.ids, "sizes": fs.sizes, "sums": module_sums(i)})
+	var raw := var_to_bytes({"name": ship_name, "reactor_scale": reactor_scale, "gyro_scale": gyro_scale,
+		"vertices": vertices, "modules": mods})
+	var out := BINARY_MAGIC.to_utf8_buffer()
+	out.append_array(PackedByteArray([0, 0, 0, 0]))
+	out.encode_u32(4, raw.size())
+	out.append_array(raw.compress(FileAccess.COMPRESSION_ZSTD))
+	return out
+
+
+static func is_binary(blob: PackedByteArray) -> bool:
+	return blob.size() > 8 and blob.slice(0, 4).get_string_from_ascii() == BINARY_MAGIC
+
+
+static func from_bytes(blob: PackedByteArray) -> ShipDesign:
+	if not is_binary(blob):
+		return null
+	var raw := blob.slice(8).decompress(blob.decode_u32(4), FileAccess.COMPRESSION_ZSTD)
+	var data: Variant = bytes_to_var(raw) # never allow objects from the network
+	if typeof(data) != TYPE_DICTIONARY:
+		return null
+	var s := ShipDesign.new()
+	s.ship_name = str(data["name"])
+	s.reactor_scale = float(data["reactor_scale"])
+	s.gyro_scale = float(data["gyro_scale"])
+	s.vertices = data["vertices"]
+	for m in data["modules"]:
+		var fs := FaceSet.new()
+		fs.ids = m["ids"]
+		fs.sizes = m["sizes"]
+		fs.rebuild_starts()
+		var entry := {"type": str(m["type"]), "fs": fs, "dir": m["dir"], "power": float(m["power"]),
+			"material": str(m["material"]), "crew": int(m["crew"])}
+		if m.get("sums") != null and (m["sums"] as PackedFloat64Array).size() == 11:
+			entry["sums"] = m["sums"]
+		s.modules.append(entry)
+	return s
+
+
+## Any saved form: pretty/compact JSON text or the binary blob.
+static func from_blob(blob: PackedByteArray) -> ShipDesign:
+	return from_bytes(blob) if is_binary(blob) else from_json(blob.get_string_from_utf8())
+
+
+## Blob used on the network and in files: JSON text for small ships, binary for big ones.
+func to_blob() -> PackedByteArray:
+	if vertices.size() <= PRETTY_JSON_MAX_VERTICES:
+		return to_json().to_utf8_buffer()
+	return to_bytes()
+
+
+func save_user() -> Error:
+	DirAccess.make_dir_recursive_absolute(Data.SAVED_SHIP_DIR)
+	var big := vertices.size() > PRETTY_JSON_MAX_VERTICES
+	var path := Data.SAVED_SHIP_DIR + ship_name.validate_filename() + (".ship" if big else ".json")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return FileAccess.get_open_error()
+	if big:
+		f.store_buffer(to_bytes())
+	else:
+		f.store_string(to_pretty_json())
+	return OK
+
+
+static func load_file(path: String) -> ShipDesign:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return null
+	return from_blob(f.get_buffer(f.get_length()))
+
+
+static func read_blob(path: String) -> PackedByteArray:
+	return FileAccess.get_file_as_bytes(path)
+
+
+## [{name, path, premade}] for premade (res://ships) + saved (user://ships)
+static func list_ships() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for entry in [[Data.PREMADE_SHIP_DIR, true], [Data.SAVED_SHIP_DIR, false]]:
+		var dir := DirAccess.open(entry[0])
+		if dir == null:
+			continue
+		for file in dir.get_files():
+			if file.ends_with(".json") or file.ends_with(".ship"):
+				out.append({"name": file.get_basename(), "path": entry[0] + file, "premade": entry[1]})
+	return out

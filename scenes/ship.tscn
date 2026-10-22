@@ -1,0 +1,120 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/ship/ship.gd" id="1_ship"]
+[ext_resource type="Script" path="res://scripts/ship/electricity.gd" id="2_elec"]
+[ext_resource type="Script" path="res://scripts/ship/gyroscope.gd" id="3_gyro"]
+[ext_resource type="Script" path="res://scripts/ship/rcs.gd" id="4_rcs"]
+[ext_resource type="Script" path="res://scripts/ship/autopilot.gd" id="5_ap"]
+[ext_resource type="Script" path="res://scripts/ship/weapons.gd" id="6_wpn"]
+[ext_resource type="Script" path="res://scripts/ship/hull_renderer.gd" id="7_hull"]
+[ext_resource type="Shader" path="res://shaders/hull.gdshader" id="8_hullsh"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_flame"]
+shading_mode = 0
+albedo_color = Color(1, 0.62, 0.2, 1)
+
+[sub_resource type="CylinderMesh" id="Mesh_flame"]
+material = SubResource("Mat_flame")
+top_radius = 0.0
+bottom_radius = 0.5
+height = 1.0
+radial_segments = 8
+rings = 1
+
+[sub_resource type="MultiMesh" id="MultiMesh_flames"]
+resource_local_to_scene = true
+transform_format = 1
+mesh = SubResource("Mesh_flame")
+
+[sub_resource type="StandardMaterial3D" id="Mat_explosion"]
+shading_mode = 0
+albedo_color = Color(1, 0.55, 0.15, 1)
+
+[sub_resource type="SphereMesh" id="Mesh_spark"]
+material = SubResource("Mat_explosion")
+radius = 0.2
+height = 0.4
+radial_segments = 8
+rings = 4
+
+[sub_resource type="SceneReplicationConfig" id="Rep_transform"]
+properties/0/path = NodePath(".:sync_pos")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:sync_quat")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:sync_vel")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+
+[sub_resource type="SceneReplicationConfig" id="Rep_state"]
+properties/0/path = NodePath(".:module_hp")
+properties/0/spawn = true
+properties/0/replication_mode = 2
+properties/1/path = NodePath(".:throttles")
+properties/1/spawn = false
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:alive")
+properties/2/spawn = true
+properties/2/replication_mode = 2
+
+[node name="Ship" type="RigidBody3D" groups=["ships"]]
+collision_layer = 1
+collision_mask = 1
+script = ExtResource("1_ship")
+
+[node name="Hull" type="Node3D" parent="."]
+script = ExtResource("7_hull")
+shader = ExtResource("8_hullsh")
+
+[node name="Flames" type="MultiMeshInstance3D" parent="."]
+cast_shadow = 0
+multimesh = SubResource("MultiMesh_flames")
+
+[node name="Systems" type="Node" parent="."]
+
+[node name="Electricity" type="Node" parent="Systems"]
+script = ExtResource("2_elec")
+
+[node name="Gyroscope" type="Node" parent="Systems"]
+script = ExtResource("3_gyro")
+
+[node name="RCS" type="Node" parent="Systems"]
+script = ExtResource("4_rcs")
+
+[node name="Autopilot" type="Node" parent="."]
+script = ExtResource("5_ap")
+
+[node name="Weapons" type="Node" parent="."]
+script = ExtResource("6_wpn")
+
+[node name="TransformSync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("Rep_transform")
+
+[node name="StateSync" type="MultiplayerSynchronizer" parent="."]
+replication_interval = 0.1
+replication_config = SubResource("Rep_state")
+
+[node name="Explosion" type="CPUParticles3D" parent="."]
+emitting = false
+amount = 60
+lifetime = 1.4
+one_shot = true
+explosiveness = 1.0
+mesh = SubResource("Mesh_spark")
+direction = Vector3(0, 1, 0)
+spread = 180.0
+gravity = Vector3(0, 0, 0)
+initial_velocity_min = 5.0
+initial_velocity_max = 16.0
+
+[node name="Nameplate" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, 0)
+billboard = 1
+no_depth_test = true
+fixed_size = true
+pixel_size = 0.0007
+text = "Pilot"
+font_size = 32
+outline_size = 8

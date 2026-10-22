@@ -1,0 +1,918 @@
+[gd_scene load_steps=18 format=3]
+
+[ext_resource type="Script" path="res://scripts/builder/ship_builder.gd" id="1_builder"]
+[ext_resource type="Script" path="res://scripts/builder/builder_ui.gd" id="2_ui"]
+[ext_resource type="Script" path="res://scripts/builder/builder_camera.gd" id="3_cam"]
+[ext_resource type="Script" path="res://scripts/builder/builder_view.gd" id="4_view"]
+[ext_resource type="Script" path="res://scripts/builder/transform_tool.gd" id="5_tool"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_modes"]
+
+[sub_resource type="Theme" id="Theme_builder"]
+default_font_size = 15
+
+[sub_resource type="Environment" id="Env_builder"]
+background_mode = 1
+background_color = Color(0.04, 0.05, 0.08, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.75, 0.8, 0.95, 1)
+ambient_light_energy = 0.7
+
+[sub_resource type="Shader" id="Shader_grid"]
+code = "shader_type spatial;\nrender_mode unshaded, blend_mix, depth_draw_never, cull_disabled;\nvarying vec3 wp;\nvoid vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }\nvoid fragment() {\n	vec2 g = abs(fract(wp.xz - 0.5) - 0.5) / fwidth(wp.xz);\n	float l = 1.0 - min(min(g.x, g.y), 1.0);\n	ALBEDO = vec3(0.4, 0.6, 0.9);\n	ALPHA = l * 0.28;\n}\n"
+
+[sub_resource type="ShaderMaterial" id="Mat_grid"]
+shader = SubResource("Shader_grid")
+
+[sub_resource type="PlaneMesh" id="Plane_grid"]
+size = Vector2(60, 60)
+
+[sub_resource type="StandardMaterial3D" id="Mat_ship"]
+vertex_color_use_as_albedo = true
+metallic = 0.2
+roughness = 0.6
+cull_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="Mat_dots"]
+shading_mode = 0
+vertex_color_use_as_albedo = true
+no_depth_test = true
+render_priority = 5
+
+[sub_resource type="SphereMesh" id="Mesh_dot"]
+material = SubResource("Mat_dots")
+radius = 0.5
+height = 1.0
+radial_segments = 10
+rings = 5
+
+[sub_resource type="MultiMesh" id="MM_dots"]
+transform_format = 1
+use_colors = true
+mesh = SubResource("Mesh_dot")
+
+[sub_resource type="StandardMaterial3D" id="Mat_overlay"]
+shading_mode = 0
+vertex_color_use_as_albedo = true
+no_depth_test = true
+transparency = 1
+cull_mode = 2
+render_priority = 4
+
+[sub_resource type="ImmediateMesh" id="IM_overlay"]
+
+[node name="ShipBuilder" type="Node3D"]
+script = ExtResource("1_builder")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_builder")
+
+[node name="SunLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8, -0.35, 0.5, 0, 0.82, 0.57, -0.6, -0.45, 0.66, 0, 6, 0)
+light_energy = 1.1
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.9, 0.2, -0.4, 0, 0.9, 0.45, 0.45, 0.4, -0.8, 0, 6, 0)
+light_energy = 0.45
+
+[node name="GroundGrid" type="MeshInstance3D" parent="."]
+mesh = SubResource("Plane_grid")
+material_override = SubResource("Mat_grid")
+cast_shadow = 0
+
+[node name="CameraRig" type="Node3D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3_cam")
+
+[node name="Camera" type="Camera3D" parent="CameraRig"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 9)
+current = true
+fov = 60.0
+
+[node name="View" type="Node3D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("4_view")
+
+[node name="ShipMesh" type="MeshInstance3D" parent="View"]
+unique_name_in_owner = true
+material_override = SubResource("Mat_ship")
+
+[node name="VertexDots" type="MultiMeshInstance3D" parent="View"]
+unique_name_in_owner = true
+multimesh = SubResource("MM_dots")
+cast_shadow = 0
+
+[node name="OverlayMesh" type="MeshInstance3D" parent="View"]
+unique_name_in_owner = true
+mesh = SubResource("IM_overlay")
+material_override = SubResource("Mat_overlay")
+cast_shadow = 0
+
+[node name="TransformTool" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5_tool")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="BuilderUI" type="Control" parent="UI"]
+script = ExtResource("2_ui")
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = SubResource("Theme_builder")
+
+[node name="TopBar" type="PanelContainer" parent="UI/BuilderUI"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = 56.0
+grow_horizontal = 2
+
+[node name="TopBarMargin" type="MarginContainer" parent="UI/BuilderUI/TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="TopBarRow" type="HBoxContainer" parent="UI/BuilderUI/TopBar/TopBarMargin"]
+layout_mode = 2
+
+[node name="ShipNameTitle" type="Label" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+layout_mode = 2
+text = "Ship name"
+
+[node name="ShipNameEdit" type="LineEdit" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "My Ship"
+size_flags_horizontal = 1
+placeholder_text = "Ship name"
+custom_minimum_size = Vector2(220, 0)
+
+[node name="NewButton" type="Button" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+layout_mode = 2
+text = "New"
+tooltip_text = "Start a fresh ship"
+
+[node name="SaveButton" type="Button" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Save"
+tooltip_text = "Save to user://ships/ (Ctrl+S). Needs exactly one Commander and a thruster."
+
+[node name="TopBarDivider1" type="Label" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+layout_mode = 2
+text = "|"
+
+[node name="LoadPicker" type="OptionButton" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 1
+custom_minimum_size = Vector2(200, 0)
+
+[node name="LoadButton" type="Button" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+layout_mode = 2
+text = "Load"
+tooltip_text = "Load the ship picked in the list"
+
+[node name="TopBarSpacer" type="Control" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="UndoButton" type="Button" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Undo"
+tooltip_text = "Ctrl+Z"
+
+[node name="RedoButton" type="Button" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Redo"
+tooltip_text = "Ctrl+Y (or Ctrl+Shift+Z)"
+
+[node name="BackToMenuButton" type="Button" parent="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow"]
+layout_mode = 2
+text = "Back to menu"
+
+[node name="ToolPanel" type="PanelContainer" parent="UI/BuilderUI"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 64.0
+offset_right = 218.0
+offset_bottom = -48.0
+grow_vertical = 2
+
+[node name="ToolPanelMargin" type="MarginContainer" parent="UI/BuilderUI/ToolPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="ToolScroll" type="ScrollContainer" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="ToolList" type="VBoxContainer" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SelectHeading" type="Label" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+layout_mode = 2
+text = "SELECT"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="ModeObjectButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Object  (1)"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_modes")
+tooltip_text = "Select whole modules"
+
+[node name="ModeVertexButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Vertex  (2)"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_modes")
+tooltip_text = "Select single points"
+
+[node name="ModeEdgeButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Edge  (3)"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_modes")
+tooltip_text = "Select lines between two points"
+
+[node name="ModeFaceButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Face  (4)"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_modes")
+tooltip_text = "Select flat sides"
+
+[node name="SelectDivider" type="HSeparator" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+layout_mode = 2
+
+[node name="TransformHeading" type="Label" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+layout_mode = 2
+text = "TRANSFORM"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="GrabButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Move  (G)"
+tooltip_text = "Move the selection. X/Y/Z locks an axis, click or Enter confirms, Esc cancels."
+
+[node name="RotateButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Rotate  (R)"
+tooltip_text = "Rotate the selection around its centre"
+
+[node name="ScaleButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Scale  (S)"
+tooltip_text = "Scale the selection around its centre"
+
+[node name="TransformDivider" type="HSeparator" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+layout_mode = 2
+
+[node name="ShapeHeading" type="Label" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+layout_mode = 2
+text = "SHAPE"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="ExtrudeButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Extrude face  (E)"
+tooltip_text = "Face mode: push the face out into a new block (new vertices)"
+
+[node name="AddVertexButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add vertex on edge  (W)"
+tooltip_text = "Edge mode: split the edge in the middle with a new vertex"
+
+[node name="ConnectVerticesButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Connect vertices  (J)"
+tooltip_text = "Vertex mode: draw a new edge between 2 vertices of the same face"
+
+[node name="LinkButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Link vertices  (L)"
+tooltip_text = "Merge the selected vertices so they move together (green dots)"
+
+[node name="UnlinkButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Unlink vertex  (U)"
+tooltip_text = "Detach the vertex from the other modules"
+
+[node name="ShapeDivider" type="HSeparator" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+layout_mode = 2
+
+[node name="ObjectHeading" type="Label" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+layout_mode = 2
+text = "OBJECT"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="MirrorButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Mirror  (M)"
+tooltip_text = "Object mode: copy the module to the other side (X axis)"
+
+[node name="DuplicateButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Duplicate  (Shift+D)"
+tooltip_text = "Copy the selected module(s)"
+
+[node name="DeleteButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Delete  (X)"
+tooltip_text = "Delete the selection"
+
+[node name="ObjectDivider" type="HSeparator" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+layout_mode = 2
+
+[node name="ViewHeading" type="Label" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+layout_mode = 2
+text = "VIEW"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="FrameButton" type="Button" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Frame view  (F)"
+tooltip_text = "Centre the camera on the selection"
+
+[node name="SnapRow" type="HBoxContainer" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+layout_mode = 2
+
+[node name="SnapLabel" type="Label" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/SnapRow"]
+layout_mode = 2
+text = "Snap (m)"
+
+[node name="SnapSpin" type="SpinBox" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/SnapRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0
+max_value = 1
+step = 0.05
+value = 0.1
+size_flags_horizontal = 3
+tooltip_text = "Moves jump by this many metres. 0 = free."
+
+[node name="AutoLinkCheck" type="CheckBox" parent="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Auto-link on drop"
+button_pressed = true
+tooltip_text = "Dropping a vertex on another module's vertex links them"
+
+[node name="SidePanel" type="PanelContainer" parent="UI/BuilderUI"]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -358.0
+offset_top = 64.0
+offset_right = -8.0
+offset_bottom = -48.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="SidePanelMargin" type="MarginContainer" parent="UI/BuilderUI/SidePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="SideTabs" type="TabContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin"]
+layout_mode = 2
+size_flags_vertical = 3
+current_tab = 0
+
+[node name="Add" type="ScrollContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="AddList" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewModuleHeading" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+layout_mode = 2
+text = "NEW MODULE"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="NewTypeLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+layout_mode = 2
+text = "Type"
+
+[node name="NewTypePicker" type="OptionButton" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewTypeHelp" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+modulate = Color(0.8, 0.85, 0.95, 0.85)
+
+[node name="NewShapeLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+layout_mode = 2
+text = "Shape"
+
+[node name="NewShapePicker" type="OptionButton" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewSegmentsRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+layout_mode = 2
+
+[node name="NewSegmentsLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList/NewSegmentsRow"]
+layout_mode = 2
+text = "Round shape detail"
+
+[node name="NewSegmentsSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList/NewSegmentsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 6
+max_value = 32
+step = 2
+value = 12
+size_flags_horizontal = 3
+tooltip_text = "Number of sides of cylinders, cones, spheres and domes"
+
+[node name="NewSizeLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+layout_mode = 2
+text = "Half size (metres, from the centre)"
+
+[node name="NewSizeRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+layout_mode = 2
+
+[node name="NewSizeXSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList/NewSizeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.05
+max_value = 10
+step = 0.05
+value = 0.5
+size_flags_horizontal = 3
+
+[node name="NewSizeYSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList/NewSizeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.05
+max_value = 10
+step = 0.05
+value = 0.5
+size_flags_horizontal = 3
+
+[node name="NewSizeZSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList/NewSizeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.05
+max_value = 10
+step = 0.05
+value = 0.5
+size_flags_horizontal = 3
+
+[node name="AddModuleButton" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add at view centre"
+tooltip_text = "The new module appears where the camera looks. Then press G to move it."
+
+[node name="AddTip" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList"]
+layout_mode = 2
+text = "Tip: modules start unattached. Move them next to each other, then link\nvertices (L) so they stay together."
+autowrap_mode = 3
+modulate = Color(1, 1, 1, 0.6)
+
+[node name="Selection" type="ScrollContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="SelectionList" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SelectionInfoLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+
+[node name="CenterSection" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="CenterHeading" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/CenterSection"]
+layout_mode = 2
+text = "CENTRE OF SELECTION (m)"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="CenterRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/CenterSection"]
+layout_mode = 2
+
+[node name="CenterXSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/CenterSection/CenterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -100
+max_value = 100
+step = 0.05
+value = 0
+size_flags_horizontal = 3
+
+[node name="CenterYSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/CenterSection/CenterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -100
+max_value = 100
+step = 0.05
+value = 0
+size_flags_horizontal = 3
+
+[node name="CenterZSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/CenterSection/CenterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -100
+max_value = 100
+step = 0.05
+value = 0
+size_flags_horizontal = 3
+
+[node name="CenterTip" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/CenterSection"]
+layout_mode = 2
+text = "Type exact numbers here instead of dragging."
+modulate = Color(1, 1, 1, 0.6)
+
+[node name="SelectionDivider" type="HSeparator" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList"]
+layout_mode = 2
+
+[node name="ActiveModuleSection" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ActiveModuleHeading" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection"]
+layout_mode = 2
+text = "ACTIVE MODULE"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="ActiveModuleLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+
+[node name="ActiveTypePicker" type="OptionButton" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ActiveTypeHelp" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+modulate = Color(0.8, 0.85, 0.95, 0.85)
+
+[node name="MaterialLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection"]
+layout_mode = 2
+text = "Material (decides damage resistance and dents)"
+autowrap_mode = 3
+
+[node name="MaterialPicker" type="OptionButton" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MaterialHelp" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+modulate = Color(0.8, 0.85, 0.95, 0.85)
+
+[node name="CrewSection" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="CrewHeading" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/CrewSection"]
+layout_mode = 2
+text = "CREW"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="CrewHelp" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/CrewSection"]
+layout_mode = 2
+text = "Seats on the ship, pilot included. Friends can join a locked ship in the lobby as crew and man the turrets."
+autowrap_mode = 3
+
+[node name="CrewSeatsRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/CrewSection"]
+layout_mode = 2
+
+[node name="CrewSeatsLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/CrewSection/CrewSeatsRow"]
+layout_mode = 2
+text = "Seats"
+
+[node name="CrewSeatsSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/CrewSection/CrewSeatsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1
+max_value = 8
+step = 1
+value = 1
+size_flags_horizontal = 3
+
+[node name="ThrusterSection" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ThrusterHeading" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection"]
+layout_mode = 2
+text = "THRUSTER"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="ThrusterDirHelp" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection"]
+layout_mode = 2
+text = "Direction the thruster PUSHES the ship.\n(The flame goes the opposite way.)"
+autowrap_mode = 3
+
+[node name="ThrustDirRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection"]
+layout_mode = 2
+
+[node name="ThrustDirXSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -1
+max_value = 1
+step = 0.05
+value = 0
+size_flags_horizontal = 3
+
+[node name="ThrustDirYSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -1
+max_value = 1
+step = 0.05
+value = 0
+size_flags_horizontal = 3
+
+[node name="ThrustDirZSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -1
+max_value = 1
+step = 0.05
+value = -1
+size_flags_horizontal = 3
+
+[node name="ThrustDirPresetRow1" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection"]
+layout_mode = 2
+
+[node name="ThrustDirPreset0" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow1"]
+layout_mode = 2
+text = "-Z fwd"
+tooltip_text = "Thruster pushes the ship toward -Z fwd"
+
+[node name="ThrustDirPreset1" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow1"]
+layout_mode = 2
+text = "+Z"
+tooltip_text = "Thruster pushes the ship toward +Z"
+
+[node name="ThrustDirPreset2" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow1"]
+layout_mode = 2
+text = "+X"
+tooltip_text = "Thruster pushes the ship toward +X"
+
+[node name="ThrustDirPresetRow2" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection"]
+layout_mode = 2
+
+[node name="ThrustDirPreset3" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow2"]
+layout_mode = 2
+text = "-X"
+tooltip_text = "Thruster pushes the ship toward -X"
+
+[node name="ThrustDirPreset4" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow2"]
+layout_mode = 2
+text = "+Y"
+tooltip_text = "Thruster pushes the ship toward +Y"
+
+[node name="ThrustDirPreset5" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow2"]
+layout_mode = 2
+text = "-Y"
+tooltip_text = "Thruster pushes the ship toward -Y"
+
+[node name="ThrustPowerRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection"]
+layout_mode = 2
+
+[node name="ThrustPowerLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustPowerRow"]
+layout_mode = 2
+text = "Power (N)"
+
+[node name="ThrustPowerSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustPowerRow"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 200
+max_value = 8000
+step = 50
+value = 2000
+size_flags_horizontal = 3
+
+[node name="Ship" type="ScrollContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="ShipList" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatsHeading" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList"]
+layout_mode = 2
+text = "STATS"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="ShipStatsLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+
+[node name="ProblemsHeading" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList"]
+layout_mode = 2
+text = "PROBLEMS"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="ShipProblemsLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+
+[node name="ShipDivider" type="HSeparator" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList"]
+layout_mode = 2
+
+[node name="InternalHeading" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList"]
+layout_mode = 2
+text = "INTERNAL MODULES (no shell, cannot be shot)"
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="ReactorRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList"]
+layout_mode = 2
+
+[node name="ReactorTitleLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList/ReactorRow"]
+layout_mode = 2
+text = "Electricity"
+
+[node name="ReactorSlider" type="HSlider" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList/ReactorRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.15
+max_value = 2.0
+step = 0.05
+value = 1.0
+
+[node name="ReactorValueLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList/ReactorRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "1.00"
+
+[node name="GyroRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList"]
+layout_mode = 2
+
+[node name="GyroTitleLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList/GyroRow"]
+layout_mode = 2
+text = "Gyroscope"
+
+[node name="GyroSlider" type="HSlider" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList/GyroRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.25
+max_value = 3.0
+step = 0.05
+value = 1.0
+
+[node name="GyroValueLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList/GyroRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "1.00"
+
+[node name="InternalTip" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList"]
+layout_mode = 2
+text = "Electricity powers thrusters and turrets. The gyroscope turns the ship.\nRCS is automatic: always 5% of the ship's best-direction thrust."
+autowrap_mode = 3
+modulate = Color(1, 1, 1, 0.6)
+
+[node name="StatusBar" type="PanelContainer" parent="UI/BuilderUI"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -40.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="StatusBarMargin" type="MarginContainer" parent="UI/BuilderUI/StatusBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="StatusRow" type="HBoxContainer" parent="UI/BuilderUI/StatusBar/StatusBarMargin"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="UI/BuilderUI/StatusBar/StatusBarMargin/StatusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Click an element to select it. Right mouse = orbit, wheel = zoom."
+size_flags_horizontal = 3
+
+[node name="KeyHelpLabel" type="Label" parent="UI/BuilderUI/StatusBar/StatusBarMargin/StatusRow"]
+layout_mode = 2
+text = "Forward is -Z  |  Shift+click = multi-select  |  A = all, Alt+A = none  |  Ctrl+Z / Ctrl+Y = undo / redo"
+modulate = Color(1, 1, 1, 0.6)
+
+[connection signal="text_changed" from="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow/ShipNameEdit" to="UI/BuilderUI" method="_on_ship_name_changed"]
+[connection signal="pressed" from="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow/NewButton" to="UI/BuilderUI" method="_on_new_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow/SaveButton" to="UI/BuilderUI" method="_on_save_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow/LoadButton" to="UI/BuilderUI" method="_on_load_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow/UndoButton" to="UI/BuilderUI" method="_on_undo_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow/RedoButton" to="UI/BuilderUI" method="_on_redo_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/TopBar/TopBarMargin/TopBarRow/BackToMenuButton" to="UI/BuilderUI" method="_on_back_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/ModeObjectButton" to="UI/BuilderUI" method="_on_mode_object_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/ModeVertexButton" to="UI/BuilderUI" method="_on_mode_vertex_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/ModeEdgeButton" to="UI/BuilderUI" method="_on_mode_edge_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/ModeFaceButton" to="UI/BuilderUI" method="_on_mode_face_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/GrabButton" to="UI/BuilderUI" method="_on_grab_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/RotateButton" to="UI/BuilderUI" method="_on_rotate_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/ScaleButton" to="UI/BuilderUI" method="_on_scale_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/ExtrudeButton" to="UI/BuilderUI" method="_on_extrude_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/AddVertexButton" to="UI/BuilderUI" method="_on_add_vertex_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/ConnectVerticesButton" to="UI/BuilderUI" method="_on_connect_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/LinkButton" to="UI/BuilderUI" method="_on_link_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/UnlinkButton" to="UI/BuilderUI" method="_on_unlink_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/MirrorButton" to="UI/BuilderUI" method="_on_mirror_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/DuplicateButton" to="UI/BuilderUI" method="_on_duplicate_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/DeleteButton" to="UI/BuilderUI" method="_on_delete_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/FrameButton" to="UI/BuilderUI" method="_on_frame_pressed"]
+[connection signal="value_changed" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/SnapRow/SnapSpin" to="UI/BuilderUI" method="_on_snap_changed"]
+[connection signal="toggled" from="UI/BuilderUI/ToolPanel/ToolPanelMargin/ToolScroll/ToolList/AutoLinkCheck" to="UI/BuilderUI" method="_on_auto_link_toggled"]
+[connection signal="item_selected" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList/NewTypePicker" to="UI/BuilderUI" method="_on_new_type_selected"]
+[connection signal="item_selected" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList/NewShapePicker" to="UI/BuilderUI" method="_on_new_shape_selected"]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Add/AddList/AddModuleButton" to="UI/BuilderUI" method="_on_add_module_pressed"]
+[connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/CenterSection/CenterRow/CenterXSpin" to="UI/BuilderUI" method="_on_center_changed"]
+[connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/CenterSection/CenterRow/CenterYSpin" to="UI/BuilderUI" method="_on_center_changed"]
+[connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/CenterSection/CenterRow/CenterZSpin" to="UI/BuilderUI" method="_on_center_changed"]
+[connection signal="item_selected" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ActiveTypePicker" to="UI/BuilderUI" method="_on_active_type_selected"]
+[connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirRow/ThrustDirXSpin" to="UI/BuilderUI" method="_on_thrust_dir_changed"]
+[connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirRow/ThrustDirYSpin" to="UI/BuilderUI" method="_on_thrust_dir_changed"]
+[connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirRow/ThrustDirZSpin" to="UI/BuilderUI" method="_on_thrust_dir_changed"]
+[connection signal="item_selected" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/MaterialPicker" to="UI/BuilderUI" method="_on_material_selected"]
+[connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/CrewSection/CrewSeatsRow/CrewSeatsSpin" to="UI/BuilderUI" method="_on_crew_seats_changed"]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow1/ThrustDirPreset0" to="UI/BuilderUI" method="_on_thrust_dir_preset_pressed" binds= [Vector3(0, 0, -1)]]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow1/ThrustDirPreset1" to="UI/BuilderUI" method="_on_thrust_dir_preset_pressed" binds= [Vector3(0, 0, 1)]]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow1/ThrustDirPreset2" to="UI/BuilderUI" method="_on_thrust_dir_preset_pressed" binds= [Vector3(1, 0, 0)]]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow2/ThrustDirPreset3" to="UI/BuilderUI" method="_on_thrust_dir_preset_pressed" binds= [Vector3(-1, 0, 0)]]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow2/ThrustDirPreset4" to="UI/BuilderUI" method="_on_thrust_dir_preset_pressed" binds= [Vector3(0, 1, 0)]]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustDirPresetRow2/ThrustDirPreset5" to="UI/BuilderUI" method="_on_thrust_dir_preset_pressed" binds= [Vector3(0, -1, 0)]]
+[connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Selection/SelectionList/ActiveModuleSection/ThrusterSection/ThrustPowerRow/ThrustPowerSpin" to="UI/BuilderUI" method="_on_thrust_power_changed"]
+[connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList/ReactorRow/ReactorSlider" to="UI/BuilderUI" method="_on_reactor_changed"]
+[connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Ship/ShipList/GyroRow/GyroSlider" to="UI/BuilderUI" method="_on_gyro_changed"]

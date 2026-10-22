@@ -1,0 +1,161 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/lobby.gd" id="1_s"]
+
+[node name="LobbyRoom" type="Control"]
+script = ExtResource("1_s")
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BackgroundColor" type="ColorRect" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.03, 0.04, 0.07, 1)
+
+[node name="RoomMargin" type="MarginContainer" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 30
+
+[node name="RoomColumn" type="VBoxContainer" parent="RoomMargin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="HeaderRow" type="HBoxContainer" parent="RoomMargin/RoomColumn"]
+layout_mode = 2
+
+[node name="LobbyTitleLabel" type="Label" parent="RoomMargin/RoomColumn/HeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+
+[node name="TimerLabel" type="Label" parent="RoomMargin/RoomColumn/HeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 28
+
+[node name="HeaderSeparator" type="HSeparator" parent="RoomMargin/RoomColumn"]
+layout_mode = 2
+
+[node name="RoomColumns" type="HBoxContainer" parent="RoomMargin/RoomColumn"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 30
+
+[node name="ShipColumn" type="VBoxContainer" parent="RoomMargin/RoomColumn/RoomColumns"]
+layout_mode = 2
+theme_override_constants/separation = 8
+size_flags_horizontal = 3
+
+[node name="ShipHeading" type="Label" parent="RoomMargin/RoomColumn/RoomColumns/ShipColumn"]
+layout_mode = 2
+text = "1. CHOOSE YOUR SHIP"
+theme_override_font_sizes/font_size = 20
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="ShipList" type="ItemList" parent="RoomMargin/RoomColumn/RoomColumns/ShipColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ShipInfoLabel" type="Label" parent="RoomMargin/RoomColumn/RoomColumns/ShipColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Pick a ship, then lock in so friends can join it as crew."
+autowrap_mode = 3
+
+[node name="LockButton" type="Button" parent="RoomMargin/RoomColumn/RoomColumns/ShipColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Lock in ship"
+custom_minimum_size = Vector2(0, 48)
+disabled = true
+
+[node name="CrewColumn" type="VBoxContainer" parent="RoomMargin/RoomColumn/RoomColumns"]
+layout_mode = 2
+theme_override_constants/separation = 8
+size_flags_horizontal = 3
+
+[node name="PlayersHeading" type="Label" parent="RoomMargin/RoomColumn/RoomColumns/CrewColumn"]
+layout_mode = 2
+text = "2. PLAYERS  (or join a friend's crew)"
+theme_override_font_sizes/font_size = 20
+modulate = Color(0.62, 0.8, 1, 1)
+
+[node name="PlayerTree" type="Tree" parent="RoomMargin/RoomColumn/RoomColumns/CrewColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+columns = 4
+column_titles_visible = true
+hide_root = true
+select_mode = 0
+
+[node name="CrewHintLabel" type="Label" parent="RoomMargin/RoomColumn/RoomColumns/CrewColumn"]
+layout_mode = 2
+text = "Crew members man the turrets of the pilot's ship. Seats are set by the ship's Commander module."
+autowrap_mode = 3
+modulate = Color(1, 1, 1, 0.6)
+
+[node name="CrewButtonsRow" type="HBoxContainer" parent="RoomMargin/RoomColumn/RoomColumns/CrewColumn"]
+layout_mode = 2
+
+[node name="JoinCrewButton" type="Button" parent="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Join selected ship as crew"
+disabled = true
+
+[node name="LeaveCrewButton" type="Button" parent="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Leave crew"
+visible = false
+
+[node name="FooterRow" type="HBoxContainer" parent="RoomMargin/RoomColumn"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="RoomMargin/RoomColumn/FooterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+size_flags_horizontal = 3
+
+[node name="StartButton" type="Button" parent="RoomMargin/RoomColumn/FooterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "START GAME"
+custom_minimum_size = Vector2(220, 48)
+visible = false
+
+[node name="LeaveLobbyButton" type="Button" parent="RoomMargin/RoomColumn/FooterRow"]
+layout_mode = 2
+text = "Leave lobby"
+custom_minimum_size = Vector2(160, 48)
+
+[connection signal="item_selected" from="RoomMargin/RoomColumn/RoomColumns/ShipColumn/ShipList" to="." method="_on_ship_selected"]
+[connection signal="pressed" from="RoomMargin/RoomColumn/RoomColumns/ShipColumn/LockButton" to="." method="_on_lock_pressed"]
+[connection signal="item_selected" from="RoomMargin/RoomColumn/RoomColumns/CrewColumn/PlayerTree" to="." method="_on_player_selected"]
+[connection signal="nothing_selected" from="RoomMargin/RoomColumn/RoomColumns/CrewColumn/PlayerTree" to="." method="_on_player_deselected"]
+[connection signal="pressed" from="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow/JoinCrewButton" to="." method="_on_join_crew_pressed"]
+[connection signal="pressed" from="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow/LeaveCrewButton" to="." method="_on_leave_crew_pressed"]
+[connection signal="pressed" from="RoomMargin/RoomColumn/FooterRow/StartButton" to="." method="_on_start_pressed"]
+[connection signal="pressed" from="RoomMargin/RoomColumn/FooterRow/LeaveLobbyButton" to="." method="_on_leave_pressed"]
