@@ -94,6 +94,8 @@ Layout: top bar (name, New/Save/Load, Undo/Redo) · left = selection mode + tool
 Camera: RMB orbit, MMB or Shift+RMB pan, wheel zoom. You can also type exact centre coordinates in the Selection tab.
 Forward is **-Z**. Ships save to `user://ships/*.json` in a readable format (one vertex / face per line).
 
+## *MODDER* -- 
+
 ## Autoloads (global helpers)
 * `Data` – every tunable constant (`RCS_FRACTION`, turret damage, pool size...) + the local player's choices.
 * `BusEvent` – signal hub (`ship_died`, `local_ship_changed`, `notify`, `builder_design_changed`...). Emit/connect from any script.
@@ -112,8 +114,6 @@ scenes/ship.tscn   Ship(RigidBody3D) HullMesh, Flames(MultiMesh), Systems/{Elect
 scenes/game_world.tscn  GameWorld, WorldEnvironment, Sun, Landmarks, SpawnPoints(8 Marker3D), Ships, ShipSpawner(MultiplayerSpawner),
                    ProjectilePool (creates its bullets in code at start), CameraRig/Pivot/Camera3D, TargetMarker, HUD
 ```
-Only these are created from code (they depend on runtime data): one `CollisionShape3D` per module in each Ship, and the Ship
-itself via the MultiplayerSpawner's `spawn_function`. Bullets are created once by `ProjectilePool` and reused.
 
 ## Networking
 Each peer owns and simulates its own ship; pose is replicated (TransformSync), module HP / throttles / alive (StateSync).
@@ -124,10 +124,6 @@ Host spawns ships and handles respawn. Forward UDP 24565 to host over the intern
 `scripts/data` (ModuleCatalog, ShipDesign, Primitives, MeshOps) · `scripts/ship` (ship, allocator, autopilot, systems, weapons) · `scripts/builder`
 `scripts/damage` · `scripts/net` · `scripts/ui` · `scripts/world` · `scripts/autoload` (Data, BusEvent, Game, Net) · `ships/*.json` premade · `tests/` headless tests ·
 `tools/` Python generators (gen_scenes / gen_builder / gen_lobby) for the .tscn files and premade ships (optional; the .tscn files are normal editable scenes).
-
-## Warnings
-`tools/check_warnings.sh` (set `GODOT=` to your binary) turns every GDScript warning into an error in a temporary copy and lists them; the project is clean
-(except 'signal never used' for the BusEvent signals, which is intended).
 
 ## Known simplifications
 Thrusters respond instantly; RigidBody3D inertia is diagonal only; turrets have no arc limits; no ship-ship damage from collisions;
