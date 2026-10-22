@@ -1,3 +1,5 @@
+> Code made with the help of AI
+
 # Vertex Ships — Godot 4.4+ project
 
 Multiplayer spaceship game with vertex-built modular ships. Open the folder in **Godot 4.4 or newer**
