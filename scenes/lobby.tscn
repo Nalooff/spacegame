@@ -120,7 +120,7 @@ layout_mode = 2
 [node name="JoinCrewButton" type="Button" parent="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Join selected ship as crew"
+text = "Choose a seat on the selected ship..."
 disabled = true
 
 [node name="LeaveCrewButton" type="Button" parent="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow"]

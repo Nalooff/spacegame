@@ -65,7 +65,7 @@ def room():
     ship_col = column("ShipColumn", [heading("1. CHOOSE YOUR SHIP", "ShipHeading"), ship_list,
         label("Pick a ship, then lock in so friends can join it as crew.", "ShipInfoLabel", unique=True, wrap=True), lock])
     players = tree("PlayerTree", 4)
-    join_crew = button("Join selected ship as crew", "JoinCrewButton", unique=True, disabled="true")
+    join_crew = button("Choose a seat on the selected ship...", "JoinCrewButton", unique=True, disabled="true")
     leave_crew = button("Leave crew", "LeaveCrewButton", unique=True, visible="false")
     crew_col = column("CrewColumn", [heading("2. PLAYERS  (or join a friend's crew)", "PlayersHeading"), players,
         label("Crew members man the turrets of the pilot's ship. Seats are set by the ship's Commander module.", "CrewHintLabel", wrap=True, modulate="Color(1, 1, 1, 0.6)"),
@@ -84,4 +84,38 @@ def room():
     C("pressed", start, "_on_start_pressed"); C("pressed", leave, "_on_leave_pressed")
     write("lobby.tscn", sc)
 
-browser(); room()
+# =============================================================== seat picker (overlay opened from the room)
+def seat_picker():
+    """Preview of a captain's ship with a floating 'taken/capacity' button over every Commander module."""
+    markers = N("SeatMarkers", "Control", {**full_rect(), "mouse_filter": 2}, unique=True)
+    hull = N("PreviewHull", "Node3D", {}, unique=True, script='ExtResource("2_hull")')
+    hull.props["shader"] = 'ExtResource("3_sh")'
+    cam = N("PreviewCamera", "Camera3D", {"current": "true", "fov": 40.0}, unique=True)
+    light = N("PreviewLight", "DirectionalLight3D", {"transform": "Transform3D(0.8, -0.3, 0.5, 0, 0.85, 0.53, -0.59, -0.42, 0.68, 0, 3, 0)"})
+    env = N("PreviewEnvironment", "WorldEnvironment", {"environment": 'SubResource("Env_preview")'})
+    world = N("PreviewWorld", "Node3D", {}, [env, light, cam, hull])
+    viewport = N("PreviewViewport", "SubViewport", {"own_world_3d": "true", "transparent_bg": "false", "handle_input_locally": "false",
+                 "size": "Vector2i(900, 520)", "render_target_update_mode": 4}, [world], unique=True)
+    container = N("PreviewContainer", "SubViewportContainer", {"layout_mode": 2, "size_flags_vertical": 3, "size_flags_horizontal": 3,
+                  "custom_minimum_size": "Vector2(700, 420)", "stretch": "true"}, [viewport, markers], unique=True)
+    title_l = N("SeatTitleLabel", "Label", {"layout_mode": 2, "text": s("Choose your seat"), "theme_override_font_sizes/font_size": 24}, unique=True)
+    hint = label("Click a Commander module. The number shows seats taken / seats available. Drag to rotate, wheel to zoom.", "SeatHintLabel", wrap=True, modulate="Color(1, 1, 1, 0.65)")
+    cancel = button("Cancel", "SeatCancelButton", custom_minimum_size="Vector2(160, 40)")
+    panel = N("SeatPanel", "PanelContainer", {"layout_mode": 1, "anchors_preset": 8, "anchor_left": 0.5, "anchor_top": 0.5, "anchor_right": 0.5, "anchor_bottom": 0.5,
+              "offset_left": -470.0, "offset_top": -330.0, "offset_right": 470.0, "offset_bottom": 330.0, "grow_horizontal": 2, "grow_vertical": 2},
+        [N("SeatMargin", "MarginContainer", {"layout_mode": 2, "theme_override_constants/margin_left": 16, "theme_override_constants/margin_top": 16,
+           "theme_override_constants/margin_right": 16, "theme_override_constants/margin_bottom": 16},
+          [N("SeatColumn", "VBoxContainer", {"layout_mode": 2, "theme_override_constants/separation": 10}, [title_l, container, hint, cancel])])])
+    dim = N("SeatDim", "ColorRect", {**full_rect(), "color": "Color(0, 0, 0, 0.7)"})
+    root = N("SeatPicker", "Control", {**full_rect()}, [dim, panel], script='ExtResource("1_s")')
+    sc = Scene(root)
+    sc.ext_res("1_s", "Script", "res://scripts/ui/seat_picker.gd")
+    sc.ext_res("2_hull", "Script", "res://scripts/ship/hull_renderer.gd")
+    sc.ext_res("3_sh", "Shader", "res://shaders/hull.gdshader")
+    sc.sub("Sky_preview", "ProceduralSkyMaterial")
+    sc.sub("Sky2_preview", "Sky", sky_material='SubResource("Sky_preview")')
+    sc.sub("Env_preview", "Environment", background_mode=2, sky='SubResource("Sky2_preview")', ambient_light_source=3, ambient_light_color="Color(0.5, 0.55, 0.7, 1)")
+    sc.connect("pressed", cancel, "_on_cancel_pressed")
+    write("seat_picker.tscn", sc)
+
+browser(); room(); seat_picker()

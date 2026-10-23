@@ -24,22 +24,18 @@ func firing_power() -> float:
 	return ship.alive_turret_count() * Data.TURRET_POWER_COST
 
 
-## Authority only. `aim_point` is a world position.
+## Authority only. `aim_point` is a world position. Every usable turret that points at it (within the tolerance) and has a
+## free line of fire shoots from its own muzzle (see ShipTurrets).
 func try_fire(aim_point: Vector3, power_factor: float) -> void:
 	if _cooldown > 0.0 or power_factor < 0.1:
 		return
+	ship.turrets.aim_point = aim_point
+	ship.turrets.has_aim = true
 	var origins := PackedVector3Array()
 	var dirs := PackedVector3Array()
-	var b := ship.global_transform.basis
-	for t in ship.props["turrets"]:
-		if ship.module_hp[t["module"]] <= 0.0:
-			continue
-		var o: Vector3 = ship.global_position + b * (t["pos"] as Vector3)
-		var d := (aim_point - o)
-		if d.length() < 1.0:
-			d = -b.z
-		origins.append(o)
-		dirs.append(d.normalized())
+	for shot in ship.turrets.firing_solution():
+		origins.append(shot["origin"])
+		dirs.append(shot["dir"])
 	if origins.is_empty():
 		return
 	_cooldown = Data.TURRET_COOLDOWN / maxf(power_factor, 0.25)
@@ -56,6 +52,17 @@ func request_fire(aim_point: Vector3) -> void:
 	if int(Net.players.get(sender, {}).get("crew_of", 0)) != multiplayer.get_unique_id():
 		return # only registered crew of THIS ship may fire its turrets
 	try_fire(aim_point, ship.electricity.ratio)
+
+
+## Crew: "my mouse points here" (sent a few times per second while no shot is requested).
+@rpc("any_peer", "call_remote", "unreliable")
+func request_aim(aim_point: Vector3) -> void:
+	if not is_multiplayer_authority() or not ship.alive or not aim_point.is_finite():
+		return
+	if int(Net.players.get(multiplayer.get_remote_sender_id(), {}).get("crew_of", 0)) != multiplayer.get_unique_id():
+		return
+	ship.turrets.aim_point = aim_point
+	ship.turrets.has_aim = true
 
 
 @rpc("authority", "call_local", "unreliable")

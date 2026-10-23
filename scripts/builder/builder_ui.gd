@@ -50,6 +50,17 @@ extends Control
 @onready var material_help: Label = %MaterialHelp
 @onready var crew_section: VBoxContainer = %CrewSection
 @onready var crew_seats_spin: SpinBox = %CrewSeatsSpin
+@onready var save_premade_button: Button = %SavePremadeButton
+@onready var turret_section: VBoxContainer = %TurretSection
+@onready var turret_link_label: Label = %TurretLinkLabel
+@onready var turret_axis_x_spin: SpinBox = %TurretAxisXSpin
+@onready var turret_axis_y_spin: SpinBox = %TurretAxisYSpin
+@onready var turret_axis_z_spin: SpinBox = %TurretAxisZSpin
+@onready var turret_yaw_min_spin: SpinBox = %TurretYawMinSpin
+@onready var turret_yaw_max_spin: SpinBox = %TurretYawMaxSpin
+@onready var turret_pitch_min_spin: SpinBox = %TurretPitchMinSpin
+@onready var turret_pitch_max_spin: SpinBox = %TurretPitchMaxSpin
+@onready var turret_speed_spin: SpinBox = %TurretSpeedSpin
 @onready var thruster_section: VBoxContainer = %ThrusterSection
 @onready var thrust_dir_x_spin: SpinBox = %ThrustDirXSpin
 @onready var thrust_dir_y_spin: SpinBox = %ThrustDirYSpin
@@ -71,6 +82,7 @@ var _refreshing := false
 
 
 func _ready() -> void:
+	save_premade_button.visible = OS.has_feature("editor")   # only when started from the Godot editor
 	for t in ModuleCatalog.TYPES:
 		new_type_picker.add_item(t.capitalize())
 		active_type_picker.add_item(t.capitalize())
@@ -131,6 +143,19 @@ func _refresh_selection_tab() -> void:
 	crew_section.visible = m["type"] == ModuleCatalog.COMMANDER
 	if crew_section.visible:
 		crew_seats_spin.set_value_no_signal(int(m.get("crew", 1)))
+	turret_section.visible = m["type"] == ModuleCatalog.TURRET
+	if turret_section.visible:
+		var axis: Vector3 = m["dir"]
+		turret_axis_x_spin.set_value_no_signal(axis.x)
+		turret_axis_y_spin.set_value_no_signal(axis.y)
+		turret_axis_z_spin.set_value_no_signal(axis.z)
+		turret_yaw_min_spin.set_value_no_signal(d.extra(am, "yaw_min"))
+		turret_yaw_max_spin.set_value_no_signal(d.extra(am, "yaw_max"))
+		turret_pitch_min_spin.set_value_no_signal(d.extra(am, "pitch_min"))
+		turret_pitch_max_spin.set_value_no_signal(d.extra(am, "pitch_max"))
+		turret_speed_spin.set_value_no_signal(d.extra(am, "turn_speed"))
+		var bar := int(d.extra(am, "barrel"))
+		turret_link_label.text = "Barrel: module %d" % bar if bar >= 0 else "No barrel linked yet (select base + barrel, press T)."
 	thruster_section.visible = m["type"] == ModuleCatalog.THRUSTER
 	if thruster_section.visible:
 		var dir: Vector3 = m["dir"]
@@ -201,6 +226,13 @@ func _on_rotate_pressed() -> void: builder.begin_transform(BuilderTransformTool.
 func _on_scale_pressed() -> void: builder.begin_transform(BuilderTransformTool.Kind.SCALE)
 
 func _on_extrude_pressed() -> void: builder.extrude()
+func _on_save_premade_pressed() -> void: builder.save_premade()
+func _on_create_face_pressed() -> void: builder.create_face()
+func _on_make_module_pressed() -> void: builder.make_module()
+func _on_bevel_pressed() -> void: builder.bevel_selection()
+func _on_link_turret_pressed() -> void: builder.link_turret_barrel()
+func _on_bevel_width_changed(value: float) -> void: builder.bevel_width = value
+func _on_bevel_segments_changed(value: float) -> void: builder.bevel_segments = int(value)
 func _on_add_vertex_pressed() -> void: builder.add_vertex_on_edge()
 func _on_connect_pressed() -> void: builder.connect_vertices()
 func _on_link_pressed() -> void: builder.link_vertices()
@@ -224,6 +256,7 @@ func _on_auto_link_toggled(on: bool) -> void:
 # =====================================================================
 func _on_new_type_selected(index: int) -> void:
 	var type: String = ModuleCatalog.TYPES[index]
+	builder.new_module_type = type
 	new_type_help.text = ModuleCatalog.TYPE_HELP[type]
 	# Pick that type's usual shape and size, the player can still change them.
 	var prim: String = ModuleCatalog.DEFAULT_PRIMITIVE[type]
@@ -279,6 +312,16 @@ func _on_thrust_dir_changed(_value: float) -> void:
 ## Preset buttons pass the direction as a bind (see gen_builder.py).
 func _on_thrust_dir_preset_pressed(dir: Vector3) -> void:
 	builder.set_thruster_direction(dir)
+
+
+func _on_turret_axis_changed(_value: float) -> void:
+	if not _refreshing:
+		builder.set_thruster_direction(Vector3(turret_axis_x_spin.value, turret_axis_y_spin.value, turret_axis_z_spin.value))
+
+
+func _on_turret_value_changed(value: float, key: String) -> void:
+	if not _refreshing:
+		builder.set_turret_value(key, value)
 
 
 func _on_thrust_power_changed(value: float) -> void:

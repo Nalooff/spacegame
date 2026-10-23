@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/ship/ship.gd" id="1_ship"]
 [ext_resource type="Script" path="res://scripts/ship/electricity.gd" id="2_elec"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/ship/weapons.gd" id="6_wpn"]
 [ext_resource type="Script" path="res://scripts/ship/hull_renderer.gd" id="7_hull"]
 [ext_resource type="Shader" path="res://shaders/hull.gdshader" id="8_hullsh"]
+[ext_resource type="Script" path="res://scripts/ship/turrets.gd" id="9_turrets"]
 
 [sub_resource type="StandardMaterial3D" id="Mat_flame"]
 shading_mode = 0
@@ -47,6 +48,9 @@ properties/1/replication_mode = 1
 properties/2/path = NodePath(".:sync_vel")
 properties/2/spawn = true
 properties/2/replication_mode = 1
+properties/3/path = NodePath(".:turret_angles")
+properties/3/spawn = false
+properties/3/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="Rep_state"]
 properties/0/path = NodePath(".:module_hp")
@@ -54,7 +58,7 @@ properties/0/spawn = true
 properties/0/replication_mode = 2
 properties/1/path = NodePath(".:throttles")
 properties/1/spawn = false
-properties/1/replication_mode = 1
+properties/1/replication_mode = 2
 properties/2/path = NodePath(".:alive")
 properties/2/spawn = true
 properties/2/replication_mode = 2
@@ -89,7 +93,11 @@ script = ExtResource("5_ap")
 [node name="Weapons" type="Node" parent="."]
 script = ExtResource("6_wpn")
 
+[node name="Turrets" type="Node" parent="."]
+script = ExtResource("9_turrets")
+
 [node name="TransformSync" type="MultiplayerSynchronizer" parent="."]
+replication_interval = 0.033
 replication_config = SubResource("Rep_transform")
 
 [node name="StateSync" type="MultiplayerSynchronizer" parent="."]

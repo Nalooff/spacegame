@@ -1,3 +1,5 @@
+> Code made with the help of AI
+
 # Vertex Ships — Godot 4.4+ project
 
 Multiplayer spaceship game with vertex-built modular ships. Open the folder in **Godot 4.4 or newer**
@@ -125,6 +127,11 @@ Host spawns ships and handles respawn. Forward UDP 24565 to host over the intern
 `scripts/damage` · `scripts/net` · `scripts/ui` · `scripts/world` · `scripts/autoload` (Data, BusEvent, Game, Net) · `ships/*.json` premade · `tests/` headless tests ·
 `tools/` Python generators (gen_scenes / gen_builder / gen_lobby) for the .tscn files and premade ships (optional; the .tscn files are normal editable scenes).
 
+## Structure, splitting, turrets, seats, plugin
+See **docs/ARCHITECTURE_V2.md** (commander connectivity, crush rule, ship splitting, seat picker, base+barrel turrets, exhaust zones, new editor tools, the Godot plugin and its steps).
+
 ## Known simplifications
-Thrusters respond instantly; RigidBody3D inertia is diagonal only; turrets have no arc limits; no ship-ship damage from collisions;
-client-authoritative ships (fine for co-op/friends, not cheat-proof); remote ships use simple smoothing, no lag compensation.
+Thrusters respond instantly; RigidBody3D inertia is diagonal only; client-authoritative ships (fine for co-op/friends, not cheat-proof);
+remote ships use simple smoothing, no lag compensation. Module links are decided from the design and not recomputed after dents.
+A ship split uses each peer's copy of the parent, so a ship still building its mesh in the background (millions of vertices) should not be split in its first seconds.
+Bevel is clean where up to 3 faces meet at the edge ends. Turret barrels cannot be dented. The seat-picker preview of ships above 30,000 vertices shows one box per module.

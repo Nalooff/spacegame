@@ -96,6 +96,65 @@ func _ready() -> void:
 	check(pretty.count("\n") > 20, "pretty JSON has line breaks (%d lines)" % pretty.count("\n"))
 	check(ShipDesign.from_json(pretty) != null, "pretty JSON parses back")
 
+	# ---- new editor tools -------------------------------------------------------------------
+	var nb: ShipBuilder = b
+	nb.new_ship()
+	# bevel an edge of the hull box: stays a closed container, loses a little volume
+	var hull_i := 0
+	var vol0 := nb.design.module_volume(hull_i)
+	var edge := nb.design.module_edges(hull_i)[0]
+	nb.set_mode(ShipBuilder.Mode.EDGE)
+	nb.sel_edges = [Vector3i(hull_i, edge.x, edge.y)]
+	nb.bevel_width = 0.1
+	nb.bevel_segments = 1
+	nb.bevel_selection()
+	check(nb.design.count_open_edges(hull_i) == 0, "bevel keeps the hull closed")
+	check(nb.design.module_volume(hull_i) < vol0 and nb.design.module_volume(hull_i) > vol0 * 0.9, "bevel removes a sliver of volume (%.3f -> %.3f)" % [vol0, nb.design.module_volume(hull_i)])
+	nb.sel_edges = [Vector3i(hull_i, edge.x, edge.y)]
+	var e2 := nb.design.module_edges(hull_i)[3]
+	nb.sel_edges = [Vector3i(hull_i, e2.x, e2.y)]
+	nb.bevel_segments = 2
+	nb.bevel_selection()
+	check(nb.design.count_open_edges(hull_i) == 0, "rounded (2 segments) edge keeps the hull closed")
+
+	# create faces -> loose -> cannot save -> make module
+	nb.new_ship()
+	var base_v := nb.design.vertices.size()
+	var pts := [Vector3(5, 0, 0), Vector3(6, 0, 0), Vector3(5, 1, 0), Vector3(5, 0, 1)]
+	for p3 in pts:
+		nb.design.vertices.append(p3)
+	var quad_faces := [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]   # a tetrahedron
+	nb.set_mode(ShipBuilder.Mode.VERTEX)
+	for qf in quad_faces:
+		nb.sel_verts = [base_v + qf[0], base_v + qf[1], base_v + qf[2]]
+		nb.create_face()
+	check(nb.design.loose_face_count() == 4, "4 loose faces created")
+	check(not nb.design.validate().is_empty(), "loose faces block saving")
+	var loose_i := nb.design.loose_module()
+	nb.set_mode(ShipBuilder.Mode.FACE)
+	nb.sel_faces = []
+	for fi in 4:
+		nb.sel_faces.append(Vector2i(loose_i, fi))
+	nb.new_module_type = ModuleCatalog.ARMOR
+	nb.make_module()
+	check(nb.design.loose_module() < 0, "loose group disappears once all faces are in a module")
+	var tet := nb.design.modules.size() - 1
+	check(nb.design.modules[tet]["type"] == ModuleCatalog.ARMOR and nb.design.count_open_edges(tet) == 0 and nb.design.module_volume(tet) > 0.01, "faces became a closed armor module")
+	check(not nb.design.validate().is_empty(), "...but it floats unconnected, so still not savable: %s" % str(nb.design.validate()[0]))
+
+	# turret + barrel link
+	nb.new_ship()
+	var tb := nb.design.add_module(ModuleCatalog.TURRET, "dome", Vector3(0, 0.45, 0.4), Vector3(0.2, 0.2, 0.2))
+	var br := nb.design.add_module(ModuleCatalog.BARREL, "cylinder", Vector3(0, 0.5, 0.0), Vector3(0.06, 0.06, 0.4))
+	check(not nb.design.turret_errors().is_empty(), "unlinked barrel is reported")
+	nb.set_mode(ShipBuilder.Mode.OBJECT)
+	nb.sel_modules = [tb, br]
+	nb.link_turret_barrel()
+	check(int(nb.design.extra(tb, "barrel")) == br and nb.design.turret_errors().is_empty(), "turret + barrel linked")
+	nb.active_module = tb
+	nb.set_turret_value("yaw_max", 100.0)
+	check(is_equal_approx(float(nb.design.extra(tb, "yaw_max")), 100.0), "arc limit editable")
+
 	# every premade ship loads and validates
 	for s in ShipDesign.list_ships():
 		var sd := ShipDesign.load_file(s["path"])

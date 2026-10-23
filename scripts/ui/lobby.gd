@@ -3,6 +3,8 @@ extends Control
 ## Host: starts the game when everyone is locked, or force-launches when the timer ran out
 ## (players without a ship then get a random premade one). Widgets live in scenes/lobby.tscn.
 
+const SEAT_PICKER := preload("res://scenes/seat_picker.tscn")
+
 @onready var lobby_title_label: Label = %LobbyTitleLabel
 @onready var timer_label: Label = %TimerLabel
 @onready var ship_list: ItemList = %ShipList
@@ -72,8 +74,11 @@ func _on_lock_pressed() -> void:
 
 
 func _on_join_crew_pressed() -> void:
-	if _selected_player > 0:
-		Net.submit_join_crew(_selected_player)
+	if _selected_player > 0 and not has_node("SeatPicker"):
+		var picker := SEAT_PICKER.instantiate()
+		picker.name = "SeatPicker"
+		add_child(picker)
+		picker.open(_selected_player)
 
 
 func _on_leave_crew_pressed() -> void:

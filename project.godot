@@ -29,6 +29,10 @@ window/size/viewport_width=1600
 window/size/viewport_height=900
 window/stretch/mode="canvas_items"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/vertex_ships/plugin.cfg")
+
 [input]
 
 thrust_fwd={

@@ -1,0 +1,122 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/seat_picker.gd" id="1_s"]
+[ext_resource type="Script" path="res://scripts/ship/hull_renderer.gd" id="2_hull"]
+[ext_resource type="Shader" path="res://shaders/hull.gdshader" id="3_sh"]
+
+[sub_resource type="ProceduralSkyMaterial" id="Sky_preview"]
+
+[sub_resource type="Sky" id="Sky2_preview"]
+sky_material = SubResource("Sky_preview")
+
+[sub_resource type="Environment" id="Env_preview"]
+background_mode = 2
+sky = SubResource("Sky2_preview")
+ambient_light_source = 3
+ambient_light_color = Color(0.5, 0.55, 0.7, 1)
+
+[node name="SeatPicker" type="Control"]
+script = ExtResource("1_s")
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SeatDim" type="ColorRect" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.7)
+
+[node name="SeatPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -470.0
+offset_top = -330.0
+offset_right = 470.0
+offset_bottom = 330.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SeatMargin" type="MarginContainer" parent="SeatPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="SeatColumn" type="VBoxContainer" parent="SeatPanel/SeatMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SeatTitleLabel" type="Label" parent="SeatPanel/SeatMargin/SeatColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Choose your seat"
+theme_override_font_sizes/font_size = 24
+
+[node name="PreviewContainer" type="SubViewportContainer" parent="SeatPanel/SeatMargin/SeatColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(700, 420)
+stretch = true
+
+[node name="PreviewViewport" type="SubViewport" parent="SeatPanel/SeatMargin/SeatColumn/PreviewContainer"]
+unique_name_in_owner = true
+own_world_3d = true
+transparent_bg = false
+handle_input_locally = false
+size = Vector2i(900, 520)
+render_target_update_mode = 4
+
+[node name="PreviewWorld" type="Node3D" parent="SeatPanel/SeatMargin/SeatColumn/PreviewContainer/PreviewViewport"]
+
+[node name="PreviewEnvironment" type="WorldEnvironment" parent="SeatPanel/SeatMargin/SeatColumn/PreviewContainer/PreviewViewport/PreviewWorld"]
+environment = SubResource("Env_preview")
+
+[node name="PreviewLight" type="DirectionalLight3D" parent="SeatPanel/SeatMargin/SeatColumn/PreviewContainer/PreviewViewport/PreviewWorld"]
+transform = Transform3D(0.8, -0.3, 0.5, 0, 0.85, 0.53, -0.59, -0.42, 0.68, 0, 3, 0)
+
+[node name="PreviewCamera" type="Camera3D" parent="SeatPanel/SeatMargin/SeatColumn/PreviewContainer/PreviewViewport/PreviewWorld"]
+unique_name_in_owner = true
+current = true
+fov = 40.0
+
+[node name="PreviewHull" type="Node3D" parent="SeatPanel/SeatMargin/SeatColumn/PreviewContainer/PreviewViewport/PreviewWorld"]
+unique_name_in_owner = true
+script = ExtResource("2_hull")
+shader = ExtResource("3_sh")
+
+[node name="SeatMarkers" type="Control" parent="SeatPanel/SeatMargin/SeatColumn/PreviewContainer"]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="SeatHintLabel" type="Label" parent="SeatPanel/SeatMargin/SeatColumn"]
+layout_mode = 2
+text = "Click a Commander module. The number shows seats taken / seats available. Drag to rotate, wheel to zoom."
+autowrap_mode = 3
+modulate = Color(1, 1, 1, 0.65)
+
+[node name="SeatCancelButton" type="Button" parent="SeatPanel/SeatMargin/SeatColumn"]
+layout_mode = 2
+text = "Cancel"
+custom_minimum_size = Vector2(160, 40)
+
+[connection signal="pressed" from="SeatPanel/SeatMargin/SeatColumn/SeatCancelButton" to="." method="_on_cancel_pressed"]

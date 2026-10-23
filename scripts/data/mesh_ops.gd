@@ -133,3 +133,85 @@ static func _edge_position(ids: PackedInt32Array, a: int, b: int) -> int:
 		if (u == a and v == b) or (u == b and v == a):
 			return k
 	return -1
+
+
+## "Bevel": replaces the edge (a, b) of module `mi` by a flat strip `width` metres wide (Blender's bevel with one segment).
+## Each end of the edge is split into two vertices that slide along the neighbouring edges of the two faces on either side;
+## the faces that meet at the corner get both vertices in the right order, so the surface stays closed when at most
+## 3 faces meet at the corner (boxes, wedges, ...).
+## Returns the two new long edges (so they can be beveled again = "round"), or [] when the edge cannot be beveled.
+static func bevel_edge(d: ShipDesign, mi: int, a: int, b: int, width: float) -> Array[Vector2i]:
+	var faces: Array = d.faces_array(mi)
+	var f1 := -1      # face where the loop runs a -> b
+	var f2 := -1      # face where the loop runs b -> a
+	for fi in faces.size():
+		var ids: PackedInt32Array = faces[fi]
+		var n := ids.size()
+		for k in n:
+			if ids[k] == a and ids[(k + 1) % n] == b:
+				f1 = fi
+			elif ids[k] == b and ids[(k + 1) % n] == a:
+				f2 = fi
+	if f1 < 0 or f2 < 0:
+		return []
+	var l1: PackedInt32Array = faces[f1]
+	var l2: PackedInt32Array = faces[f2]
+	var ia := l1.find(a)
+	var pa: int = l1[(ia - 1 + l1.size()) % l1.size()]          # neighbour of a in face 1 (not b)
+	var pb: int = l1[(l1.find(b) + 1) % l1.size()]              # neighbour of b in face 1 (not a)
+	var jb := l2.find(b)
+	var qb: int = l2[(jb - 1 + l2.size()) % l2.size()]          # neighbour of b in face 2
+	var qa: int = l2[(l2.find(a) + 1) % l2.size()]              # neighbour of a in face 2
+	var w := minf(width, 0.45 * minf(minf(d.vertices[a].distance_to(d.vertices[pa]), d.vertices[a].distance_to(d.vertices[qa])),
+		minf(d.vertices[b].distance_to(d.vertices[pb]), d.vertices[b].distance_to(d.vertices[qb]))))
+	if w < 0.005:
+		return []
+	var a1 := _slide(d, a, pa, w)
+	var a2 := _slide(d, a, qa, w)
+	var b1 := _slide(d, b, pb, w)
+	var b2 := _slide(d, b, qb, w)
+	for fi in faces.size():
+		var ids: PackedInt32Array = faces[fi]
+		if fi == f1:
+			ids[ids.find(a)] = a1
+			ids[ids.find(b)] = b1
+		elif fi == f2:
+			ids[ids.find(a)] = a2
+			ids[ids.find(b)] = b2
+		else:
+			ids = _split_corner(ids, a, a1, a2, pa, qa)
+			ids = _split_corner(ids, b, b1, b2, pb, qb)
+		faces[fi] = ids
+	faces.append(PackedInt32Array([b1, a1, a2, b2]))
+	d.set_faces_array(mi, faces)
+	d.fix_winding(mi)
+	return [Vector2i(a1, b1), Vector2i(a2, b2)]
+
+
+static func _slide(d: ShipDesign, from: int, toward: int, w: float) -> int:
+	var dir := (d.vertices[toward] - d.vertices[from]).normalized()
+	d.vertices.append(d.vertices[from] + dir * w)
+	return d.vertices.size() - 1
+
+
+## In a third face that has corner `v`: replace it by the two new vertices, ordered so each sits next to the neighbour it slid towards.
+static func _split_corner(ids: PackedInt32Array, v: int, v1: int, v2: int, n1: int, n2: int) -> PackedInt32Array:
+	var k := ids.find(v)
+	if k < 0:
+		return ids
+	var n := ids.size()
+	var prev := ids[(k - 1 + n) % n]
+	var next := ids[(k + 1) % n]
+	var out := PackedInt32Array()
+	var first := v1
+	var second := v2
+	if prev == n2 or next == n1:
+		first = v2
+		second = v1
+	for i in n:
+		if i == k:
+			out.append(first)
+			out.append(second)
+		else:
+			out.append(ids[i])
+	return out

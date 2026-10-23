@@ -59,12 +59,13 @@ def build():
     undo_b = tool_button("Undo", "UndoButton", "Ctrl+Z")
     redo_b = tool_button("Redo", "RedoButton", "Ctrl+Y (or Ctrl+Shift+Z)")
     back_b = button("Back to menu", "BackToMenuButton")
+    premade_b = button("Save as PREMADE", "SavePremadeButton", unique=True, visible="false", tooltip_text=s("Only when run from the Godot editor: writes into res://ships/"))
     spacer = N("TopBarSpacer", "Control", {"layout_mode": 2, "size_flags_horizontal": 3})
     top_bar = panel("TopBar", {"anchors_preset": 10, "anchor_right": 1.0, "offset_left": 8.0, "offset_top": 8.0, "offset_right": -8.0,
                                "offset_bottom": 56.0, "grow_horizontal": 2},
                     [hbox("TopBarRow", [label("Ship name", "ShipNameTitle"), ship_name_edit, new_b, save_b,
                                         label("|", "TopBarDivider1"), load_picker, load_b, spacer,
-                                        undo_b, redo_b, back_b])])
+                                        undo_b, redo_b, premade_b, back_b])])
     ship_name_edit.props["custom_minimum_size"] = "Vector2(220, 0)"
     ship_name_edit.props["size_flags_horizontal"] = 1
     load_picker.props["custom_minimum_size"] = "Vector2(200, 0)"
@@ -84,6 +85,12 @@ def build():
     extrude_b = tool_button("Extrude face  (E)", "ExtrudeButton", "Face mode: push the face out into a new block (new vertices)")
     addv_b = tool_button("Add vertex on edge  (W)", "AddVertexButton", "Edge mode: split the edge in the middle with a new vertex")
     conn_b = tool_button("Connect vertices  (J)", "ConnectVerticesButton", "Vertex mode: draw a new edge between 2 vertices of the same face")
+    face_b = tool_button("Create face  (C)", "CreateFaceButton", "Vertex mode: click 3+ vertices in order, then make a face. It is red (loose) until it is part of a module.")
+    makemod_b = tool_button("Make module  (N)", "MakeModuleButton", "Face mode: the selected faces become a new module of the type chosen in the Add tab. Must be a closed container.")
+    bevel_b = tool_button("Bevel / round  (B)", "BevelButton", "Edge mode: replace the selected edges by a flat strip. Use Segments 2-3 to round them off.")
+    bevel_w = spin("BevelWidthSpin", 0.01, 2, 0.01, 0.1, tooltip_text=s("Width of the bevel in metres"))
+    bevel_s = spin("BevelSegmentsSpin", 1, 3, 1, 1, tooltip_text=s("1 = flat chamfer, 2-3 = rounded"))
+    turret_link_b = tool_button("Link turret + barrel  (T)", "LinkTurretButton", "Object mode: select one turret base and one barrel, then link them")
     link_b = tool_button("Link vertices  (L)", "LinkButton", "Merge the selected vertices so they move together (green dots)")
     unlink_b = tool_button("Unlink vertex  (U)", "UnlinkButton", "Detach the vertex from the other modules")
     mirror_b = tool_button("Mirror  (M)", "MirrorButton", "Object mode: copy the module to the other side (X axis)")
@@ -99,7 +106,8 @@ def build():
             vbox("ToolList", [
                 heading("SELECT", "SelectHeading"), mode_obj, mode_vert, mode_edge, mode_face, sep("SelectDivider"),
                 heading("TRANSFORM", "TransformHeading"), grab_b, rot_b, scale_b, sep("TransformDivider"),
-                heading("SHAPE", "ShapeHeading"), extrude_b, addv_b, conn_b, link_b, unlink_b, sep("ShapeDivider"),
+                heading("SHAPE", "ShapeHeading"), extrude_b, addv_b, conn_b, link_b, unlink_b, bevel_b, row("Width (m)", "BevelWidth", bevel_w), row("Segments", "BevelSegments", bevel_s),
+                sep("ShapeDivider"), heading("FACES & MODULES", "FacesHeading"), face_b, makemod_b, turret_link_b, sep("FacesDivider"),
                 heading("OBJECT", "ObjectHeading"), mirror_b, dup_b, del_b, sep("ObjectDivider"),
                 heading("VIEW", "ViewHeading"), frame_b, row("Snap (m)", "Snap", snap_spin), auto_link], size_flags_horizontal=3)])])
 
@@ -122,6 +130,7 @@ def build():
     dir_names = [("-Z fwd", "Vector3(0, 0, -1)"), ("+Z", "Vector3(0, 0, 1)"), ("+X", "Vector3(1, 0, 0)"),
                  ("-X", "Vector3(-1, 0, 0)"), ("+Y", "Vector3(0, 1, 0)"), ("-Y", "Vector3(0, -1, 0)")]
     dir_buttons = [(button(t, "ThrustDirPreset%d" % i, tooltip_text=s("Thruster pushes the ship toward " + t)), v) for i, (t, v) in enumerate(dir_names)]
+    turret_axis_buttons = [(button(t, "TurretAxisPreset%d" % i, tooltip_text=s("Turret swivel 'up' axis: " + t)), v) for i, (t, v) in enumerate(dir_names)]
     sel_tab = vbox("Selection", [
         label("", "SelectionInfoLabel", unique=True, wrap=True),
         vbox("CenterSection", [
@@ -140,6 +149,18 @@ def build():
                 heading("CREW", "CrewHeading"),
                 label("Seats on the ship, pilot included. Friends can join a locked ship in the lobby as crew and man the turrets.", "CrewHelp", wrap=True),
                 row("Seats", "CrewSeats", spin("CrewSeatsSpin", 1, 8, 1, 1))], unique=True),
+            vbox("TurretSection", [
+                heading("TURRET BASE (crew station + swivel)", "TurretHeading"),
+                label("The barrel (a separate 'Turret barrel' module, link it with T) swivels around the centre of this base. Mount axis = the 'up' of the swivel.", "TurretHelp", wrap=True),
+                hbox("TurretAxisRow", [spin("TurretAxisXSpin", -1, 1, 0.05, 0), spin("TurretAxisYSpin", -1, 1, 0.05, 1), spin("TurretAxisZSpin", -1, 1, 0.05, 0)]),
+                hbox("TurretAxisPresetRow1", [b for b, _ in turret_axis_buttons[:3]]),
+                hbox("TurretAxisPresetRow2", [b for b, _ in turret_axis_buttons[3:]]),
+                row("Yaw min (deg)", "TurretYawMin", spin("TurretYawMinSpin", -180, 0, 5, -180)),
+                row("Yaw max (deg)", "TurretYawMax", spin("TurretYawMaxSpin", 0, 180, 5, 180)),
+                row("Pitch min (deg)", "TurretPitchMin", spin("TurretPitchMinSpin", -90, 0, 5, -10)),
+                row("Pitch max (deg)", "TurretPitchMax", spin("TurretPitchMaxSpin", 0, 90, 5, 85)),
+                row("Turn speed (deg/s)", "TurretSpeed", spin("TurretSpeedSpin", 10, 360, 5, 90)),
+                label("", "TurretLinkLabel", unique=True, wrap=True)], unique=True),
             vbox("ThrusterSection", [
                 heading("THRUSTER", "ThrusterHeading"),
                 label("Direction the thruster PUSHES the ship.\n(The flame goes the opposite way.)", "ThrusterDirHelp", wrap=True),
@@ -219,10 +240,13 @@ def build():
     for b, m in [(new_b, "new"), (save_b, "save"), (load_b, "load"), (undo_b, "undo"), (redo_b, "redo"), (back_b, "back"),
                  (mode_obj, "mode_object"), (mode_vert, "mode_vertex"), (mode_edge, "mode_edge"), (mode_face, "mode_face"),
                  (grab_b, "grab"), (rot_b, "rotate"), (scale_b, "scale"), (extrude_b, "extrude"), (addv_b, "add_vertex"),
-                 (conn_b, "connect"), (link_b, "link"), (unlink_b, "unlink"), (mirror_b, "mirror"), (dup_b, "duplicate"),
+                 (conn_b, "connect"), (face_b, "create_face"), (makemod_b, "make_module"), (bevel_b, "bevel"), (turret_link_b, "link_turret"), (link_b, "link"), (unlink_b, "unlink"), (mirror_b, "mirror"), (dup_b, "duplicate"),
                  (del_b, "delete"), (frame_b, "frame")]:
         C("pressed", b, "_on_%s_pressed" % m)
     C("value_changed", snap_spin, "_on_snap_changed")
+    C("pressed", premade_b, "_on_save_premade_pressed")
+    C("value_changed", bevel_w, "_on_bevel_width_changed")
+    C("value_changed", bevel_s, "_on_bevel_segments_changed")
     C("toggled", auto_link, "_on_auto_link_toggled")
     def find_named(node, name):
         if node.name == name: return node
@@ -239,6 +263,10 @@ def build():
     C("value_changed", find_named(sel_tab, "CrewSeatsSpin"), "_on_crew_seats_changed")
     for b, v in dir_buttons: C("pressed", b, "_on_thrust_dir_preset_pressed", v)
     C("value_changed", find_named(sel_tab, "ThrustPowerSpin"), "_on_thrust_power_changed")
+    for b, v in turret_axis_buttons: C("pressed", b, "_on_thrust_dir_preset_pressed", v)
+    for n in ("TurretAxisXSpin", "TurretAxisYSpin", "TurretAxisZSpin"): C("value_changed", find_named(sel_tab, n), "_on_turret_axis_changed")
+    for n, k in (("TurretYawMinSpin", "yaw_min"), ("TurretYawMaxSpin", "yaw_max"), ("TurretPitchMinSpin", "pitch_min"), ("TurretPitchMaxSpin", "pitch_max"), ("TurretSpeedSpin", "turn_speed")):
+        C("value_changed", find_named(sel_tab, n), "_on_turret_value_changed", '"%s"' % k)
     C("value_changed", reactor, "_on_reactor_changed")
     C("value_changed", gyro, "_on_gyro_changed")
     return scene

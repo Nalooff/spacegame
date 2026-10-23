@@ -58,6 +58,10 @@ func _ready() -> void:
 	tool.builder = self
 	tool.finished.connect(_on_transform_finished)
 	camera_rig.view_changed.connect(_on_camera_moved)
+	# started from the "Vertex Ships" editor dock: it leaves the ship to open in this file
+	if Data.builder_open_path == "" and OS.has_feature("editor") and FileAccess.file_exists("user://open_in_builder.txt"):
+		Data.builder_open_path = FileAccess.get_file_as_string("user://open_in_builder.txt").strip_edges()
+		DirAccess.remove_absolute("user://open_in_builder.txt")
 	if Data.builder_open_path != "":
 		var loaded := ShipDesign.load_file(Data.builder_open_path)
 		if loaded != null:
@@ -460,6 +464,10 @@ func _handle_key(e: InputEventKey) -> void:
 		KEY_E: extrude()
 		KEY_W: add_vertex_on_edge()
 		KEY_J: connect_vertices()
+		KEY_C: create_face()
+		KEY_N: make_module()
+		KEY_B: bevel_selection()
+		KEY_T: link_turret_barrel()
 		KEY_L: link_vertices()
 		KEY_U: unlink_vertices()
 		KEY_M: mirror()
@@ -671,6 +679,106 @@ func connect_vertices() -> void:
 	say("Those two vertices do not share a face (or are already neighbours).")
 
 
+## "Create face" (key C, Vertex mode): the selected vertices, in the order you clicked them, become one face.
+## It is a LOOSE face (red) until you group faces into a closed container with "Make module".
+func create_face() -> void:
+	if mode != Mode.VERTEX or sel_verts.size() < 3:
+		say("Press 2 (Vertex mode), click 3 or more vertices IN ORDER around the face, then C.")
+		return
+	checkpoint()
+	design.add_loose_face(PackedInt32Array(sel_verts))
+	on_design_changed()
+	say("Face created (red = not in a module yet). Select its faces in Face mode (4) and press N to make a module.")
+
+
+## "Make module" (key N, Face mode): the selected faces become a new module of the type picked in the Add tab.
+## The faces must form a CLOSED container (every edge shared by exactly two faces), otherwise the ship cannot be saved.
+func make_module() -> void:
+	if mode != Mode.FACE or sel_faces.is_empty():
+		say("Press 4 (Face mode), select the faces that enclose a volume (Shift+click, or A), then N.")
+		return
+	var src := sel_faces[0].x
+	for f in sel_faces:
+		if f.x != src:
+			say("Select faces of ONE module at a time (loose faces are all in the red 'loose' group).")
+			return
+	checkpoint()
+	var idx: Array[int] = []
+	for f in sel_faces:
+		idx.append(f.y)
+	var n := design.move_faces_to_new_module(src, idx, new_module_type)
+	clear_selection()
+	if n >= 0:
+		active_module = n
+		sel_modules = [n]
+		var open_edges := design.count_open_edges(n)
+		say("Module %d created (%s)%s" % [n, new_module_type,
+			"." if open_edges == 0 else ". NOT closed yet: %d open edge(s). Add the missing faces." % open_edges])
+	on_design_changed()
+	on_selection_changed()
+
+
+## "Bevel / round" (key B, Edge mode): flat strip along the selected edges. `bevel_segments` 2-3 rounds it off.
+var bevel_width: float = 0.1
+var bevel_segments: int = 1
+var new_module_type: String = ModuleCatalog.HULL
+
+func bevel_selection() -> void:
+	if mode != Mode.EDGE or sel_edges.is_empty():
+		say("Press 3 (Edge mode), click the edges to bevel, then B.")
+		return
+	checkpoint()
+	var done := 0
+	var todo: Array[Vector3i] = sel_edges.duplicate()
+	for e in todo:
+		var w := bevel_width
+		var current: Array[Vector2i] = [Vector2i(e.y, e.z)]
+		for step in bevel_segments:
+			var next: Array[Vector2i] = []
+			for edge in current:
+				next.append_array(MeshOps.bevel_edge(design, e.x, edge.x, edge.y, w))
+			if step == 0 and not next.is_empty():
+				done += 1
+			current = next
+			w *= 0.5
+	sel_edges.clear()
+	on_design_changed()
+	on_selection_changed()
+	if done == 0:
+		_undo.drop_last()
+		say("Could not bevel (the edge needs a face on both sides, and room for the strip).")
+	else:
+		say("Beveled %d edge(s). Unlinked from other modules at the corners: relink with L if needed." % done)
+
+
+## Link a turret base and its barrel (Object mode: select the base and the barrel, key T).
+func link_turret_barrel() -> void:
+	var base := -1
+	var barrel := -1
+	for mi in sel_modules:
+		match design.modules[mi]["type"]:
+			ModuleCatalog.TURRET: base = mi
+			ModuleCatalog.BARREL: barrel = mi
+	if base < 0 or barrel < 0:
+		say("Object mode: select ONE turret base and ONE barrel (Shift+click), set their types in the Selection tab, then T.")
+		return
+	checkpoint()
+	for mi in design.modules.size():
+		if design.modules[mi]["type"] == ModuleCatalog.TURRET and int(design.extra(mi, "barrel")) == barrel:
+			design.modules[mi]["barrel"] = -1
+	design.modules[base]["barrel"] = barrel
+	on_design_changed()
+	say("Barrel %d is now mounted on turret %d. The swivel point is the centre of the base." % [barrel, base])
+
+
+func set_turret_value(key: String, value: float) -> void:
+	if active_module < 0 or design.modules[active_module]["type"] != ModuleCatalog.TURRET:
+		return
+	checkpoint("turret_" + key)
+	design.modules[active_module][key] = value
+	on_design_changed()
+
+
 func link_vertices() -> void:
 	if mode != Mode.VERTEX or sel_verts.size() < 2:
 		say("Press 2 (Vertex mode), Shift+click two or more vertices, then L to link them.")
@@ -748,7 +856,7 @@ func set_commander_crew(seats: int) -> void:
 func set_thruster_direction(dir: Vector3) -> void:
 	if active_module < 0:
 		return
-	checkpoint("dir")
+	checkpoint("dir")    # (also the mount axis of a turret base)
 	design.modules[active_module]["dir"] = dir.normalized() if dir.length() > 0.001 else Vector3(0, 0, -1)
 	on_design_changed()
 
@@ -799,6 +907,16 @@ func save() -> void:
 		say("Saved as '%s' (user://ships/)." % design.ship_name)
 	else:
 		say("Save failed (error %d)." % err)
+
+
+## Only shown when the game runs from the Godot editor: writes into res://ships/ (see addons/vertex_ships).
+func save_premade() -> void:
+	var errors := design.validate()
+	if not errors.is_empty():
+		say("Cannot save: " + errors[0])
+		return
+	var err := design.save_premade()
+	say("Saved as PREMADE ship '%s' (res://ships/). Refresh the Vertex Ships dock." % design.ship_name if err == OK else "Save failed (error %d)." % err)
 
 
 func load_from(path: String) -> void:

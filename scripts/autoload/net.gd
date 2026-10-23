@@ -6,13 +6,15 @@ extends Node
 ##   join_lobby(address, port, password)  -> host checks password / space, answers join_result()
 ##   submit_ship(blob)                    -> "I chose this ship"        (not final)
 ##   submit_lock(true)                    -> "lock in": ship is final, others can join it as crew
-##   submit_join_crew(captain_id)         -> become crew of a locked ship that has a free seat
+##   submit_join_crew(captain_id, commander) -> become crew of a locked ship, on a free seat of that commander module
 ##   start_game()                         -> host only: allowed when everyone is locked, or when the timer ran out
 ##
-## ROSTER  Net.players = { peer_id: { name, ship (HASH of the ship blob, "" = none), ship_name, locked, crew_of, seats } }
+## ROSTER  Net.players = { peer_id: { name, ship (HASH of the ship blob, "" = none), ship_name, locked, crew_of, seats, slots, seat } }
 ##   The ships themselves are in Net.blobs {hash: PackedByteArray}; they are sent in chunks (see 'Ship blobs').
 ##   crew_of = 0 -> the player pilots their own ship;  crew_of = X -> crew on player X's ship.
-##   seats = total seats (pilot included) of the player's ship, from its Commander module.
+##   seats = total seats (pilot included) of the player's ship = sum of the seats of all its Commander modules.
+##   slots = { commander module index: seats of that commander } (Dictionary), seat = the commander module this player sits at
+##           (-1 = not chosen yet: a pilot then sits at the first commander).
 ##
 ## Ship nodes themselves are replicated by the MultiplayerSpawner in game_world.tscn.
 
@@ -189,7 +191,7 @@ func _register_host() -> void:
 
 
 func _new_entry(pname: String) -> Dictionary:
-	return {"name": pname.left(20), "ship": "", "ship_name": "", "locked": false, "crew_of": 0, "seats": 1}
+	return {"name": pname.left(20), "ship": "", "ship_name": "", "locked": false, "crew_of": 0, "seats": 1, "slots": {}, "seat": -1}
 
 
 # =====================================================================
@@ -258,8 +260,8 @@ func submit_lock(on: bool) -> void:
 	_ask_host(&"srv_set_lock", [on])
 
 
-func submit_join_crew(captain_id: int) -> void:
-	_ask_host(&"srv_join_crew", [captain_id])
+func submit_join_crew(captain_id: int, commander: int) -> void:
+	_ask_host(&"srv_join_crew", [captain_id, commander])
 
 
 func submit_leave_crew() -> void:
@@ -347,7 +349,7 @@ func _host_accept_ship(id: int, h: String, blob: PackedByteArray) -> void:
 	_peer_has.get_or_add(id, {})[h] = true
 	players[id]["ship"] = h
 	players[id]["ship_name"] = d.ship_name
-	players[id]["seats"] = d.crew_capacity()
+	_set_ship_slots(id, d)
 	_broadcast()
 
 
@@ -358,6 +360,24 @@ func client_blob_chunk(h: String, total: int, pos: int, part: PackedByteArray) -
 	if not blob.is_empty() and hash_blob(blob) == h:
 		blobs[h] = blob
 		blob_received.emit(h)
+
+
+## Client: make sure we hold the ship with hash `h` (e.g. to preview a captain's ship before choosing a seat).
+## Emits blob_received(h) when it is here (immediately if we already have it).
+func request_blob(h: String) -> void:
+	if blobs.has(h) or not multiplayer.has_multiplayer_peer():
+		blob_received.emit(h)
+		return
+	_ask_host(&"srv_send_blob", [h])
+
+
+@rpc("any_peer", "reliable")
+func srv_send_blob(h: String) -> void:
+	var id := _sender()
+	if not multiplayer.is_server() or not players.has(id) or not blobs.has(h):
+		return
+	_peer_has.get_or_add(id, {})[h] = true
+	_send_blob(id, h, blobs[h], &"client_blob_chunk")
 
 
 @rpc("any_peer", "reliable")
@@ -379,16 +399,19 @@ func srv_set_lock(on: bool) -> void:
 
 
 @rpc("any_peer", "reliable")
-func srv_join_crew(captain: int) -> void:
+func srv_join_crew(captain: int, commander: int) -> void:
 	var id := _sender()
 	if not multiplayer.is_server() or not players.has(id) or not players.has(captain) or captain == id:
 		return
 	var cap: Dictionary = players[captain]
-	if not cap["locked"] or cap["crew_of"] != 0 or crew_count(captain) + 1 >= int(cap["seats"]):
+	if not cap["locked"] or cap["crew_of"] != 0 or not (cap["slots"] as Dictionary).has(commander):
+		return
+	if seats_left(captain, commander) <= 0:
 		return
 	if crew_count(id) > 0:
 		return # I am a captain with crew of my own: unlock first
 	players[id]["crew_of"] = captain
+	players[id]["seat"] = commander
 	players[id]["locked"] = true
 	_broadcast()
 
@@ -399,6 +422,7 @@ func srv_leave_crew() -> void:
 	if not multiplayer.is_server() or not players.has(id) or players[id]["crew_of"] == 0:
 		return
 	players[id]["crew_of"] = 0
+	players[id]["seat"] = -1
 	players[id]["locked"] = false
 	_broadcast()
 
@@ -408,6 +432,7 @@ func _release_crew_of(captain: int) -> void:
 	for id in players:
 		if players[id]["crew_of"] == captain:
 			players[id]["crew_of"] = 0
+			players[id]["seat"] = -1
 			players[id]["locked"] = false
 
 
@@ -420,11 +445,178 @@ func crew_count(captain: int) -> int:
 	return n
 
 
-## Free seats on a locked captain's ship.
+## Free seats on a locked captain's ship (all commanders together).
 func seats_free(captain: int) -> int:
 	if not players.has(captain) or not players[captain]["locked"] or players[captain]["crew_of"] != 0:
 		return 0
-	return int(players[captain]["seats"]) - 1 - crew_count(captain)
+	var n := 0
+	for cmd in players[captain]["slots"]:
+		n += seats_left(captain, int(cmd))
+	return n
+
+
+## The commander module `peer` sits at on the ship they are aboard (pilots default to the first commander).
+func seat_of(peer: int) -> int:
+	var p: Dictionary = players.get(peer, {})
+	if p.is_empty():
+		return -1
+	if int(p["seat"]) >= 0:
+		return int(p["seat"])
+	if int(p["crew_of"]) == 0:
+		var keys: Array = (p["slots"] as Dictionary).keys()
+		keys.sort()
+		return int(keys[0]) if not keys.is_empty() else -1
+	return -1
+
+
+## { commander module: number of people sitting there } on `captain`'s ship (the captain counts too).
+func occupancy(captain: int) -> Dictionary:
+	var out := {}
+	for cmd in players.get(captain, {}).get("slots", {}):
+		out[int(cmd)] = 0
+	for id in players:
+		if id == captain or int(players[id]["crew_of"]) == captain:
+			var s := seat_of(id)
+			if out.has(s):
+				out[s] += 1
+	return out
+
+
+## Free seats at ONE commander of `captain`'s ship.
+func seats_left(captain: int, commander: int) -> int:
+	var slots: Dictionary = players.get(captain, {}).get("slots", {})
+	if not slots.has(commander):
+		return 0
+	return int(slots[commander]) - int(occupancy(captain).get(commander, 0))
+
+
+func _set_ship_slots(id: int, d: ShipDesign) -> void:
+	players[id]["slots"] = d.seat_slots()
+	players[id]["seats"] = d.crew_capacity()
+	players[id]["seat"] = -1
+
+
+# ---- in-game changes of the ship structure (host only) ---------------------------------------------------
+## A ship lost commanders and/or split into several ships (see Ship._check_structure).
+##   captain      peer id of the ship's owner (0 = a derelict nobody flies: nothing to do)
+##   alive_cmds   commander modules (ids of the ship BEFORE the split) that still work, anywhere
+##   groups       module-id arrays of the parts that became NEW ships (ascending ids; child module k = ids[k])
+## Returns, per group, the peer that now flies that new ship (0 = nobody: it drifts as a derelict).
+## Crew whose commander is gone move to a free seat elsewhere on the ship, or get a ship of their own.
+func srv_structure_changed(captain: int, alive_cmds: Array, groups: Array) -> Array:
+	var pilots: Array = []
+	for g in groups:
+		pilots.append(0)
+	if not multiplayer.is_server() or not players.has(captain):
+		return pilots
+	var slots: Dictionary = (players[captain]["slots"] as Dictionary).duplicate()
+	var crew: Array[int] = []
+	for id in players:
+		if int(players[id]["crew_of"]) == captain:
+			crew.append(id)
+	crew.sort()
+	# 1) people seated in a part that became a ship of its own go with it
+	var left_ids := {}
+	for gi in groups.size():
+		var ids: PackedInt32Array = groups[gi]
+		var first := 0
+		for id in crew:
+			var idx := ids.find(int(players[id]["seat"]))
+			if idx < 0:
+				continue
+			left_ids[id] = true
+			if first == 0:
+				first = id
+				players[id]["crew_of"] = 0
+				players[id]["locked"] = true
+				var child_slots := {}
+				for k in ids.size():
+					if slots.has(int(ids[k])):
+						child_slots[k] = slots[int(ids[k])]
+				players[id]["slots"] = child_slots
+				players[id]["seats"] = _sum_slots(child_slots)
+				players[id]["seat"] = idx
+				pilots[gi] = id
+			else:
+				players[id]["crew_of"] = first
+				players[id]["seat"] = idx
+	# 2) the captain's own seat and the seats of the crew that stayed: commanders that are gone lose their people
+	var here := {}
+	for cmd in slots.keys():
+		if alive_cmds.has(int(cmd)) and not _in_any_group(int(cmd), groups):
+			here[int(cmd)] = int(slots[cmd])
+	var kept_slots := here.duplicate()
+	players[captain]["slots"] = kept_slots
+	players[captain]["seats"] = _sum_slots(kept_slots)
+	if not kept_slots.has(int(players[captain]["seat"])):
+		players[captain]["seat"] = -1       # -> first remaining commander
+	for id in crew:
+		if left_ids.has(id) or not players[id].get("crew_of", 0) == captain:
+			continue
+		if kept_slots.has(int(players[id]["seat"])):
+			continue
+		var free := -1
+		for cmd in kept_slots:
+			if seats_left(captain, int(cmd)) > 0:
+				free = int(cmd)
+				break
+		if free >= 0:
+			players[id]["seat"] = free
+		else:
+			players[id]["crew_of"] = 0
+			players[id]["seat"] = -1
+			if players[id]["ship"] == "":
+				_give_random_ship(id)
+				_distribute_blobs()
+			crew_orphaned.emit(id)
+	_broadcast()
+	return pilots
+
+
+func _in_any_group(module: int, groups: Array) -> bool:
+	for g in groups:
+		if (g as PackedInt32Array).has(module):
+			return true
+	return false
+
+
+func _sum_slots(slots: Dictionary) -> int:
+	var n := 0
+	for k in slots:
+		n += int(slots[k])
+	return n
+
+
+## Host: a ship of `captain` was (re)spawned from their roster design: everybody sits at a fresh seat again.
+func srv_reset_seats(captain: int) -> void:
+	if not multiplayer.is_server() or not players.has(captain):
+		return
+	var h: String = players[captain]["ship"]
+	if h != "" and blobs.has(h):
+		var d := ShipDesign.from_blob(blobs[h])
+		if d != null:
+			_set_ship_slots(captain, d)
+	var crew: Array[int] = []
+	for id in players:
+		if int(players[id]["crew_of"]) == captain:
+			crew.append(id)
+	crew.sort()
+	for id in crew:
+		players[id]["seat"] = -1
+	for id in crew:
+		var free := -1
+		var keys: Array = (players[captain]["slots"] as Dictionary).keys()
+		keys.sort()
+		for cmd in keys:
+			if seats_left(captain, int(cmd)) > 0:
+				free = int(cmd)
+				break
+		if free >= 0:
+			players[id]["seat"] = free
+		else:
+			players[id]["crew_of"] = 0
+			players[id]["locked"] = false
+	_broadcast()
 
 
 ## The peer whose ship `peer` is aboard (itself, unless crew).
@@ -499,7 +691,7 @@ func _give_random_ship(id: int) -> void:
 	blobs[h] = blob
 	players[id]["ship"] = h
 	players[id]["ship_name"] = d.ship_name
-	players[id]["seats"] = d.crew_capacity()
+	_set_ship_slots(id, d)
 
 
 @rpc("authority", "call_local", "reliable")
