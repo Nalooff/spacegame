@@ -85,10 +85,12 @@ var _iso_scale: float = 1.0
 var layers: Array[Dictionary] = []
 signal layers_changed
 var _mouse: Vector2 = Vector2.ZERO
+var _sheet_pass: bool = false          ## true while the Sheet view draws its decks (no ghost of the deck below there)
 
 
 func _ready() -> void:
 	if layers.is_empty():
+		register_layer("below", "Deck below", Callable(self, "_layer_below"))      # first: it is drawn underneath everything
 		register_layer("structure", "Hull", Callable(self, "_layer_structure"))
 		register_layer("rooms", "Rooms and corridors", Callable(self, "_layer_rooms"))
 
@@ -628,6 +630,28 @@ func _layer_structure(font: Font) -> void:
 		draw_string(font, _centroid(poly) + Vector2(-10, 4), ROOM_CODES.get(t, "???"), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(col, 0.9))
 
 
+## LAYER "below": the deck underneath as a faint ghost (hull and rooms), so you can see what a corridor or stair should line up with.
+## Only in the single-deck view (not on the sheet, where every deck is drawn on its own).
+func _layer_below(font: Font) -> void:
+	if view != View.DECK or deck <= 0 or _sheet_pass:
+		return
+	for mi in design.modules.size():
+		var t: String = design.modules[mi]["type"]
+		if t == ModuleCatalog.LOOSE or t == ModuleCatalog.BARREL or _mod_layer(mi) != deck - 1:
+			continue
+		if mi >= _foot.size() or (_foot[mi] as PackedVector2Array).size() < 3:
+			continue
+		if ship != null and mi < ship.module_hp.size() and ship.module_hp[mi] < 0.0:
+			continue
+		var poly := _to_screen_poly(_foot[mi])
+		var room := design.is_room(mi)
+		draw_colored_polygon(poly, Color(_ink, 0.10 if room else 0.045))
+		draw_polyline(_closed(poly), Color(_ink, 0.38 if room else 0.2), 1.2 if room else 1.0, true)
+		if room:
+			draw_string(font, _centroid(poly) + Vector2(-9, 4), ROOM_CODES.get(t, "???"), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.35))
+	draw_string(font, Vector2(12, size.y - 28), "faint = deck %d below" % deck, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.4))
+
+
 ## LAYER "rooms": rooms, corridors, doors, damage colours and the "?" spheres.
 func _layer_rooms(font: Font) -> void:
 	var doors := _doors()
@@ -768,13 +792,40 @@ func _layer_rooms(font: Font) -> void:
 			draw_string(font, _place_text(font, "?", cs + Vector2(-4, 5), 16), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, _ink)
 			if rep.get("nolink", false):
 				draw_string(font, _place_text(font, "NO LINK", cs + Vector2(-26, 22), 10), "NO LINK", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.45, 0.2))
-	# 5. the path being drawn
+	# 5. the path being drawn, with the thing a click would link to highlighted (and the line ending exactly on it)
+	var target := -1
+	var target_edge := {}
+	if editable and tool == Tool.DRAW and view == View.DECK and not _sheet_pass:
+		target = _node_at(_mouse)
+		if target < 0:
+			target_edge = _edge_near(_mouse, 10.0)
+		_draw_link_target(target, target_edge)
 	if _from >= 0 and _node_visible(_from):
-		draw_line(_node_screen(_from), _snapped(_mouse, _node_screen(_from)), Color(_ink, 0.7), 2.0)
+		var end_p: Vector2 = _node_screen(target) if target >= 0 and target != _from else (target_edge["point"] if not target_edge.is_empty() else _snapped(_mouse, _node_screen(_from)))
+		draw_line(_node_screen(_from), end_p, Color(_ink, 0.7), 2.0)
 	elif _has_free_start:
 		var fs := _to_screen(_project(_free_start["pos"]))
 		draw_circle(fs, 5.0, _ink)
-		draw_line(fs, _snapped(_mouse, fs), Color(_ink, 0.7), 2.0)
+		var end_f: Vector2 = _node_screen(target) if target >= 0 else (target_edge["point"] if not target_edge.is_empty() else _snapped(_mouse, fs))
+		draw_line(fs, end_f, Color(_ink, 0.7), 2.0)
+
+
+## Highlight of what the next click would link to: a room (its footprint lights up), a junction / bend, or a point on a corridor.
+func _draw_link_target(node: int, edge_hit: Dictionary) -> void:
+	var col := Color(1.0, 0.82, 0.2)
+	if node >= 0:
+		var kind: String = plan.nodes[node]["kind"]
+		if kind == "door":
+			var poly := _screen_poly(int(plan.nodes[node]["module"]))
+			if poly.size() >= 3:
+				draw_colored_polygon(poly, Color(col, 0.18))
+				draw_polyline(_closed(poly), col, 3.0, true)
+		else:
+			draw_arc(_node_screen(node), 9.0, 0.0, TAU, 20, col, 2.5, true)
+	elif not edge_hit.is_empty():
+		draw_arc(edge_hit["point"], 7.0, 0.0, TAU, 16, col, 2.0, true)
+		var font := ThemeDB.fallback_font
+		draw_string(font, edge_hit["point"] + Vector2(10, -8), "junction", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col)
 
 
 ## A tiny symbol for the room type (the little pictograms on a wall plan).
@@ -902,6 +953,7 @@ func _draw_sheet(font: Font) -> void:
 	var keep_scale := _scale
 	var keep_origin := _origin
 	view = View.DECK                             # the deck drawing code is reused as it is
+	_sheet_pass = true
 	_scale = best_scale
 	for k in deck_count:
 		var tl := area.position + Vector2((k % cols) * tile.x, floori(float(k) / cols) * tile.y)
@@ -910,6 +962,7 @@ func _draw_sheet(font: Font) -> void:
 		_origin = tl + tile * 0.5 + Vector2(0, 8) - (lo + hi) * 0.5 * _scale
 		_draw_deck_content(font)
 		draw_string(font, tl + Vector2(12, 20), "DECK %d" % (k + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, _ink)
+	_sheet_pass = false
 	view = keep_view
 	deck = keep_deck
 	_scale = keep_scale
@@ -981,10 +1034,23 @@ func _draw_iso(font: Font) -> void:
 	var sc := minf(avail.x / extent.x, avail.y / extent.y) * _iso_zoom
 	var org := Vector2(size.x * 0.5, 62.0 + avail.y * 0.5 + 10.0) - (lo + hi) * 0.5 * sc
 	_iso_scale = sc
+	# Drawing order (painter's algorithm): deck by deck from the lowest; inside a deck the hull / armour first, then the rooms and outside
+	# parts on top of it; then by depth. The hovered module is always drawn last, so it is never hidden.
 	order.sort_custom(func(a: int, b: int) -> bool:
+		var ha := a == _iso_hover
+		var hb := b == _iso_hover
+		if ha != hb:
+			return hb
+		if _mod_layer(a) != _mod_layer(b):
+			return _mod_layer(a) < _mod_layer(b)
+		var ca := 1 if (design.is_room(a) or not ModuleCatalog.CORRIDOR_TYPES.has(design.modules[a]["type"])) else 0
+		var cb := 1 if (design.is_room(b) or not ModuleCatalog.CORRIDOR_TYPES.has(design.modules[b]["type"])) else 0
+		if ca != cb:
+			return ca < cb
 		return _iso_depth(design.module_centroid(a) + offs[a] + _iso_push.get(a, Vector3.ZERO)) < _iso_depth(design.module_centroid(b) + offs[b] + _iso_push.get(b, Vector3.ZERO)))
 	_iso_hits.clear()
 	_iso_offs = offs
+	var placed: Dictionary = {}                      # module -> {cen, g, off}: corridors and labels are drawn after ALL modules
 	for mi in order:
 		var t: String = design.modules[mi]["type"]
 		var room := design.is_room(mi)
@@ -992,13 +1058,16 @@ func _draw_iso(font: Font) -> void:
 		var g: float = _iso_grow.get(mi, 1.0)
 		var off: Vector3 = offs[mi] + _iso_push.get(mi, Vector3.ZERO)
 		var hovered := mi == _iso_hover
+		placed[mi] = {"cen": cen, "g": g, "off": off}
 		var r := _ratio(mi) if (room or ModuleCatalog.EXTERNAL_TYPES.has(t)) else 1.0
 		var proj := PackedVector2Array()
 		for p in design.module_points(mi):
 			proj.append(_iso(cen + (p - cen) * g + off) * sc + org)
 		var hull2 := Geometry2D.convex_hull(proj) if proj.size() >= 3 else PackedVector2Array()
 		if hull2.size() >= 3:
-			draw_colored_polygon(hull2, Color.BLACK if r <= 0.0 and (room or ModuleCatalog.EXTERNAL_TYPES.has(t)) else _paper)
+			var solid_fill := room or ModuleCatalog.EXTERNAL_TYPES.has(t)
+			# hull and armour are see-through, so rooms of the decks below still show through them
+			draw_colored_polygon(hull2, Color.BLACK if r <= 0.0 and solid_fill else (_paper if solid_fill or hovered else Color(_paper, 0.5)))
 			_iso_hits.append({"mi": mi, "poly": hull2})
 		var col := damage_color(r, _ink) if (room or ModuleCatalog.EXTERNAL_TYPES.has(t)) else Color(_ink, 0.55)
 		if hovered:
@@ -1010,8 +1079,14 @@ func _draw_iso(font: Font) -> void:
 			draw_line(ea, eb, col if r > 0.0 or not room else Color(0.6, 0.6, 0.65), w, true)
 		if hovered and hull2.size() >= 3:
 			draw_polyline(_closed(hull2), Color(_ink, 0.25), 6.0, true)
-		# corridors inside this module
-		if show_rooms:
+
+	# corridors, then the codes: on top of every module so nothing is hidden by a module drawn later
+	if show_rooms:
+		for mi in order:
+			var pl: Dictionary = placed[mi]
+			var pcen: Vector3 = pl["cen"]
+			var pg: float = pl["g"]
+			var poff: Vector3 = pl["off"]
 			for ei in plan.edges.size():
 				var ed: Dictionary = plan.edges[ei]
 				var owner_m := int(ed["module"])
@@ -1023,15 +1098,10 @@ func _draw_iso(font: Font) -> void:
 				var pb: Vector3 = plan.nodes[ed["b"]]["pos"]
 				var er := _edge_ratio(ei)
 				var ec := damage_color(er, _ink) if er < 0.9 else _ink
-				var qa := _iso(cen + (pa - cen) * g + off) * sc + org
-				var qb := _iso(cen + (pb - cen) * g + off) * sc + org
+				var qa := _iso(pcen + (pa - pcen) * pg + poff) * sc + org
+				var qb := _iso(pcen + (pb - pcen) * pg + poff) * sc + org
 				draw_line(qa, qb, ec if er > 0.0 else Color(0.6, 0.6, 0.65), 4.0, true)
 				draw_line(qa, qb, _paper, 2.0, true)
-		if room or ModuleCatalog.EXTERNAL_TYPES.has(t):
-			var cs := _iso(cen + off) * sc + org
-			if room and r > 0.0:
-				_room_icon(t, cs + Vector2(0, -10), Color(col, 0.9))
-			draw_string(font, cs + Vector2(-13, 10), ROOM_CODES.get(t, "???"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col if r > 0.0 else Color(0.8, 0.8, 0.85))
 	# dashed assembly lines: where two modules join (a doorway between them)
 	if show_rooms:
 		for nd in plan.nodes:
@@ -1049,6 +1119,18 @@ func _draw_iso(font: Font) -> void:
 				_dashed_thin(a, b, Color(_ink, 0.7))
 				draw_circle(a, 2.5, _ink)
 				draw_circle(b, 2.5, _ink)
+	for mi in order:                                  # codes and icons last
+		var t2: String = design.modules[mi]["type"]
+		var room2 := design.is_room(mi)
+		if not (room2 or ModuleCatalog.EXTERNAL_TYPES.has(t2)):
+			continue
+		var pl2: Dictionary = placed[mi]
+		var cs := _iso((pl2["cen"] as Vector3) + (pl2["off"] as Vector3)) * sc + org
+		var r2 := _ratio(mi)
+		var col2 := damage_color(r2, _ink)
+		if room2 and r2 > 0.0:
+			_room_icon(t2, cs + Vector2(0, -10), Color(col2, 0.9))
+		draw_string(font, cs + Vector2(-13, 10), ROOM_CODES.get(t2, "???"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col2 if r2 > 0.0 else Color(0.8, 0.8, 0.85))
 	# extra layers added by other scripts (they draw in the same projection)
 	for l in layers:
 		if l["enabled"] and (l["iso"] as Callable).is_valid():
@@ -1353,8 +1435,8 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion:
 		_mouse = (event as InputEventMouseMotion).position
-		if _from >= 0 or _has_free_start:
-			queue_redraw()
+		if _from >= 0 or _has_free_start or tool == Tool.DRAW:
+			queue_redraw()                                # the highlight of what a click would link to follows the mouse
 	if not editable or tool == Tool.VIEW or design == null or plan == null:
 		return
 	if event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
@@ -1379,17 +1461,41 @@ func _gui_input(event: InputEvent) -> void:
 		_draw_click(mb.position)
 
 
+## What a click at `p` means as a corridor end: a junction / bend / stair near the point, else the ROOM the point is inside
+## (its door node: you do not have to hit the tiny dot in the middle), else nothing (-1).
 func _node_at(p: Vector2) -> int:
 	var best := PICK_PX
 	var out := -1
 	for ni in plan.nodes.size():
 		if not _node_visible(ni):
 			continue
+		if plan.nodes[ni]["kind"] == "door" or _joint_kind(ni) != "":
+			continue                                      # rooms are picked by their whole footprint below; stair / wall doors are not junctions
 		var d := _node_screen(ni).distance_to(p)
 		if d < best:
 			best = d
 			out = ni
-	return out
+	if out >= 0:
+		return out
+	var on_edge := _edge_near(p, 6.0)                     # a corridor drawn over a room wins (click = junction), not the room
+	if not on_edge.is_empty():
+		var ee: Dictionary = plan.edges[int(on_edge["edge"])]
+		if plan.nodes[ee["a"]]["kind"] != "door" and plan.nodes[ee["b"]]["kind"] != "door":
+			return -1
+	for room in plan.rooms:
+		if view == View.DECK and _mod_layer(room) != deck:
+			continue
+		var poly := _screen_poly(room)
+		if poly.size() >= 3 and (Geometry2D.is_point_in_polygon(p, poly) or _near_outline(p, poly, 8.0)):
+			return plan.door_of(room)
+	return -1
+
+
+func _near_outline(p: Vector2, poly: PackedVector2Array, px: float) -> bool:
+	for i in poly.size():
+		if Geometry2D.get_closest_point_to_segment(p, poly[i], poly[(i + 1) % poly.size()]).distance_to(p) <= px:
+			return true
+	return false
 
 
 func _plan_edit() -> Dictionary:
@@ -1493,7 +1599,7 @@ func _draw_click(p: Vector2) -> void:
 	var hit := _node_at(p)
 	if hit < 0:
 		# a click on an existing corridor makes a JUNCTION there (the corridor is split)
-		var near := _edge_near(p, 7.0)
+		var near := _edge_near(p, 10.0)
 		if not near.is_empty():
 			edit_requested.emit()
 			var jkey := _split_edge(int(near["edge"]), near["point"])

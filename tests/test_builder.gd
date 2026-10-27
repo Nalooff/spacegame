@@ -200,5 +200,25 @@ func _ready() -> void:
 		var sd := ShipDesign.load_file(s["path"])
 		check(sd != null and sd.validate().is_empty(), "ship file %s" % s["name"])
 
+	# occlusion (TriangleMesh has no ray cast in GDScript, so RayIndex does it)
+	var bm := BoxMesh.new()
+	var ri := RayIndex.new()
+	ri.build(bm.get_faces())
+	check(is_equal_approx(ri.first_hit(Vector3(0.3, 0.1, 5), Vector3(0, 0, -1), 20.0), 4.5), "RayIndex: a ray at a unit box hits the front face at 4.5")
+	check(ri.first_hit(Vector3(5, 5, 5), Vector3(0, 0, -1), 20.0) == INF, "RayIndex: a ray beside the box misses")
+	check(ri.first_hit(Vector3(0.3, 0.1, 5), Vector3(0, 0, -1), 2.0) == INF, "RayIndex: a hit beyond the maximum distance does not count")
+	b.set_mode(ShipBuilder.Mode.EDGE)
+	b.shading = ShipBuilder.Shading.SOLID
+	b.view.redraw(b)
+	await get_tree().process_frame
+	var seen := 0
+	var hidden := 0
+	for v in b.design.vertices:
+		if b.is_point_visible(v):
+			seen += 1
+		else:
+			hidden += 1
+	check(seen > 0 and hidden > 0, "solid shading: some vertices are visible, some hidden behind the ship (%d / %d)" % [seen, hidden])
+	b._select_at(Vector2(800, 450), false)     # clicking in edge mode must not crash
 	print("RESULT: %s" % ("PASS" if fails == 0 else "%d FAILED" % fails))
 	get_tree().quit(fails)

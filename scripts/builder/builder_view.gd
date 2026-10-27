@@ -46,7 +46,7 @@ var _mat_depth: ShaderMaterial
 var _mat_xray: ShaderMaterial
 var _ship_mat_solid: Material
 var _ship_mat_xray: StandardMaterial3D
-var _tri_mesh: TriangleMesh = null      ## cached collision mesh of the visible modules (for "is this point hidden?")
+var _tri_mesh: RayIndex = null      ## cached collision mesh of the visible modules (for "is this point hidden?")
 
 
 func _ready() -> void:
@@ -77,9 +77,14 @@ func _set_bias(b: ShipBuilder) -> void:
 
 
 ## Collision mesh of what is drawn (lazy; rebuilt after every redraw). Used by the builder to tell which vertices are hidden.
-func triangle_mesh() -> TriangleMesh:
+func triangle_mesh() -> RayIndex:
 	if _tri_mesh == null and ship_mesh.mesh != null and ship_mesh.mesh.get_surface_count() > 0:
-		_tri_mesh = ship_mesh.mesh.generate_triangle_mesh()
+		var faces := ship_mesh.mesh.get_faces()
+		if faces.size() / 3.0 > 40000.0:
+			return null                                # huge ship (large mode): no occlusion test, everything counts as visible
+		var idx := RayIndex.new()
+		idx.build(faces)
+		_tri_mesh = idx
 	return _tri_mesh
 
 

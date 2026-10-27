@@ -80,6 +80,8 @@ Generated from the modules (`scripts/data/ship_plan.gd`), drawn by `scripts/ui/p
 * **Two rooms that touch** need no corridor: just a **door** in the shared wall. **Stairs**: a room on another deck gets one small disc marker with an
   up / down arrow and the number of the deck it leads to, **inside the room** (and straight below / above it on the other deck) - no long corridor to get down.
 * **Corridors** can start anywhere in the hull, bend, and split other corridors (a junction); bulkhead **doors** can be placed on them. Corridors never leave the ship.
+  While drawing, the thing a click would link to lights up (a room, a junction or a point on a corridor) and the line snaps to it; a click **anywhere inside a room** links to that room.
+* The deck view shows the **deck below as a faint ghost** (layer "Deck below"), so you can see what to line up with.
 * **Views**: Deck (one deck), Side, Front, **Sheet** (all decks on one page, like a blueprint), **Exploded 3D** (isometric, hover a module and the others push away
   and it grows), white paper / dark paper. **Layers** (Hull, Rooms and corridors; more can be registered, e.g. electricity) can be switched on and off.
 * Labels and markers avoid overlapping each other. The legend lists: stairs, corridor, module (the code in the box says which).

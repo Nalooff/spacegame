@@ -17,6 +17,7 @@ func _ready() -> void:
 	await _test_reports()
 	_test_transmitter()
 	_test_stairs_and_walls()
+	_test_room_linking()
 	_test_free_corridors()
 	print("RESULT: ", "PASS" if fails == 0 else "FAIL (%d)" % fails)
 	get_tree().quit(1 if fails else 0)
@@ -81,6 +82,40 @@ func _test_stairs_and_walls() -> void:
 		check(pl.unlinked_rooms(d.commander_modules()).is_empty(), "%s: every room is still reachable from the commander" % file)
 		canvas.queue_free()
 	check(found_stairs > 0, "at least one stair exists in the premade ships (%d)" % found_stairs)
+
+
+## Linking a corridor to a room: a click ANYWHERE inside the room (or on its wall) means "that room", not only on its centre dot.
+func _test_room_linking() -> void:
+	print("clicking inside a room links to it")
+	for file in ["Brick", "Dart", "Scrap Hauler"]:
+		var d := _design(file)
+		var canvas := PlanCanvas.new()
+		canvas.size = Vector2(900, 480)
+		add_child(canvas)
+		canvas.register_layer("below", "Deck below", Callable(canvas, "_layer_below"))
+		canvas.register_layer("structure", "Hull", Callable(canvas, "_layer_structure"))
+		canvas.register_layer("rooms", "Rooms and corridors", Callable(canvas, "_layer_rooms"))
+		canvas.show_design(d, true)
+		canvas.set_tool(PlanCanvas.Tool.DRAW)
+		for room in canvas.plan.rooms:
+			canvas.set_deck(canvas._mod_layer(room))
+			var poly: PackedVector2Array = canvas._screen_poly(room)
+			if poly.size() < 3:
+				continue
+			var c: Vector2 = canvas._centroid(poly)
+			var lo := Vector2(INF, INF)
+			var hi := Vector2(-INF, -INF)
+			for pt in poly:
+				lo = lo.min(pt)
+				hi = hi.max(pt)
+			var probe := c + (hi - lo) * Vector2(0.2, 0.15)
+			if not Geometry2D.is_point_in_polygon(probe, poly):
+				continue
+			var hit: int = canvas._node_at(probe)
+			var near_corridor: bool = not canvas._edge_near(probe, 6.0).is_empty()
+			var near_node: bool = hit >= 0 and canvas._node_screen(hit).distance_to(probe) <= PlanCanvas.PICK_PX      # a junction right there wins, as it should
+			check(hit == canvas.plan.door_of(room) or near_corridor or near_node, "%s: a click inside room %d (off centre) targets that room (got %d, want %d)" % [file, room, hit, canvas.plan.door_of(room)])
+		canvas.queue_free()
 
 
 ## Corridors can start anywhere inside the hull, bend, and split other corridors (a junction).

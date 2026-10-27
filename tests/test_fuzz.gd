@@ -137,6 +137,7 @@ func _fuzz_canvas() -> void:
 	var canvas := PlanCanvas.new()
 	canvas.size = Vector2(900, 520)
 	add_child(canvas)
+	canvas.register_layer("below", "Deck below", Callable(canvas, "_layer_below"))
 	canvas.register_layer("structure", "Hull", Callable(canvas, "_layer_structure"))
 	canvas.register_layer("rooms", "Rooms and corridors", Callable(canvas, "_layer_rooms"))
 	var n := 0
@@ -150,6 +151,7 @@ func _fuzz_canvas() -> void:
 				for k in 3:
 					canvas.set_deck(k)
 					for lay in [[true, true], [true, false], [false, true], [false, false]]:
+						canvas.set_layer_enabled("below", lay[0])
 						canvas.set_layer_enabled("structure", lay[0])
 						canvas.set_layer_enabled("rooms", lay[1])
 						canvas.queue_redraw()

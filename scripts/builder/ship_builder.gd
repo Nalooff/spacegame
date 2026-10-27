@@ -329,10 +329,8 @@ func is_point_visible(p: Vector3) -> bool:
 	var to_cam := (camera.global_basis.z) if camera_rig.orthographic else (cam_pos - p).normalized()
 	var dist := p.distance_to(cam_pos)
 	var start := p + to_cam * (0.012 + dist * 0.0015)
-	var hit: Dictionary = tm.intersect_ray(start, to_cam)
-	if hit.is_empty():
-		return true
-	return start.distance_to(hit["position"] as Vector3) >= dist - 0.01       # the surface is behind the camera: not in the way
+	var hit := tm.first_hit(start, to_cam.normalized(), dist)
+	return hit >= dist - 0.01                              # nothing between the point and the camera (a hit behind the camera does not count)
 
 
 func _pick_vertex(mouse: Vector2) -> int:
