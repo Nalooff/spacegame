@@ -281,10 +281,11 @@ func _on_tool_pressed(e: Dictionary) -> void:
 ## Greys out the tools that cannot be used with the current selection.
 func _refresh_tool_states() -> void:
 	for id in _tool_buttons.keys():
-		var b: Button = _tool_buttons[id]
-		if not is_instance_valid(b):
-			_tool_buttons.erase(id)
+		var held: Variant = _tool_buttons[id]            # untyped on purpose: a freed button cannot be assigned to a typed variable
+		if not is_instance_valid(held):
+			_tool_buttons.erase(id)                      # its panel was rebuilt (mode change): forget it
 			continue
+		var b: Button = held
 		b.disabled = not builder.tool_available(id)
 
 

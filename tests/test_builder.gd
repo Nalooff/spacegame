@@ -12,6 +12,14 @@ func _ready() -> void:
 	add_child(scene)
 	await get_tree().process_frame
 	var b: ShipBuilder = scene
+	# regression: switching the mode rebuilds the tool panel (old buttons are freed a frame later); the next refresh must not crash
+	for m in [ShipBuilder.Mode.VERTEX, ShipBuilder.Mode.OBJECT, ShipBuilder.Mode.EDGE, ShipBuilder.Mode.OBJECT, ShipBuilder.Mode.FACE, ShipBuilder.Mode.VERTEX, ShipBuilder.Mode.OBJECT]:
+		b.set_mode(m)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		b.on_selection_changed()
+		await get_tree().process_frame
+	check(b.mode == ShipBuilder.Mode.OBJECT, "mode can be switched back and forth with frames in between (freed tool buttons are forgotten)")
 	var d := b.design
 	check(d.modules.size() == 3, "new ship has hull, commander, thruster")
 	check(d.validate().is_empty(), "new ship is valid: %s" % str(d.validate()))
