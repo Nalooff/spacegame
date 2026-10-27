@@ -74,6 +74,8 @@ const DISCOVERY_PORT := 24566         # UDP port lobbies are advertised on (LAN)
 ## Hosts post one small message per lobby (name, players, public IP + port - never a password); browsers read the
 ## last few minutes of messages. Any ntfy server works (the free https://ntfy.sh, or your own later).
 ## CHANGE BOARD_TOPIC to something unique for your game (anyone who knows the topic can read/write it).
+## Use Steam (lobbies, friends, relay) when the GodotSteam add-ons are installed and Steam is running. false = never.
+const USE_STEAM := true
 const BOARD_ENABLED := true
 var BOARD_URL := "https://ntfy.sh"   # (var, so tests / a settings screen can point it elsewhere)
 var BOARD_TOPIC := "vertexships-lobbies-7f3a9c"

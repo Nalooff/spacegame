@@ -2,45 +2,88 @@
 
 # Vertex Ships — Godot 4.4+ project
 
-Multiplayer spaceship game with vertex-built modular ships. Open the folder in **Godot 4.4 or newer**
-(project.godot is in this folder), press F5. Main scene: `scenes/main_menu.tscn`.
-Validated headless with Godot 4.4.1: scenes load, autopilot, builder ops, ramming/dent test (`tests/test_damage.tscn`), two-process game test
-(`tests/run_net_test.sh`) and a 3-process lobby test (`tests/run_lobby_test.sh`: discovery, wrong/right password, lock, crew, force launch, crew firing).
+Multiplayer spaceship game with **vertex-built modular ships**. Build a ship in the editor, fly it, fight with turrets, ram, and manage
+the damage on an emergency deck plan. Open this folder in **Godot 4.4 or newer** (`project.godot` is here), press F5.
+Main scene: `scenes/main_menu.tscn`. Version in `project.godot` (`config/version`).
 
-## Menus and lobbies
-* **Creation** – ship builder. **Play** – lobby browser (no IP/port typing).
-* **Host a lobby**: name, Public/Private, password if private. Hosting alone = single player.
-* **Join**: the browser lists every open lobby in the pre-game state (lock icon = private; a password prompt appears). Two sources are merged:
-  **LAN** (UDP broadcast, `scripts/net/lobby_directory.gd`) and **Internet** (`scripts/net/lobby_board.gd`, see below). The password is checked by
-  the host (sent as a hash, never advertised).
-* **Internet play without a server of yours**: the list is a free public ntfy-style "message board" (`Data.BOARD_URL`, default `https://ntfy.sh`,
-  topic `Data.BOARD_TOPIC`) - hosts post one small JSON message (name, players, public IP + port, private flag), browsers read the last minutes.
-  The game itself is direct peer-to-peer (ENet). On Create, `scripts/net/nat_helper.gd` asks the router to open the UDP port (UPnP) and looks up the
-  public IP. If the router refuses UPnP the host must forward the UDP port (24565) by hand - nothing can avoid that without a relay server.
-  **Change `Data.BOARD_TOPIC` to your own unique string** (anyone who knows the topic can read/write it); no account is needed.
-  Players on the SAME router as the host cannot use the public address; the board entry also carries the host's LAN address and the browser switches to it automatically.
-  The host's room shows the internet status (UPnP result, public address) under the timer, so you can see why a friend cannot join. The router mapping is leased and renewed, never deleted.
-  Limits: ntfy.sh is a free third-party service (rate limits, can change); players behind strict NAT/CGNAT cannot host.
-  NOT verifiable in the build sandbox: real ntfy.sh and real UPnP. Tested against a local fake ntfy (`tests/run_board_test.sh`).
-* **Pre-game room** (`scenes/lobby.tscn`): pick a ship, **Lock in**. A locked ship can be joined as **crew** by other players while it
-  has free seats. Seats = `crew` value of the ship's **Commander module** (builder -> Selection tab, 1-8, pilot included).
-  Unlocking releases the crew. A **2:00 timer** runs (`Data.LOBBY_SECONDS`): the host can START when everyone is locked, or **FORCE LAUNCH**
-  after the timer ends; players without a ship then get a random premade one.
-* **In game**: the pilot flies; crew members watch from the same ship and **hold left click to fire its turrets** (aim with the mouse).
-  If a pilot leaves, their crew get a random ship of their own.
+* Playing: see **Controls**. Building ships: see **Ship editor** and `docs/MODULE_CREATION.md` (a walkthrough with screenshots).
+* Releasing: **Steam and itch.io** in `docs/STEAM_AND_ITCH.md`.
+* Architecture notes: `docs/ARCHITECTURE_V2.md`, `docs/ARCHITECTURE_V3.md`.
+
+## Menus and multiplayer
+* **Creation** = ship editor. **Play** = lobby browser (nobody types an IP address).
+* **Host**: lobby name, Public / Private (password, checked by the host, only a hash is sent). Hosting alone = single player.
+* **Join**: the list merges every source:
+  * **Steam** (optional, see below): Steam lobbies, joining through friends ("Join game"), no port forwarding;
+  * **LAN**: UDP broadcast (`scripts/net/lobby_directory.gd`);
+  * **Internet board**: a free ntfy-style message board (`Data.BOARD_URL`, `Data.BOARD_TOPIC` - **change the topic to your own unique string**).
+    Hosts post one small JSON message, browsers read it. The game itself is direct peer-to-peer (ENet); `scripts/net/nat_helper.gd` asks the
+    router for UPnP and looks up the public IP. If UPnP is refused the host must forward **UDP 24565**. Players behind CGNAT cannot host.
+    Players on the same router as the host are switched to the host's LAN address automatically.
+* **Steam** (`scripts/net/steam_backend.gd`): used automatically when the GodotSteam add-ons are installed and the Steam client runs; otherwise
+  the game behaves exactly as without it (`Data.USE_STEAM` can switch it off). The roster, ship transfer, passwords and crew work unchanged on top.
+  Setup, what was tested (against a fake Steam only) and what was not: **docs/STEAM_AND_ITCH.md**.
+* **Pre-game room** (`scenes/lobby.tscn`): pick a ship, **Lock in**. A locked ship can be joined as **crew** while it has free seats
+  (seats = `crew` of the ship's Commander module, 1-8, pilot included). A **2:00 timer** (`Data.LOBBY_SECONDS`): the host can START when everyone is locked,
+  or FORCE LAUNCH after the timer; players without a ship get a random premade one. Teams decide who is a friend (`Net.are_friends`).
+* Tested headless: two-process game (`tests/run_net_test.sh`), 3-process lobby (`tests/run_lobby_test.sh`), the internet board against a local fake ntfy
+  (`tests/run_board_test.sh`), the Steam flow against a fake Steam (`tests/test_steam.tscn`). NOT verifiable in the build sandbox: real ntfy.sh, real UPnP, real Steam.
+
+## Playing
+Each player flies one ship; other players can be **crew** on it. Two ways to run a ship (switch with **V**):
+* **Commander** (default): you give orders. Orders and damage reports travel over the ship's **communications**; the radar locks targets.
+  Turrets are **half-automatic**: they track the locked enemy, but fire **only when the barrel actually points at it** (within `Data.TURRET_AIM_TOLERANCE_DEG`)
+  and only when you allow it: **hold left mouse** or toggle **H = weapons free**. A turret that cannot reach the target (limited arc) turns to the closest
+  direction it can reach and waits.
+* **Crew** (take a station with **F**): you control that turret yourself; **as long as you hold fire it fires**, pointing at the target or not.
+
+Flight orders (the commander's autopilot, `scripts/ship/autopilot.gd`):
+* **GOTO**: fly to a point and stop there (no speed cap: the fastest speed the ship can still brake from, flip with the gyroscope, retro-burn, RCS finishes).
+* **DRIVE**: fly towards a point or a tracked ship with a chosen **thrust** and **never stop** (made for ramming). Only **brake (X)** or cancel ends it.
+* **Turret facing lock**: while moving, the ship turns so the most turrets bear on the locked enemy (or the destination) instead of pointing its best thrust axis along the push.
+* **Tactical map (M)**: click in space to place waypoints (no typing coordinates), see contacts and your orders.
+
+Damage and information: the damage is simulated at once, but what the **commander knows** depends on communications. With comms online, reports are instant.
+Without, someone has to walk the report along the corridors (seconds shown on the plan); damage the commander has not heard about is shown as a dashed
+**"?" sphere** ("something happened around here"), and rooms with no open corridor to the bridge are marked **NO LINK** - they cannot be ordered and their
+reports wait until comms or a corridor is back. Thrusters and external antennas work without a corridor.
+
+## Controls
+| Key | Action |
+|---|---|
+| W / S, A / D, Space / C | thrust forward-back, strafe, up-down (ship-local; the thruster allocator + RCS solve it) |
+| arrows, Q / E | pitch / yaw, roll |
+| X | brake · **T** hold attitude (flight assist) · **R** lock the target under the cursor |
+| left mouse | fire at the cursor (hold = weapons free in commander mode; crew: fires the station's turret) |
+| **H** | weapons free on / off · **M** tactical map · **P** ship plan (live status) |
+| **V** | commander / crew mode · **F** next station · Esc autopilot panel |
+| right mouse drag, wheel | orbit the camera, zoom |
+Any manual flight key cancels the autopilot.
 
 ## Ship model
-* **External modules** (physical shells, have HP, can be shot): Hull, Armor, Thruster, Turret, **Commander (exactly one, mandatory;
-  if destroyed the ship dies and respawns)**. A module is a set of polygon faces. Start shapes (`scripts/data/primitives.gd`):
-  box, wedge, pyramid, tetra, **cylinder, cone, sphere, dome** (round ones have an adjustable number of sides).
-* **Linking** (Flyout-style): all modules share ONE vertex pool (`ShipDesign.vertices`). Two modules that use the same vertex id are linked; moving
-  it moves both. Drop a vertex on another module's vertex (auto-link) or select two (Shift) and press **L**. **U** unlinks.
-* **Internal modules** (no shell, never damaged): **Electricity**, **Gyroscope**, **RCS** — nodes under `Ship/Systems`.
-  * Electricity: powers thrusters/RCS/gyro/turrets; if demand > supply everything is scaled down (brown-out). Builder slider.
-  * Gyroscope: turning + stabilisation + cancels torque from off-centre thrusters. Builder slider.
-  * RCS: pushes from the centre of mass (no torque), always **5 % of the ship's best-direction thrust**
-    (`ThrustAllocator.best_axis`; e.g. 2×5 N forward + 9 N backward → 10 N → RCS 0.5 N). Not editable, can never rival the main thrusters.
-* Thrusters have arbitrary position, direction and power; force is applied AT the thruster (`apply_force(f, offset)`), so they make torque.
+* A ship is a set of **modules**; a module is a set of polygon faces. All modules share ONE vertex pool (`ShipDesign.vertices`): two modules that use the
+  same vertex id are linked (Flyout-style), moving it moves both. Start shapes: box, wedge, pyramid, tetra, cylinder, cone, sphere, dome (round ones have adjustable sides).
+* **Module types** (`scripts/data/module_catalog.gd`, per-m3 stats in `module_presets.gd`):
+  * **Hull / Armor**: the shell and the space that holds the corridors.
+  * **Commander** (exactly one is mandatory; if the last dies the ship dies and respawns), **Turret** (base + barrels), **Radar**: **rooms** - people walk in, they need a corridor.
+  * **Thruster**: never a room, never needs a corridor, drawn only as an outline on the plan.
+  * **Antenna**: ONE module type with **presets**. *Whip* and *Dish* are external (no corridor, fixed signal); *Relay* and *Long range* are **rooms** (need a corridor) with an
+    **adjustable signal strength** - a weaker signal is harder for enemy radar to see and costs less electricity.
+  * Presets decide the module's `kind` (`"room"` / `"external"`); you can save your own (see `docs/MODULE_CREATION.md`).
+* **Internal systems** (no shell, never damaged), under `Ship/Systems`: **Electricity** (powers everything, brown-out scales it down), **Gyroscope** (turning, stabilising,
+  cancels torque of off-centre thrusters), **RCS** (always 5 % of the best-direction thrust, from the centre of mass), **Communications** (antennas).
+* Thrusters have any position, direction and power; force is applied AT the thruster, so they make torque.
+
+## Ship plan (emergency map)
+Generated from the modules (`scripts/data/ship_plan.gd`), drawn by `scripts/ui/plan_canvas.gd`. Open it with **Plan** in the editor (you can edit the corridors) or **P** in game (live status).
+* **Rooms** are drawn with their real footprint and a three-letter code in the box (ENG, GUN, CMD, RDR, ANT) with a small icon.
+* **Two rooms that touch** need no corridor: just a **door** in the shared wall. **Stairs**: a room on another deck gets one small disc marker with an
+  up / down arrow and the number of the deck it leads to, **inside the room** (and straight below / above it on the other deck) - no long corridor to get down.
+* **Corridors** can start anywhere in the hull, bend, and split other corridors (a junction); bulkhead **doors** can be placed on them. Corridors never leave the ship.
+* **Views**: Deck (one deck), Side, Front, **Sheet** (all decks on one page, like a blueprint), **Exploded 3D** (isometric, hover a module and the others push away
+  and it grows), white paper / dark paper. **Layers** (Hull, Rooms and corridors; more can be registered, e.g. electricity) can be switched on and off.
+* Labels and markers avoid overlapping each other. The legend lists: stairs, corridor, module (the code in the box says which).
+* Plan tabs: MAP, STATUS, LOGS (what the commander was told and when).
 
 ## Damage and deformation (`scripts/damage/`)
 Everything that hurts a ship is a **DamageHit** (what happened) resolved by a **DamageType** (how much HP / how deep a dent) and applied by
@@ -73,68 +116,61 @@ Mass/centre of mass/inertia ARE recomputed after a dent (cached per-module sums,
 * Builder: above 30k vertices it switches to large-ship mode (no vertex dots/wireframe/vertex-edge-face picking); undo stores compressed snapshots with a 256 MB cap.
 * Measured here (headless, 2 CPU cores, `tests/test_scale.tscn -- 580 fine`, 2.03M vertices): Ship `_ready` 0.28 s on the main thread, hull data ready after ~14 s in the background, one dent ~15-40 ms. GPU frame rate for 4M triangles could NOT be measured in the sandbox.
 
-## Autopilot (HUD, bottom-right)
-Type X Y Z → **GO**: accelerate (no speed cap), flip with the gyroscope, retro-burn, RCS finishes the stop. **Brake (X)** stops where it can.
-Algorithm = `ship_sim.py` Python prototype, ported to `scripts/ship/autopilot.gd` + `thrust_allocator.gd`.
+## Autopilot internals
+`scripts/ship/autopilot.gd` + `thrust_allocator.gd`: speed profile -> velocity loop -> wanted force -> gyroscope aims the BEST thrust axis (or the turret-facing
+axis) -> allocator -> throttles -> RCS tops up -> gyro cancels thruster torque. Prototype: `tools/ship_sim.py`.
 
-## Controls (flight)
-W/S forward/back, A/D strafe, Space/C up/down (ship-local, solved by the thruster allocator + RCS), arrows pitch/yaw, Q/E roll,
-X brake, T flight-assist on/off, LMB fire at cursor, RMB drag orbit camera, wheel zoom. Any manual key cancels the autopilot.
-
-## Builder ("Creation") – Blender-style
-Layout: top bar (name, New/Save/Load, Undo/Redo) · left = selection mode + tools · right tabs **Add / Selection / Ship** · bottom = messages.
+## Ship editor ("Creation")
+Blender-style: mode dropdown (Object / Vertex / Edge / Face) with contextual tools, **adjustable operators** (change the last operation's numbers afterwards, F9),
+shading modes, top bar (name, New / Save / Load, Undo / Redo), right tabs **Create** (Ship | Module) / **Properties** / **Ship**, bottom messages.
 | Key | Action |
 |---|---|
-| 1 / 2 / 3 / 4 | select **Object / Vertex / Edge / Face** (Tab toggles Object <-> last edit mode) |
-| click, Shift+click | select / add to selection. Click-drag a selected thing = quick move |
-| A / Alt+A | select all / none |
-| G / R / S | move / rotate / scale selection (X, Y, Z lock an axis, click or Enter = ok, Esc = cancel) |
-| E | extrude face · W add vertex on edge · J connect two vertices (new edge) |
-| L / U | link / unlink vertices |
-| M / Shift+D / X or Del | mirror / duplicate / delete |
+| 1 / 2 / 3 / 4 | Object / Vertex / Edge / Face (Tab toggles Object <-> last edit mode) |
+| click, Shift+click | select / add. Click-drag a selected thing = quick move. A / Alt+A = all / none |
+| G / R / S | move / rotate / scale (X, Y, Z lock an axis, type a number, Enter = ok, Esc = cancel) |
+| E | extrude face · W add vertex on edge · J connect two vertices · bevel, inset, subdivide, triangulate in the tool panel |
+| L / U | link / unlink vertices · M mirror · Shift+D duplicate · X / Del delete |
 | F | frame selection · Ctrl+Z / Ctrl+Y undo / redo · Ctrl+S save |
-Camera: RMB orbit, MMB or Shift+RMB pan, wheel zoom. You can also type exact centre coordinates in the Selection tab.
-Forward is **-Z**. Ships save to `user://ships/*.json` in a readable format (one vertex / face per line).
+Camera: right mouse orbit, middle mouse or Shift+right pan, wheel zoom. Forward is **-Z**. Ships save to `user://ships/*.json` (readable) or `.ship` (compressed, for huge ships).
+Where things are: `ship_builder.gd` state + actions · `builder_ui.gd` buttons · `builder_view.gd` drawing · `transform_tool.gd` G/R/S · `data/mesh_ops.gd` topology · `data/primitives.gd` shapes.
+New button = add it in `tools/gen_builder.py`, connect it to a `_on_xxx` in builder_ui.gd, call a ShipBuilder function.
 
-## *MODDER* -- 
-
-## Autoloads (global helpers)
-* `Data` – every tunable constant (`RCS_FRACTION`, turret damage, pool size...) + the local player's choices.
-* `BusEvent` – signal hub (`ship_died`, `local_ship_changed`, `notify`, `builder_design_changed`...). Emit/connect from any script.
-* `Game` – scene paths + `go_to()`. `Net` – lobby rules (host is the referee), roster, ENet host/join, `Net.players[id] = {name, ship, locked, crew_of, seats}`.
-
-## Where to change things (builder)
-`ship_builder.gd` state + every action (extrude, subdivide...) · `builder_ui.gd` buttons (each calls a builder action) ·
-`builder_view.gd` drawing · `transform_tool.gd` G/R/S · `data/mesh_ops.gd` topology edits · `data/primitives.gd` shapes.
-New button = add it in `tools/gen_builder.py`, connect to a `_on_xxx` in builder_ui.gd, call a ShipBuilder function.
+## Autoloads
+`Data` (every tunable constant + the local player's choices) · `BusEvent` (signal hub) · `Game` (scene paths, `go_to()`) · `Net` (lobby rules - the host is the referee,
+roster, ENet / Steam host and join, `Net.players[id]`).
 
 ## Scene tree (everything fixed lives in .tscn files)
 ```
-scenes/main_menu.tscn   scenes/lobby_browser.tscn   scenes/lobby.tscn (room)   scenes/ship_builder.tscn   scenes/hud.tscn
-scenes/ship.tscn   Ship(RigidBody3D) HullMesh, Flames(MultiMesh), Systems/{Electricity,Gyroscope,RCS}, Autopilot, Weapons,
+scenes/main_menu.tscn   scenes/lobby_browser.tscn   scenes/lobby.tscn (room)   scenes/ship_builder.tscn   scenes/hud.tscn   scenes/tactical_map.tscn   scenes/plan_view.tscn
+scenes/ship.tscn   Ship(RigidBody3D) HullMesh, Flames(MultiMesh), Systems/{Electricity,Gyroscope,RCS,Communications}, Autopilot, Weapons,
                    TransformSync + StateSync (MultiplayerSynchronizer), Explosion, Nameplate
 scenes/game_world.tscn  GameWorld, WorldEnvironment, Sun, Landmarks, SpawnPoints(8 Marker3D), Ships, ShipSpawner(MultiplayerSpawner),
-                   ProjectilePool (creates its bullets in code at start), CameraRig/Pivot/Camera3D, TargetMarker, HUD
+                   ProjectilePool (bullets created in code at start), CameraRig/Pivot/Camera3D, TargetMarker, HUD
 ```
+Most scenes are generated by `tools/gen_scenes.py`, `gen_builder.py`, `gen_lobby.py` (optional - the .tscn files are normal, editable scenes; `plan_view.tscn` is hand-written).
 
-## Networking
-Each peer owns and simulates its own ship; pose is replicated (TransformSync), module HP / throttles / alive (StateSync).
-Shots are replicated as RPCs; each peer simulates the bullets and only the owner of the ship that is hit applies damage.
-Host spawns ships and handles respawn. Forward UDP 24565 to host over the internet.
+## Networking model
+Each peer owns and simulates its own ship; pose is replicated (TransformSync), module HP / throttles / alive (StateSync). Shots are RPCs; each peer simulates
+the bullets and only the owner of the hit ship applies damage. The host spawns ships and handles respawn. Ships travel as hash-verified blobs in chunks (`Net.blobs`).
 
 ## Layout
-`scripts/data` (ModuleCatalog, ShipDesign, Primitives, MeshOps) · `scripts/ship` (ship, allocator, autopilot, systems, weapons) · `scripts/builder`
-`scripts/damage` · `scripts/net` · `scripts/ui` · `scripts/world` · `scripts/autoload` (Data, BusEvent, Game, Net) · `ships/*.json` premade · `tests/` headless tests ·
-`tools/` Python generators (gen_scenes / gen_builder / gen_lobby) for the .tscn files and premade ships (optional; the .tscn files are normal editable scenes).
+`scripts/data` (ModuleCatalog, ModulePresets, ShipDesign, ShipPlan, Primitives, MeshOps) · `scripts/ship` (ship, allocator, autopilot, turrets, weapons, detection, reports, systems) ·
+`scripts/builder` · `scripts/damage` · `scripts/net` · `scripts/ui` · `scripts/world` · `scripts/autoload` · `addons/vertex_ships` (editor plugin) · `ships/*.json` premade ·
+`tests/` · `tools/`. New `class_name` scripts need a class-cache refresh: `godot --headless --path . --editor --quit-after 20`.
 
-## Structure, splitting, turrets, seats, plugin
-See **docs/ARCHITECTURE_V3.md** (module presets with per-m3 stats, radar / detection / teams, weapons with lead and beams, commander vs crew modes and stations) and **docs/ARCHITECTURE_V2.md** (commander connectivity, crush rule, ship splitting, seat picker, base+barrel turrets, exhaust zones, new editor tools, the Godot plugin and its steps).
+## Tests
+Headless, from the project folder (`GODOT` = your binary):
+`$GODOT --headless --path . res://tests/test_<name>.tscn` for **structure, combat, builder, damage, graph, scale, plan, scenes, steam, fuzz, fuzz_live**;
+`$GODOT --headless --fixed-fps 60 --path . -s res://tests/test_drive.gd -- "Twin Hull"` (DRIVE and facing lock);
+`tests/run_net_test.sh`, `run_lobby_test.sh`, `run_board_test.sh`. **fuzz** = random modelling operators, save/load, random damage and comms, every plan view;
+**fuzz_live** = real ships flying random orders while damaged. `bash tools/check_warnings.sh` prints nothing when there is no GDScript warning (the project treats them as errors).
+Screenshots (needs a virtual display): `tools/shots.sh` with `tests/shot_*.tscn`.
 
-## Ship plan (emergency map) and dead modules
-See `docs/ARCHITECTURE_V3.md` section 5. Modules are never destroyed: crushed ones become dead wrecks, only fully unlinked ones are cut off. The **Plan** button in the builder (draw corridors) and **P** in game (live status). Antenna modules + the Communications system make orders instant; without them orders are walked along the corridors.
+## Releasing
+**docs/STEAM_AND_ITCH.md**: itch.io export + butler, Steam add-ons, App ID, SteamPipe. Before release change `Data.BOARD_TOPIC`, the export path in `export_presets.cfg`, and `config/version`.
 
 ## Known simplifications
-Thrusters respond instantly; RigidBody3D inertia is diagonal only; client-authoritative ships (fine for co-op/friends, not cheat-proof);
-remote ships use simple smoothing, no lag compensation. Module links are decided from the design and not recomputed after dents.
-A ship split uses each peer's copy of the parent, so a ship still building its mesh in the background (millions of vertices) should not be split in its first seconds.
-Bevel is clean where up to 3 faces meet at the edge ends. Turret barrels cannot be dented. The seat-picker preview of ships above 30,000 vertices shows one box per module.
+Thrusters respond instantly; RigidBody3D inertia is diagonal only; client-authoritative ships (fine for co-op / friends, not cheat-proof); remote ships use simple
+smoothing, no lag compensation. Module links are decided from the design and not recomputed after dents. Doors are drawn on the plan but have no gameplay effect yet.
+A ship split uses each peer's copy of the parent, so a ship still building its mesh in the background should not be split in its first seconds. Bevel is clean where up to
+3 faces meet at the edge ends. Turret barrels cannot be dented. The seat-picker preview of ships above 30,000 vertices shows one box per module.

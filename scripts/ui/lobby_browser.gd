@@ -49,6 +49,10 @@ func _ready() -> void:
 	Net.nat.detect_own_ip()   # lets us notice lobbies on our own network (they must be joined by their LAN address)
 	host_status_label.text = Data.notice
 	Data.notice = ""
+	if Net.steam_active():
+		host_status_label.text += "Steam: %s (lobbies are hosted through Steam)" % Net.steam.persona_name
+	if Net.steam_active():
+		Net.steam.invite_accepted.connect(_on_invite_accepted)
 
 
 func _exit_tree() -> void:
@@ -64,6 +68,8 @@ func _process(dt: float) -> void:
 	if _board_timer <= 0.0:
 		_board_timer = 15.0
 		Net.board.refresh()   # internet list, every 15 s (and on the Refresh button)
+		if Net.steam_active():
+			Net.steam.list_lobbies()
 	_rebuild_list()
 
 
@@ -81,7 +87,7 @@ func _rebuild_list() -> void:
 		if l["private"]:
 			item.set_icon(0, LOCK_ICON)
 			item.set_tooltip_text(0, "Private: needs a password")
-		item.set_text(1, l["host"] + ("  (internet)" if l.get("source", "") == "internet" else "  (LAN)"))
+		item.set_text(1, l["host"] + {"internet": "  (internet)", "steam": "  (Steam)"}.get(l.get("source", ""), "  (LAN)"))
 		item.set_text(2, "%d / %d" % [l["players"], l["max"]])
 		item.set_metadata(0, l["id"])
 		if l["id"] == _selected_id:
@@ -116,6 +122,11 @@ func _on_create_pressed() -> void:
 	if is_private and password_edit.text == "":
 		host_status_label.text = "A private lobby needs a password."
 		return
+	if Net.steam_active():                      # Steam: no port forwarding, friends can join through Steam
+		host_status_label.text = "Creating the Steam lobby ..."
+		Net.steam_host_result.connect(_on_steam_host_result, CONNECT_ONE_SHOT)
+		Net.host_steam(lobby_name_edit.text, is_private, password_edit.text)
+		return
 	var err := Net.host_lobby(lobby_name_edit.text, is_private, password_edit.text)
 	if err != OK:
 		host_status_label.text = "Could not create the lobby (error %d)." % err
@@ -135,8 +146,27 @@ func _on_lobby_selected() -> void:
 func _on_refresh_pressed() -> void:
 	Net.directory.clear()
 	Net.board.refresh()
+	if Net.steam_active():
+		Net.steam.list_lobbies()
 	_signature = ""
 	browse_status_label.text = "Searching..."
+
+
+## A Steam friend invited us ("Join game"): join that lobby (a private one asks for its password as usual).
+func _on_invite_accepted(lobby_id: int) -> void:
+	_joining = Net.steam.lobby_entry(lobby_id)
+	if _joining["private"]:
+		join_password_edit.text = ""
+		password_dialog.popup_centered()
+	else:
+		_connect("")
+
+
+func _on_steam_host_result(ok: bool, reason: String) -> void:
+	if ok:
+		Game.go_to(Game.LOBBY_SCENE)
+	else:
+		host_status_label.text = "Steam lobby failed: " + reason
 
 
 func _on_join_pressed() -> void:
@@ -157,6 +187,12 @@ func _on_password_confirmed() -> void:
 
 
 func _connect(password: String) -> void:
+	if _joining.get("source", "") == "steam":
+		browse_status_label.text = "Joining '%s' through Steam ..." % _joining["name"]
+		_tried = "Steam"
+		join_button.disabled = true
+		Net.join_steam(_joining, password)
+		return
 	# Addresses to try, in order. Same router as the host (our public IP equals theirs): the public address
 	# usually does not loop back, so the local one goes first. Otherwise the public one goes first.
 	var pub: String = _joining["address"]

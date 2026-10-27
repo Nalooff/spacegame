@@ -49,6 +49,10 @@ var directory := LobbyDirectory.new()
 ## Internet lobby list + router port opening. Created in _ready (they need HTTPRequest/Thread children).
 var board: LobbyBoard
 var nat: NatHelper
+var steam: SteamBackend                 ## optional Steam transport (needs the GodotSteam add-ons, see docs/STEAM_AND_ITCH.md)
+var steam_lobbies: Array = []           ## last list Steam gave us (source "steam")
+var _steam_hosting: bool = false
+signal steam_host_result(ok: bool, reason: String)
 
 var _password_hash: String = ""     # host: required hash;  client: hash we will send
 var _lobby_open: bool = false       # host: still accepting players / advertising
@@ -68,6 +72,16 @@ func _ready() -> void:
 	# list the lobby on the internet board as soon as the public address is known, and again when UPnP is done
 	nat.ip_found.connect(func(): if _lobby_open and is_host(): _advertise())
 	nat.finished.connect(func(_ok): if _lobby_open and is_host(): _advertise())
+	steam = SteamBackend.new()
+	steam.name = "SteamBackend"
+	add_child(steam)
+	steam.lobbies_found.connect(func(list: Array): steam_lobbies = list)
+	steam.host_ready.connect(_on_steam_host_ready)
+	steam.client_ready.connect(_on_steam_client_ready)
+	steam.join_failed.connect(_on_steam_failed)
+	if Data.USE_STEAM and SteamBackend.is_available() and steam.start():
+		Data.player_name = steam.persona_name
+		steam.list_lobbies()
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
@@ -77,6 +91,7 @@ func _ready() -> void:
 ## Closing the window never ran leave(), so the lobby stayed on the internet list until it went stale.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		steam.leave()
 		if is_host() and _lobby_open:
 			board.close()
 			await get_tree().create_timer(1.0).timeout   # give the "closed" message time to leave
@@ -127,6 +142,51 @@ func host_lobby(lobby: String, is_private: bool, password: String) -> Error:
 	return OK
 
 
+## True when Steam is running: hosting then goes through Steam (no port forwarding), see host_steam().
+func steam_active() -> bool:
+	return steam != null and steam.ready_ok
+
+
+## Host through Steam. The answer comes later: signal steam_host_result (the room can open when ok).
+func host_steam(lobby: String, is_private: bool, password: String) -> void:
+	players.clear()
+	in_game = false
+	lobby_name = lobby.strip_edges() if lobby.strip_edges() != "" else "%s's lobby" % Data.player_name
+	lobby_private = is_private
+	_password_hash = hash_password(lobby_name, password) if is_private else ""
+	_steam_hosting = true
+	steam.create_lobby({"name": lobby_name, "private": is_private, "host": Data.player_name, "players": 1, "max": Data.MAX_PLAYERS})
+
+
+func _on_steam_host_ready(peer: MultiplayerPeer) -> void:
+	multiplayer.multiplayer_peer = peer
+	lobby_seconds_left = Data.LOBBY_SECONDS
+	_lobby_open = true
+	_register_host()
+	_advertise()
+	steam_host_result.emit(true, "")
+
+
+## Join a lobby from the Steam list (or a friend's invite). The host's answer arrives as `joined` / `join_rejected`.
+func join_steam(lobby: Dictionary, password: String) -> void:
+	players.clear()
+	lobby_name = str(lobby.get("name", ""))
+	_password_hash = hash_password(lobby_name, password)
+	steam.join_lobby(int(lobby["steam_lobby"]))
+
+
+func _on_steam_client_ready(peer: MultiplayerPeer) -> void:
+	multiplayer.multiplayer_peer = peer
+
+
+func _on_steam_failed(reason: String) -> void:
+	if _steam_hosting:
+		_steam_hosting = false
+		steam_host_result.emit(false, reason)
+	else:
+		join_rejected.emit(reason)
+
+
 func join_lobby(address: String, port: int, password: String, lobby: String) -> Error:
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(address, port)
@@ -140,6 +200,8 @@ func join_lobby(address: String, port: int, password: String, lobby: String) -> 
 
 
 func leave() -> void:
+	steam.leave()
+	_steam_hosting = false
 	directory.stop_advertising()
 	board.close()
 	nat.stop()
@@ -164,6 +226,9 @@ func my_id() -> int:
 func _advertise() -> void:
 	var info := {"name": lobby_name, "private": lobby_private, "host": Data.player_name,
 		"players": players.size(), "max": Data.MAX_PLAYERS, "port": _game_port}
+	if _steam_hosting:                               # Steam lists the lobby; no LAN broadcast / board needed
+		steam.update_info(info)
+		return
 	directory.advertise(info)                        # LAN (UDP broadcast)
 	if nat.public_ip != "" and not _no_internet:     # internet (message board), once the public IP is known
 		var net_info := info.duplicate()
@@ -176,9 +241,11 @@ func _advertise() -> void:
 var _no_internet: bool = false
 
 
-## Every lobby the player can see: LAN + internet.
+## Every lobby the player can see: Steam + LAN + internet.
 func all_lobbies() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
+	for l in steam_lobbies:
+		out.append(l)
 	out.append_array(directory.lobbies)
 	for l in board.lobbies:
 		out.append(l)
@@ -697,6 +764,7 @@ func start_game() -> bool:
 			_give_random_ship(id)
 		p["locked"] = true
 	_lobby_open = false
+	steam.set_open(false)
 	directory.stop_advertising()
 	board.close()
 	_distribute_blobs()
