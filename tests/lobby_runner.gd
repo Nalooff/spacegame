@@ -56,7 +56,7 @@ func _crew() -> void:
 		var host_locked: bool = Net.players.get(1, {}).get("locked", false)
 		say("roster host locked=%s seats=%s" % [host_locked, Net.players.get(1, {}).get("seats")])
 		step = 3
-		Net.submit_join_crew(1)
+		Net.submit_join_crew(1, Net.seat_of(1))
 	elif step == 3 and t > 9.0:
 		say("my crew_of = %s, ship owner = %s" % [Net.players.get(Net.my_id(), {}).get("crew_of"), Net.ship_owner_of(Net.my_id())])
 		step = 4
@@ -93,7 +93,7 @@ func _host() -> void:
 		var pool := get_tree().get_first_node_in_group("projectile_pool")
 		if pool != null:
 			for p in pool.get_children():
-				if (p as Projectile).active:
+				if p is Projectile and (p as Projectile).active:
 					active += 1
 		say("ships: %s ; active bullets in pool (after crew fired): %d" % [get_tree().get_nodes_in_group("ships").map(func(s): return s.name), active])
 		say("roster at start: %s" % JSON.stringify(_summary()))

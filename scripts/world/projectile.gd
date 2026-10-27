@@ -18,6 +18,8 @@ func _ready() -> void:
 
 func activate(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float) -> void:
 	global_position = pos
+	if vel.length() > 0.1:
+		look_at(pos + vel, Vector3.UP if absf(vel.normalized().y) < 0.95 else Vector3.RIGHT)   # the tracer lies along -Z
 	velocity = vel
 	shooter = from_ship
 	damage = dmg
@@ -53,5 +55,5 @@ func _physics_process(dt: float) -> void:
 		var owner_id: int = body.shape_find_owner(hit["shape"])
 		var shape_node := body.shape_owner_get_owner(owner_id) as CollisionShape3D
 		if shape_node != null and shape_node.has_meta("module"):
-			body.apply_hit(DamageHit.kinetic(int(shape_node.get_meta("module")), damage, hit["position"], shooter))
+			body.apply_hit(DamageHit.kinetic(int(shape_node.get_meta("module")), damage, hit["position"], shooter, velocity.normalized()))
 	deactivate()

@@ -1,0 +1,192 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/plan_view.gd" id="1_view"]
+[ext_resource type="Script" path="res://scripts/ui/plan_canvas.gd" id="2_canvas"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_views"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_tools"]
+
+[node name="PlanView" type="PanelContainer"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -560.0
+offset_top = -340.0
+offset_right = 560.0
+offset_bottom = 340.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_view")
+
+[node name="PlanMargin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="PlanColumn" type="VBoxContainer" parent="PlanMargin"]
+layout_mode = 2
+
+[node name="PlanHeaderRow" type="HBoxContainer" parent="PlanMargin/PlanColumn"]
+layout_mode = 2
+
+[node name="PlanTitleLabel" type="Label" parent="PlanMargin/PlanColumn/PlanHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "SHIP PLAN"
+
+[node name="DeckPicker" type="OptionButton" parent="PlanMargin/PlanColumn/PlanHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Which floor of the ship to show"
+
+[node name="ViewTopButton" type="Button" parent="PlanMargin/PlanColumn/PlanHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("ButtonGroup_views")
+text = "Decks"
+
+[node name="ViewSideButton" type="Button" parent="PlanMargin/PlanColumn/PlanHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_views")
+text = "Side"
+
+[node name="ViewFrontButton" type="Button" parent="PlanMargin/PlanColumn/PlanHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_views")
+text = "Front"
+
+[node name="ViewSheetButton" type="Button" parent="PlanMargin/PlanColumn/PlanHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Every deck on one sheet, like the deck plans on the wall of a ship"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_views")
+text = "Sheet"
+
+[node name="ViewIsoButton" type="Button" parent="PlanMargin/PlanColumn/PlanHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Exploded isometric: decks and modules pulled apart, dashed lines show where they join"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_views")
+text = "Exploded 3D"
+
+[node name="PaperButton" type="Button" parent="PlanMargin/PlanColumn/PlanHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Switch between white lines on dark paper and dark lines on white paper"
+toggle_mode = true
+text = "White paper"
+
+[node name="ClosePlanButton" type="Button" parent="PlanMargin/PlanColumn/PlanHeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "X"
+
+[node name="PlanToolRow" type="HBoxContainer" parent="PlanMargin/PlanColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ToolViewButton" type="Button" parent="PlanMargin/PlanColumn/PlanToolRow"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("ButtonGroup_tools")
+text = "Look"
+
+[node name="ToolDrawButton" type="Button" parent="PlanMargin/PlanColumn/PlanToolRow"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_tools")
+text = "Draw corridor"
+
+[node name="ToolEraseButton" type="Button" parent="PlanMargin/PlanColumn/PlanToolRow"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_tools")
+text = "Erase corridor"
+
+[node name="ToolDoorButton" type="Button" parent="PlanMargin/PlanColumn/PlanToolRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Click a corridor to put a door on it; click the door again to remove it"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_tools")
+text = "Door"
+
+[node name="ResetPlanButton" type="Button" parent="PlanMargin/PlanColumn/PlanToolRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Forget every change: corridors are generated again from the modules"
+text = "Reset to automatic"
+
+[node name="LayerRow" type="HBoxContainer" parent="PlanMargin/PlanColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="PlanTabs" type="TabBar" parent="PlanMargin/PlanColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+tab_count = 3
+tab_0/title = "MAP"
+tab_1/title = "STATUS"
+tab_2/title = "LOGS"
+
+[node name="ExplodeRow" type="HBoxContainer" parent="PlanMargin/PlanColumn"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="ExplodeLabel" type="Label" parent="PlanMargin/PlanColumn/ExplodeRow"]
+layout_mode = 2
+text = "Explode"
+
+[node name="ExplodeSlider" type="HSlider" parent="PlanMargin/PlanColumn/ExplodeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+max_value = 2.0
+step = 0.05
+value = 1.0
+
+[node name="ExplodeHint" type="Label" parent="PlanMargin/PlanColumn/ExplodeRow"]
+layout_mode = 2
+text = "   drag to rotate the view, wheel to zoom"
+
+[node name="PlanCanvas" type="Control" parent="PlanMargin/PlanColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(900, 480)
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 0
+script = ExtResource("2_canvas")
+
+[node name="PlanInfoText" type="RichTextLabel" parent="PlanMargin/PlanColumn"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(900, 480)
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+
+[node name="PlanStatusLabel" type="Label" parent="PlanMargin/PlanColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+text = ""

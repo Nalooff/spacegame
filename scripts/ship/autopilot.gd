@@ -1,5 +1,12 @@
 class_name ShipAutopilot
 extends Node
+## Autopilot with two flight modes:
+##   GOTO   fly to a point and STOP there (speed profile below).
+##   DRIVE  fly towards a point (or a tracked ship) with a chosen THRUST (0..1) and NEVER stop: no braking on arrival,
+##          so the ship can ram. Only `brake()` / `cancel()` ends it. Sideways drift is cancelled while driving.
+## Either mode can additionally FACE TURRETS: the ship is turned so the most turrets bear on the locked enemy (or on the
+## destination) instead of pointing its best thrust axis along the push; the thrusters then push as well as they can.
+##
 ## Coordinate autopilot: fly to (x, y, z) and stop there. GDScript port of the Python
 ## simulation (ship_sim.py) that was validated on random ships. No speed cap: the speed
 ## profile is simply the fastest speed the ship can still brake from.
@@ -13,7 +20,7 @@ extends Node
 
 signal arrived
 
-enum Mode { OFF, GOTO }
+enum Mode { OFF, GOTO, DRIVE }
 
 @export var brake_frac_main: float = 0.5 ## share of best-axis acceleration used by the planned brake
 @export var brake_frac_rcs: float = 0.5
@@ -31,6 +38,10 @@ var phase: String = "OFF"
 var distance: float = 0.0
 var att_error: float = 0.0
 var on_target: bool = false
+var throttle: float = 1.0               ## DRIVE: fraction of the best-axis acceleration that is asked for (0..1)
+var track_ship: Ship = null             ## DRIVE: follow this ship instead of the fixed `target` (ramming a moving enemy)
+var face_turrets: bool = false          ## attitude follows the turret-facing lock (see ShipTurrets.best_facing_axis)
+var player_order: bool = false          ## true: the player gave this order; the commander AI must not replace it
 
 # outputs (body frame), read by Ship
 var out_throttle: PackedFloat32Array = PackedFloat32Array()
@@ -42,6 +53,9 @@ var _arcs_eff := 0.0
 var _alpha_eff := 1.0
 var _t_flip := 1.0
 var _goal := Vector3(0, 0, -1)
+var _att_axis := Vector3(0, 0, -1)       # ship-space axis that the attitude loop points along `_goal`
+var _face_axis := Vector3(0, 0, -1)
+var _face_timer := 0.0
 var _settle := 0.0
 var _arrived_sent := false
 
@@ -56,14 +70,35 @@ func configure(s: Ship) -> void:
 	_t_flip = 2.0 * sqrt(PI / (0.6 * _alpha_eff)) * 0.75 + 0.2 # time budget for the 180 degree flip
 	out_throttle.resize(ship.alloc.n)
 	_goal = ship.global_transform.basis * ship.alloc.u_best
+	_att_axis = ship.alloc.u_best
 
 
-func go_to(p: Vector3) -> void:
+func go_to(p: Vector3, by_player: bool = false) -> void:
 	target = p
 	mode = Mode.GOTO
+	player_order = by_player
+	track_ship = null
 	_settle = 0.0
 	_arrived_sent = false
 	on_target = false
+
+
+## DRIVE towards `p` (or keep driving at `follow`, whose position is tracked) with thrust `thr` 0..1. Never stops by itself.
+func drive_to(p: Vector3, thr: float, follow: Ship = null, by_player: bool = true) -> void:
+	target = p
+	track_ship = follow
+	throttle = clampf(thr, 0.0, 1.0)
+	mode = Mode.DRIVE
+	player_order = by_player
+	_arrived_sent = true       # DRIVE never reports "arrived"
+	on_target = false
+
+
+## The point the ship is currently heading for (follows `track_ship`).
+func current_target() -> Vector3:
+	if track_ship != null and is_instance_valid(track_ship) and track_ship.alive:
+		return track_ship.global_position
+	return target
 
 
 ## Stop as fast as sensible: aim at the point where the ship would come to rest.
@@ -79,6 +114,8 @@ func brake() -> void:
 
 func cancel() -> void:
 	mode = Mode.OFF
+	player_order = false
+	track_ship = null
 	phase = "OFF"
 	on_target = false
 	out_throttle.fill(0.0)
@@ -99,7 +136,7 @@ func _desired_speed(d: float, speed: float) -> float:
 
 
 func _attitude_torque(b: Basis) -> Vector3:
-	var fwd := b * ship.alloc.u_best
+	var fwd := b * _att_axis
 	var axis := fwd.cross(_goal)
 	var sn := axis.length()
 	var cs := fwd.dot(_goal)
@@ -116,8 +153,20 @@ func _attitude_torque(b: Basis) -> Vector3:
 	return ship.inertia * (k_att * (w_body - omega_body))
 
 
+## World point the turrets should face: the locked enemy (if any), else the destination.
+func _face_point() -> Vector3:
+	if ship.detection != null and ship.detection.locked != null:
+		var c := ship.detection.find_contact(ship.detection.locked)
+		if not c.is_empty():
+			return c["est_pos"]
+	return current_target()
+
+
 ## Called by Ship every physics tick while mode != OFF.
 func update(dt: float) -> void:
+	if mode == Mode.DRIVE:
+		_update_drive(dt)
+		return
 	var s := ship
 	var b := s.global_transform.basis
 	var err := target - s.global_position
@@ -131,9 +180,11 @@ func update(dt: float) -> void:
 	if big_push:
 		_goal = a_cmd / a_mag
 
+	_att_axis = s.alloc.u_best
+	var faced := _apply_facing(dt)
 	var tau_att := _attitude_torque(b)
 	var f_des := s.mass * (b.transposed() * a_cmd)
-	if big_push and att_error < deg_to_rad(align_gate_deg):
+	if big_push and (faced or att_error < deg_to_rad(align_gate_deg)):
 		out_throttle = s.alloc.allocate(f_des, out_throttle)
 	else:
 		out_throttle.fill(0.0)
@@ -166,3 +217,51 @@ func update(dt: float) -> void:
 			arrived.emit()
 	else:
 		_settle = 0.0
+
+
+## Facing lock: point the best-facing turret axis at the enemy instead of pointing the thrust axis along the push.
+## Returns true when the facing lock is in charge of the attitude (thrust then does not wait for alignment).
+func _apply_facing(dt: float) -> bool:
+	if not face_turrets or ship.turrets == null or ship.turrets.rigs.is_empty():
+		return false
+	_face_timer -= dt
+	if _face_timer <= 0.0:
+		_face_timer = 1.0
+		_face_axis = ship.turrets.best_facing_axis(_face_axis)
+	var to := _face_point() - ship.global_position
+	if to.length() < 1.0:
+		return false
+	_att_axis = _face_axis
+	_goal = to.normalized()
+	return true
+
+
+## DRIVE: push towards the target with `throttle` of the best-axis acceleration, never slowing for arrival.
+func _update_drive(dt: float) -> void:
+	var s := ship
+	var b := s.global_transform.basis
+	var err := current_target() - s.global_position
+	var d := err.length()
+	distance = d
+	var dir := err / d if d > 1e-6 else b * s.alloc.u_best
+	var v := s.linear_velocity
+	var lateral := v - dir * v.dot(dir)
+	# push along the line to the target, but lean against sideways drift so the ship really goes THERE
+	var push := (dir - lateral / maxf(_a_eff * 2.0, 1.0)).normalized()
+	var a_cmd := push * _a_eff * throttle
+	_att_axis = s.alloc.u_best
+	if a_cmd.length() > 1e-4:
+		_goal = push
+	var faced := _apply_facing(dt)
+	var tau_att := _attitude_torque(b)
+	var f_des := s.mass * (b.transposed() * a_cmd)
+	if s.alloc.f_best > 0.0 and throttle > 0.001 and (faced or att_error < deg_to_rad(align_gate_deg)):
+		out_throttle = s.alloc.allocate(f_des, out_throttle)
+	else:
+		out_throttle.fill(0.0)
+	var f_thr := s.alloc.force_of(out_throttle)
+	var tau_thr := s.alloc.torque_of(out_throttle)
+	out_f_rcs = f_des - f_thr if throttle > 0.001 else Vector3.ZERO
+	out_tau = tau_att - tau_thr
+	phase = "DRIVE %d%%%s" % [int(throttle * 100.0), " FACING" if faced else ""]
+	on_target = false

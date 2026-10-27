@@ -1,11 +1,24 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_s"]
+[ext_resource type="Script" path="res://scripts/ui/contact_markers.gd" id="2_markers"]
+[ext_resource type="PackedScene" path="res://scenes/plan_view.tscn" id="3_plan"]
+[ext_resource type="PackedScene" path="res://scenes/tactical_map.tscn" id="4_map"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_s")
 
 [node name="HudRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ContactMarkers" type="Control" parent="HudRoot"]
+script = ExtResource("2_markers")
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -28,17 +41,6 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 text = ""
-
-[node name="HullLabel" type="Label" parent="HudRoot/FlightStatusPanel/StatusColumn"]
-layout_mode = 2
-text = "Hull"
-
-[node name="HullBar" type="ProgressBar" parent="HudRoot/FlightStatusPanel/StatusColumn"]
-unique_name_in_owner = true
-layout_mode = 2
-show_percentage = false
-value = 100.0
-custom_minimum_size = Vector2(0, 14)
 
 [node name="CommanderLabel" type="Label" parent="HudRoot/FlightStatusPanel/StatusColumn"]
 layout_mode = 2
@@ -114,8 +116,8 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -430.0
-offset_top = -170.0
+offset_left = -300.0
+offset_top = -150.0
 offset_right = -10.0
 offset_bottom = -10.0
 grow_horizontal = 0
@@ -126,66 +128,14 @@ layout_mode = 2
 
 [node name="AutopilotTitleLabel" type="Label" parent="HudRoot/AutopilotPanel/AutopilotColumn"]
 layout_mode = 2
-text = "COORDINATE AUTOPILOT  (flies there and stops)"
-autowrap_mode = 3
+text = "FLIGHT ORDERS"
 
-[node name="CoordinatesRow" type="HBoxContainer" parent="HudRoot/AutopilotPanel/AutopilotColumn"]
+[node name="OpenMapButton" type="Button" parent="HudRoot/AutopilotPanel/AutopilotColumn"]
 layout_mode = 2
-
-[node name="XLabel" type="Label" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
-layout_mode = 2
-text = "X"
-
-[node name="XSpin" type="SpinBox" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
-unique_name_in_owner = true
-layout_mode = 2
-min_value = -100000
-max_value = 100000
-step = 0.1
-value = 0
-size_flags_horizontal = 3
-allow_greater = true
-allow_lesser = true
-update_on_text_changed = true
-
-[node name="YLabel" type="Label" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
-layout_mode = 2
-text = "Y"
-
-[node name="YSpin" type="SpinBox" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
-unique_name_in_owner = true
-layout_mode = 2
-min_value = -100000
-max_value = 100000
-step = 0.1
-value = 0
-size_flags_horizontal = 3
-allow_greater = true
-allow_lesser = true
-update_on_text_changed = true
-
-[node name="ZLabel" type="Label" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
-layout_mode = 2
-text = "Z"
-
-[node name="ZSpin" type="SpinBox" parent="HudRoot/AutopilotPanel/AutopilotColumn/CoordinatesRow"]
-unique_name_in_owner = true
-layout_mode = 2
-min_value = -100000
-max_value = 100000
-step = 0.1
-value = 0
-size_flags_horizontal = 3
-allow_greater = true
-allow_lesser = true
-update_on_text_changed = true
+text = "Tactical map  (M)"
 
 [node name="AutopilotButtonsRow" type="HBoxContainer" parent="HudRoot/AutopilotPanel/AutopilotColumn"]
 layout_mode = 2
-
-[node name="GoButton" type="Button" parent="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow"]
-layout_mode = 2
-text = "GO"
 
 [node name="BrakeButton" type="Button" parent="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow"]
 layout_mode = 2
@@ -193,11 +143,12 @@ text = "Brake (X)"
 
 [node name="CancelButton" type="Button" parent="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow"]
 layout_mode = 2
-text = "Cancel"
+text = "Cancel order"
 
-[node name="HereButton" type="Button" parent="HudRoot/AutopilotPanel/AutopilotColumn"]
+[node name="FireStateLabel" type="Label" parent="HudRoot/AutopilotPanel/AutopilotColumn"]
+unique_name_in_owner = true
 layout_mode = 2
-text = "Use my position"
+text = ""
 
 [node name="ControlsHelpLabel" type="Label" parent="HudRoot"]
 layout_mode = 1
@@ -211,16 +162,21 @@ offset_bottom = -10.0
 grow_vertical = 0
 vertical_alignment = 2
 modulate = Color(1, 1, 1, 0.6)
-text = "W/S forward/back  A/D strafe  Space/C up/down  Arrows pitch/yaw  Q/E roll\nLMB fire at cursor   RMB drag orbit camera   Wheel zoom\nX brake   T flight-assist on/off   Any manual key cancels the autopilot"
+text = "W/S forward/back  A/D strafe  Space/C up/down  Arrows pitch/yaw  Q/E roll\nLMB fire at cursor (commander mode: hold LMB to fire at the lock)   R lock next enemy (guns lead it)   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P ship plan   X brake   T flight-assist   M tactical map (click = waypoint)   H weapons free   Any manual key cancels the autopilot"
 
 [node name="BannerTimer" type="Timer" parent="HudRoot"]
 unique_name_in_owner = true
 wait_time = 3.0
 one_shot = true
 
-[connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow/GoButton" to="." method="_on_go_pressed"]
+[node name="PlanView" parent="HudRoot" instance=ExtResource("3_plan")]
+unique_name_in_owner = true
+
+[node name="TacticalMap" parent="HudRoot" instance=ExtResource("4_map")]
+unique_name_in_owner = true
+
+[connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/OpenMapButton" to="." method="_on_open_map_pressed"]
 [connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow/BrakeButton" to="." method="_on_brake_pressed"]
 [connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow/CancelButton" to="." method="_on_cancel_pressed"]
-[connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/HereButton" to="." method="_on_here_pressed"]
 [connection signal="pressed" from="HudRoot/PlayersPanel/PlayersColumn/LeaveButton" to="." method="_on_leave_pressed"]
 [connection signal="timeout" from="HudRoot/BannerTimer" to="." method="_on_banner_timer_timeout"]

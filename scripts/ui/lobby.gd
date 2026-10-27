@@ -3,11 +3,15 @@ extends Control
 ## Host: starts the game when everyone is locked, or force-launches when the timer ran out
 ## (players without a ship then get a random premade one). Widgets live in scenes/lobby.tscn.
 
+const SEAT_PICKER := preload("res://scenes/seat_picker.tscn")
+
 @onready var lobby_title_label: Label = %LobbyTitleLabel
 @onready var timer_label: Label = %TimerLabel
 @onready var ship_list: ItemList = %ShipList
 @onready var ship_info_label: Label = %ShipInfoLabel
 @onready var lock_button: Button = %LockButton
+@onready var my_seat_button: Button = %MySeatButton
+@onready var team_picker: OptionButton = %TeamPicker
 @onready var player_tree: Tree = %PlayerTree
 @onready var join_crew_button: Button = %JoinCrewButton
 @onready var leave_crew_button: Button = %LeaveCrewButton
@@ -34,6 +38,9 @@ func _ready() -> void:
 	for e in ShipDesign.list_ships():
 		ship_list.add_item(("[premade] " if e["premade"] else "[custom] ") + e["name"])
 		_ship_paths.append(e["path"])
+	team_picker.add_item("No team: everybody else is an enemy")
+	for t in range(1, 5):
+		team_picker.add_item("Team %d" % t)
 	Net.roster_changed.connect(_refresh_all)
 	start_button.visible = Net.is_host()
 	_refresh_all()
@@ -67,13 +74,29 @@ func _on_ship_selected(index: int) -> void:
 	_refresh_all()
 
 
+func _on_team_selected(index: int) -> void:
+	Net.submit_team(index)
+
+
 func _on_lock_pressed() -> void:
 	Net.submit_lock(not _me().get("locked", false))
 
 
 func _on_join_crew_pressed() -> void:
-	if _selected_player > 0:
-		Net.submit_join_crew(_selected_player)
+	if _selected_player > 0 and not has_node("SeatPicker"):
+		var picker := SEAT_PICKER.instantiate()
+		picker.name = "SeatPicker"
+		add_child(picker)
+		picker.open(_selected_player)
+
+
+## The owner of a locked ship chooses which commander module (bridge) they sit at.
+func _on_my_seat_pressed() -> void:
+	if not has_node("SeatPicker"):
+		var picker := SEAT_PICKER.instantiate()
+		picker.name = "SeatPicker"
+		add_child(picker)
+		picker.open(Net.my_id(), true)
 
 
 func _on_leave_crew_pressed() -> void:
@@ -88,10 +111,13 @@ func _refresh_all() -> void:
 	var locked: bool = me.get("locked", false)
 	ship_list.mouse_filter = Control.MOUSE_FILTER_IGNORE if (locked or is_crew) else Control.MOUSE_FILTER_STOP
 	ship_list.modulate = Color(1, 1, 1, 0.5) if (locked or is_crew) else Color(1, 1, 1, 1)
+	team_picker.select(int(me.get("team", 0)))
+	team_picker.disabled = locked or is_crew
 	lock_button.visible = not is_crew
 	lock_button.text = "Unlock ship (also releases your crew)" if locked else "Lock in ship"
 	lock_button.disabled = not locked and (me.get("ship", "") == "")
 	leave_crew_button.visible = is_crew
+	my_seat_button.visible = locked and not is_crew and (me.get("slots", {}) as Dictionary).size() > 1
 	_update_join_crew_button()
 	_update_start_button()
 
@@ -106,7 +132,8 @@ func _refresh_tree() -> void:
 		if p["crew_of"] != 0:
 			continue
 		var it := player_tree.create_item(root)
-		it.set_text(0, "%s%s%s" % [p["name"], "  (host)" if id == 1 else "", "  (you)" if id == Net.my_id() else ""])
+		it.set_text(0, "%s%s%s%s" % [p["name"], "  (host)" if id == 1 else "", "  (you)" if id == Net.my_id() else "",
+			"  [team %d]" % int(p.get("team", 0)) if int(p.get("team", 0)) > 0 else ""])
 		it.set_text(1, p["ship_name"] if p["ship_name"] != "" else "- not chosen -")
 		if p["ship"] != "":
 			it.set_text(2, "%d / %d" % [1 + Net.crew_count(id), p["seats"]])

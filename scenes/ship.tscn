@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/ship/ship.gd" id="1_ship"]
 [ext_resource type="Script" path="res://scripts/ship/electricity.gd" id="2_elec"]
@@ -8,6 +8,23 @@
 [ext_resource type="Script" path="res://scripts/ship/weapons.gd" id="6_wpn"]
 [ext_resource type="Script" path="res://scripts/ship/hull_renderer.gd" id="7_hull"]
 [ext_resource type="Shader" path="res://shaders/hull.gdshader" id="8_hullsh"]
+[ext_resource type="Script" path="res://scripts/ship/turrets.gd" id="9_turrets"]
+[ext_resource type="Script" path="res://scripts/ship/detection.gd" id="10_detect"]
+[ext_resource type="Script" path="res://scripts/ship/stations.gd" id="11_stations"]
+[ext_resource type="Script" path="res://scripts/ship/communications.gd" id="12_comms"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_report"]
+shading_mode = 0
+transparency = 1
+cull_mode = 2
+albedo_color = Color(1, 0.6, 0.15, 0.28)
+
+[sub_resource type="SphereMesh" id="Mesh_report"]
+material = SubResource("Mat_report")
+radius = 1.0
+height = 2.0
+radial_segments = 24
+rings = 12
 
 [sub_resource type="StandardMaterial3D" id="Mat_flame"]
 shading_mode = 0
@@ -47,6 +64,9 @@ properties/1/replication_mode = 1
 properties/2/path = NodePath(".:sync_vel")
 properties/2/spawn = true
 properties/2/replication_mode = 1
+properties/3/path = NodePath(".:turret_angles")
+properties/3/spawn = false
+properties/3/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="Rep_state"]
 properties/0/path = NodePath(".:module_hp")
@@ -54,10 +74,19 @@ properties/0/spawn = true
 properties/0/replication_mode = 2
 properties/1/path = NodePath(".:throttles")
 properties/1/spawn = false
-properties/1/replication_mode = 1
+properties/1/replication_mode = 2
 properties/2/path = NodePath(".:alive")
 properties/2/spawn = true
 properties/2/replication_mode = 2
+properties/3/path = NodePath(".:sig_elec")
+properties/3/spawn = false
+properties/3/replication_mode = 2
+properties/4/path = NodePath(".:sig_heat")
+properties/4/spawn = false
+properties/4/replication_mode = 2
+properties/5/path = NodePath(".:corridor_hp")
+properties/5/spawn = true
+properties/5/replication_mode = 2
 
 [node name="Ship" type="RigidBody3D" groups=["ships"]]
 collision_layer = 1
@@ -83,13 +112,33 @@ script = ExtResource("3_gyro")
 [node name="RCS" type="Node" parent="Systems"]
 script = ExtResource("4_rcs")
 
+[node name="Detection" type="Node" parent="Systems"]
+script = ExtResource("10_detect")
+
+[node name="Communications" type="Node" parent="Systems"]
+script = ExtResource("12_comms")
+
+[node name="ReportSpheres" type="Node3D" parent="."]
+
+[node name="SphereTemplate" type="MeshInstance3D" parent="ReportSpheres"]
+visible = false
+cast_shadow = 0
+mesh = SubResource("Mesh_report")
+
 [node name="Autopilot" type="Node" parent="."]
 script = ExtResource("5_ap")
+
+[node name="Stations" type="Node" parent="."]
+script = ExtResource("11_stations")
 
 [node name="Weapons" type="Node" parent="."]
 script = ExtResource("6_wpn")
 
+[node name="Turrets" type="Node" parent="."]
+script = ExtResource("9_turrets")
+
 [node name="TransformSync" type="MultiplayerSynchronizer" parent="."]
+replication_interval = 0.033
 replication_config = SubResource("Rep_transform")
 
 [node name="StateSync" type="MultiplayerSynchronizer" parent="."]

@@ -6,7 +6,8 @@ Node tree overview (names are descriptive on purpose):
     CameraRig (builder_camera.gd) / Camera
     View (builder_view.gd) / ShipMesh, VertexDots, OverlayMesh
     TransformTool (transform_tool.gd)
-    UI (CanvasLayer) / BuilderUI (builder_ui.gd) / TopBar, ToolPanel, SidePanel, StatusBar
+    UI (CanvasLayer) / BuilderUI (builder_ui.gd) / TopBar, ToolPanel (left), ViewportBar, OperatorPanel, SidePanel (right), StatusBar
+The buttons of the left panel are NOT in this file: builder_ui.gd builds them from the table in builder_tools.gd.
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -32,6 +33,9 @@ def panel(name, preset_props, kids):
         "layout_mode": 2, "theme_override_constants/margin_left": 10, "theme_override_constants/margin_right": 10,
         "theme_override_constants/margin_top": 8, "theme_override_constants/margin_bottom": 8}, kids)])
 
+TYPES = ["hull", "armor", "thruster", "turret", "turret_barrel", "commander", "radar", "antenna"]   # = ModuleCatalog.TYPES
+SHAPES = ["box", "wedge", "pyramid", "tetra", "cylinder", "cone", "sphere", "dome"]                # = Primitives.NAMES
+
 def build():
     # ============================================================ 3D side
     shader_code = s("shader_type spatial;\nrender_mode unshaded, blend_mix, depth_draw_never, cull_disabled;\n"
@@ -53,81 +57,120 @@ def build():
     # ============================================================ UI: top bar
     ship_name_edit = line("ShipNameEdit", "My Ship", placeholder_text=s("Ship name"))
     load_picker = opt("LoadPicker")
-    new_b = button("New", "NewButton", tooltip_text=s("Start a fresh ship"))
+    back_b = button("", "BackToMenuButton", tooltip_text=s("Back to the menu"))
+    new_b = button("New", "NewButton", tooltip_text=s("Start a fresh ship (see the Create tab for templates)"))
     save_b = tool_button("Save", "SaveButton", "Save to user://ships/ (Ctrl+S). Needs exactly one Commander and a thruster.")
     load_b = button("Load", "LoadButton", tooltip_text=s("Load the ship picked in the list"))
-    undo_b = tool_button("Undo", "UndoButton", "Ctrl+Z")
-    redo_b = tool_button("Redo", "RedoButton", "Ctrl+Y (or Ctrl+Shift+Z)")
-    back_b = button("Back to menu", "BackToMenuButton")
+    undo_b = tool_button("", "UndoButton", "Undo (Ctrl+Z)")
+    redo_b = tool_button("", "RedoButton", "Redo (Ctrl+Y)")
+    plan_b = button("Plan", "PlanButton", unique=True, tooltip_text=s("The emergency plan: rooms, corridors and doors"))
+    premade_b = button("Save as PREMADE", "SavePremadeButton", unique=True, visible="false", tooltip_text=s("Only when run from the Godot editor: writes into res://ships/"))
     spacer = N("TopBarSpacer", "Control", {"layout_mode": 2, "size_flags_horizontal": 3})
     top_bar = panel("TopBar", {"anchors_preset": 10, "anchor_right": 1.0, "offset_left": 8.0, "offset_top": 8.0, "offset_right": -8.0,
                                "offset_bottom": 56.0, "grow_horizontal": 2},
-                    [hbox("TopBarRow", [label("Ship name", "ShipNameTitle"), ship_name_edit, new_b, save_b,
-                                        label("|", "TopBarDivider1"), load_picker, load_b, spacer,
-                                        undo_b, redo_b, back_b])])
+                    [hbox("TopBarRow", [back_b, ship_name_edit, new_b, save_b, load_picker, load_b, spacer,
+                                        undo_b, redo_b, plan_b, premade_b])])
     ship_name_edit.props["custom_minimum_size"] = "Vector2(220, 0)"
     ship_name_edit.props["size_flags_horizontal"] = 1
     load_picker.props["custom_minimum_size"] = "Vector2(200, 0)"
     load_picker.props["size_flags_horizontal"] = 1
 
     # ============================================================ UI: tool panel (left)
-    group = 'SubResource("ButtonGroup_modes")'
-    def mode_button(text, name, tip):
-        return button(text, name, unique=True, toggle_mode="true", button_group=group, tooltip_text=s(tip))
-    mode_obj = mode_button("Object  (1)", "ModeObjectButton", "Select whole modules")
-    mode_vert = mode_button("Vertex  (2)", "ModeVertexButton", "Select single points")
-    mode_edge = mode_button("Edge  (3)", "ModeEdgeButton", "Select lines between two points")
-    mode_face = mode_button("Face  (4)", "ModeFaceButton", "Select flat sides")
-    grab_b = tool_button("Move  (G)", "GrabButton", "Move the selection. X/Y/Z locks an axis, click or Enter confirms, Esc cancels.")
-    rot_b = tool_button("Rotate  (R)", "RotateButton", "Rotate the selection around its centre")
-    scale_b = tool_button("Scale  (S)", "ScaleButton", "Scale the selection around its centre")
-    extrude_b = tool_button("Extrude face  (E)", "ExtrudeButton", "Face mode: push the face out into a new block (new vertices)")
-    addv_b = tool_button("Add vertex on edge  (W)", "AddVertexButton", "Edge mode: split the edge in the middle with a new vertex")
-    conn_b = tool_button("Connect vertices  (J)", "ConnectVerticesButton", "Vertex mode: draw a new edge between 2 vertices of the same face")
-    link_b = tool_button("Link vertices  (L)", "LinkButton", "Merge the selected vertices so they move together (green dots)")
-    unlink_b = tool_button("Unlink vertex  (U)", "UnlinkButton", "Detach the vertex from the other modules")
-    mirror_b = tool_button("Mirror  (M)", "MirrorButton", "Object mode: copy the module to the other side (X axis)")
-    dup_b = tool_button("Duplicate  (Shift+D)", "DuplicateButton", "Copy the selected module(s)")
-    del_b = tool_button("Delete  (X)", "DeleteButton", "Delete the selection")
-    frame_b = tool_button("Frame view  (F)", "FrameButton", "Centre the camera on the selection")
-    snap_spin = spin("SnapSpin", 0, 1, 0.05, 0.1, tooltip_text=s("Moves jump by this many metres. 0 = free."))
-    auto_link = N("AutoLinkCheck", "CheckBox", {"layout_mode": 2, "text": s("Auto-link on drop"), "button_pressed": "true",
-                  "tooltip_text": s("Dropping a vertex on another module's vertex links them")}, unique=True)
+    # Only the frame is here. ContextToolList (tools of the chosen selection type) and CommonToolList (tools for every type)
+    # are filled by builder_ui.gd from the table in builder_tools.gd.
+    mode_menu = N("ModeMenuButton", "MenuButton", {"layout_mode": 2, "text": s("Object"), "flat": "false", "alignment": 0,
+                  "custom_minimum_size": "Vector2(0, 40)", "tooltip_text": s("Selection type: what a click selects (1 object, 2 vertex, 3 edge, 4 face)")}, unique=True)
     tool_panel = panel("ToolPanel", {"anchors_preset": 9, "anchor_bottom": 1.0, "offset_left": 8.0, "offset_top": 64.0,
-                                    "offset_right": 218.0, "offset_bottom": -48.0, "grow_vertical": 2},
-        [N("ToolScroll", "ScrollContainer", {"layout_mode": 2, "horizontal_scroll_mode": 0}, [
-            vbox("ToolList", [
-                heading("SELECT", "SelectHeading"), mode_obj, mode_vert, mode_edge, mode_face, sep("SelectDivider"),
-                heading("TRANSFORM", "TransformHeading"), grab_b, rot_b, scale_b, sep("TransformDivider"),
-                heading("SHAPE", "ShapeHeading"), extrude_b, addv_b, conn_b, link_b, unlink_b, sep("ShapeDivider"),
-                heading("OBJECT", "ObjectHeading"), mirror_b, dup_b, del_b, sep("ObjectDivider"),
-                heading("VIEW", "ViewHeading"), frame_b, row("Snap (m)", "Snap", snap_spin), auto_link], size_flags_horizontal=3)])])
+                                    "offset_right": 244.0, "offset_bottom": -48.0, "grow_vertical": 2},
+        [vbox("ToolColumn", [
+            mode_menu,
+            label("", "ModeInfoLabel", unique=True, wrap=True, modulate="Color(1, 1, 1, 0.6)"),
+            N("ContextScroll", "ScrollContainer", {"layout_mode": 2, "size_flags_vertical": 3, "horizontal_scroll_mode": 0}, [
+                vbox("ContextToolList", [], unique=True, size_flags_horizontal=3)]),
+            sep("ToolDivider"),
+            vbox("CommonToolList", [], unique=True)])])
+
+    # ============================================================ UI: viewport bar (top centre, over the 3D view)
+    shading_menu = N("ShadingMenuButton", "MenuButton", {"layout_mode": 2, "text": s("Solid"), "tooltip_text": s("Shading: Solid / X-ray / Wireframe (Alt+Z toggles X-ray)")}, unique=True)
+    view_menu = N("ViewMenuButton", "MenuButton", {"layout_mode": 2, "text": s("View"), "tooltip_text": s("Camera: perspective / orthographic and standard views (numpad 1, 3, 7, 5)")}, unique=True)
+    overlay_menu = N("OverlaysMenuButton", "MenuButton", {"layout_mode": 2, "text": s("Overlays"), "tooltip_text": s("What the viewport shows besides the modules")}, unique=True)
+    snap_spin = spin("SnapSpin", 0, 1, 0.05, 0.1, expand=False, tooltip_text=s("Moves jump by this many metres. 0 = free."))
+    auto_link = N("AutoLinkCheck", "CheckBox", {"layout_mode": 2, "text": s("Auto-link"), "button_pressed": "true",
+                  "tooltip_text": s("Dropping a vertex on another module's vertex links them")}, unique=True)
+    pilot_check = N("PilotCheck", "CheckBox", {"layout_mode": 2, "text": s("Holds the flight controls (pilot)"), "button_pressed": "true",
+                    "tooltip_text": s("Untick for a gunner-only bridge: whoever sits here cannot fly the ship")}, unique=True)
+    viewport_bar = panel("ViewportBar", {"anchors_preset": 5, "anchor_left": 0.5, "anchor_right": 0.5, "offset_left": -250.0, "offset_top": 64.0,
+                                        "offset_right": 250.0, "offset_bottom": 104.0, "grow_horizontal": 2},
+        [hbox("ViewportBarRow", [shading_menu, view_menu, overlay_menu, N("ViewportBarDivider", "VSeparator", {"layout_mode": 2}),
+                                 label("Snap", "SnapLabel"), snap_spin, auto_link], alignment=1)])
+
+    # ============================================================ UI: operator panel ("Adjust last operation")
+    op_panel = panel("OperatorPanel", {"anchor_top": 1.0, "anchor_bottom": 1.0, "offset_left": 252.0, "offset_top": -52.0, "offset_right": 252.0,
+                                      "offset_bottom": -52.0, "grow_vertical": 0, "custom_minimum_size": "Vector2(330, 0)", "visible": "false"},
+        [vbox("OperatorColumn", [
+            label("BEVEL", "OperatorTitle", unique=True, modulate="Color(1, 0.77, 0.28, 1)"),
+            vbox("OperatorParams", [], unique=True),
+            label("", "OperatorHint", unique=True, wrap=True, modulate="Color(1, 1, 1, 0.55)"),
+            hbox("OperatorButtons", [button("Apply", "OperatorApplyButton", unique=True, size_flags_horizontal=3),
+                                     button("Cancel", "OperatorCancelButton", unique=True, size_flags_horizontal=3)])])])
+    op_panel.script = 'ExtResource("7_op")'
+    op_panel.unique = True
+    box_overlay = N("BoxSelectOverlay", "Control", {**full_rect(), "mouse_filter": 2}, unique=True, script='ExtResource("8_box")')
 
     # ============================================================ UI: side panel (right) with tabs
-    # --- Add tab
-    add_tab = vbox("Add", [
-        heading("NEW MODULE", "NewModuleHeading"),
-        label("Type", "NewTypeLabel"), opt("NewTypePicker"),
+    # --- Create tab: ship creation OR module creation
+    ship_btn = button("Ship", "CreateShipButton", unique=True, toggle_mode="true", button_group='SubResource("ButtonGroup_create")', size_flags_horizontal=3,
+                      tooltip_text=s("Start a ship: templates and premade ships"))
+    mod_btn = button("Module", "CreateModuleButton", unique=True, toggle_mode="true", button_pressed="true", button_group='SubResource("ButtonGroup_create")',
+                     size_flags_horizontal=3, tooltip_text=s("Add a module (hull, thruster, turret...) to the ship"))
+    type_buttons = [button("", "TypeButton_" + t, toggle_mode="true", button_group='SubResource("ButtonGroup_types")', custom_minimum_size="Vector2(0, 44)",
+                           size_flags_horizontal=3, tooltip_text=s(t.replace("turret_barrel", "turret barrel").capitalize()), expand_icon="true") for t in TYPES]
+    type_buttons[0].props["button_pressed"] = "true"
+    shape_buttons = [button("", "ShapeButton_" + n, toggle_mode="true", button_group='SubResource("ButtonGroup_shapes")', custom_minimum_size="Vector2(0, 40)",
+                            size_flags_horizontal=3, tooltip_text=s(n.capitalize()), expand_icon="true") for n in SHAPES]
+    shape_buttons[0].props["button_pressed"] = "true"
+    def size_cell(title, name, val):
+        return vbox(name + "Cell", [label(title, name + "Label", modulate="Color(1, 1, 1, 0.6)"), spin(name + "Spin", 0.05, 10, 0.05, val)], size_flags_horizontal=3)
+    ship_section = vbox("ShipCreationSection", [
+        heading("START A NEW SHIP", "StartShipHeading"),
+        label("A starter ship has a hull, a bridge and an engine, so it can be saved at once. A blank ship is empty: add every module yourself.", "StartShipHelp", wrap=True, modulate="Color(0.8, 0.85, 0.95, 0.85)"),
+        hbox("StartShipRow", [button("Starter ship", "NewStarterShipButton", unique=True, size_flags_horizontal=3, custom_minimum_size="Vector2(0, 52)", tooltip_text=s("Hull + bridge + engine")),
+                              button("Blank ship", "NewBlankShipButton", unique=True, size_flags_horizontal=3, custom_minimum_size="Vector2(0, 52)", tooltip_text=s("Nothing in it"))]),
+        sep("StartShipDivider"),
+        heading("OR START FROM A PREMADE SHIP", "PremadeHeading"),
+        label("Pick one in the list at the top (next to Load) and press Load: you edit your own copy.", "PremadeHelp", wrap=True, modulate="Color(0.8, 0.85, 0.95, 0.85)"),
+    ], unique=True)
+    module_section = vbox("ModuleCreationSection", [
+        heading("MODULE TYPE", "NewTypeHeading"),
+        N("TypeGrid", "GridContainer", {"layout_mode": 2, "columns": 4}, type_buttons, unique=True),
+        label("", "NewTypeLabel", unique=True),
         label("", "NewTypeHelp", unique=True, wrap=True, modulate="Color(0.8, 0.85, 0.95, 0.85)"),
-        label("Shape", "NewShapeLabel"), opt("NewShapePicker"),
-        row("Round shape detail", "NewSegments", spin("NewSegmentsSpin", 6, 32, 2, 12, tooltip_text=s("Number of sides of cylinders, cones, spheres and domes"))),
-        label("Half size (metres, from the centre)", "NewSizeLabel"),
-        hbox("NewSizeRow", [spin("NewSizeXSpin", 0.05, 10, 0.05, 0.5), spin("NewSizeYSpin", 0.05, 10, 0.05, 0.5), spin("NewSizeZSpin", 0.05, 10, 0.05, 0.5)]),
-        tool_button("Add at view centre", "AddModuleButton", "The new module appears where the camera looks. Then press G to move it."),
-        label("Tip: modules start unattached. Move them next to each other, then link\nvertices (L) so they stay together.", "AddTip", wrap=True, modulate="Color(1, 1, 1, 0.6)"),
-    ])
-    for n in add_tab.kids:
-        if n.type == "OptionButton": pass
-    # --- Selection tab
+        heading("PRESET", "NewPresetHeading"),
+        opt("NewPresetPicker"),
+        label("", "NewPresetHelp", unique=True, wrap=True, modulate="Color(0.8, 0.85, 0.95, 0.85)"),
+        heading("SHAPE", "NewShapeHeading"),
+        N("ShapeGrid", "GridContainer", {"layout_mode": 2, "columns": 4}, shape_buttons, unique=True),
+        row("Round detail", "NewSegments", spin("NewSegmentsSpin", 6, 32, 2, 12, tooltip_text=s("Number of sides of cylinders, cones, spheres and domes"))),
+        heading("SIZE  (half-size in metres, from the centre)", "NewSizeHeading"),
+        hbox("NewSizeRow", [size_cell("X", "NewSizeX", 0.5), size_cell("Y", "NewSizeY", 0.5), size_cell("Z", "NewSizeZ", 0.5)]),
+        button("Add module at the view centre", "AddModuleButton", unique=True, custom_minimum_size="Vector2(0, 44)",
+               tooltip_text=s("The new module appears where the camera looks. Then press G to move it.")),
+        label("Modules start unattached: move them next to each other, then link vertices (L) so they stay together.", "AddTip", wrap=True, modulate="Color(1, 1, 1, 0.55)"),
+    ], unique=True)
+    add_tab = vbox("Add", [hbox("CreateModeRow", [ship_btn, mod_btn]), ship_section, module_section])
+    # --- Properties tab
     dir_names = [("-Z fwd", "Vector3(0, 0, -1)"), ("+Z", "Vector3(0, 0, 1)"), ("+X", "Vector3(1, 0, 0)"),
                  ("-X", "Vector3(-1, 0, 0)"), ("+Y", "Vector3(0, 1, 0)"), ("-Y", "Vector3(0, -1, 0)")]
     dir_buttons = [(button(t, "ThrustDirPreset%d" % i, tooltip_text=s("Thruster pushes the ship toward " + t)), v) for i, (t, v) in enumerate(dir_names)]
+    turret_axis_buttons = [(button(t, "TurretAxisPreset%d" % i, tooltip_text=s("Turret swivel 'up' axis: " + t)), v) for i, (t, v) in enumerate(dir_names)]
     sel_tab = vbox("Selection", [
         label("", "SelectionInfoLabel", unique=True, wrap=True),
         vbox("CenterSection", [
-            heading("CENTRE OF SELECTION (m)", "CenterHeading"),
+            heading("POSITION OF SELECTION (m)", "CenterHeading"),
             hbox("CenterRow", [spin("CenterXSpin", -100, 100, 0.05, 0), spin("CenterYSpin", -100, 100, 0.05, 0), spin("CenterZSpin", -100, 100, 0.05, 0)]),
-            label("Type exact numbers here instead of dragging.", "CenterTip", modulate="Color(1, 1, 1, 0.6)")], unique=True),
+            heading("SIZE OF SELECTION (m)", "SizeHeading"),
+            hbox("SizeRow", [spin("SizeXSpin", 0, 200, 0.05, 1), spin("SizeYSpin", 0, 200, 0.05, 1), spin("SizeZSpin", 0, 200, 0.05, 1)]),
+            label("Type exact numbers here instead of dragging.", "CenterTip", modulate="Color(1, 1, 1, 0.55)")], unique=True),
         sep("SelectionDivider"),
         vbox("ActiveModuleSection", [
             heading("ACTIVE MODULE", "ActiveModuleHeading"),
@@ -136,17 +179,36 @@ def build():
             label("", "ActiveTypeHelp", unique=True, wrap=True, modulate="Color(0.8, 0.85, 0.95, 0.85)"),
             label("Material (decides damage resistance and dents)", "MaterialLabel", wrap=True), opt("MaterialPicker"),
             label("", "MaterialHelp", unique=True, wrap=True, modulate="Color(0.8, 0.85, 0.95, 0.85)"),
-            vbox("CrewSection", [
-                heading("CREW", "CrewHeading"),
-                label("Seats on the ship, pilot included. Friends can join a locked ship in the lobby as crew and man the turrets.", "CrewHelp", wrap=True),
-                row("Seats", "CrewSeats", spin("CrewSeatsSpin", 1, 8, 1, 1))], unique=True),
+            vbox("ModuleStatsSection", [
+                heading("PRESET & STATS", "StatsSectionHeading"),
+                opt("PresetPicker"),
+                label("", "PresetHelp", unique=True, wrap=True, modulate="Color(0.8, 0.85, 0.95, 0.85)"),
+                vbox("StatsList", [], unique=True),
+                label("", "DerivedLabel", unique=True, wrap=True, modulate="Color(0.9, 0.85, 0.6, 0.9)"),
+                hbox("SavePresetRow", [N("PresetNameEdit", "LineEdit", {"layout_mode": 2, "size_flags_horizontal": 3, "placeholder_text": s("preset name")}, unique=True),
+                                       tool_button("Save as preset", "SavePresetButton", "Keep these numbers as your own preset for this module type")])], unique=True),
+            vbox("CommanderSection", [
+                heading("COMMANDER (bridge)", "CommanderHeading"),
+                label("A player only controls what THEIR commander is linked to. Select this commander + a turret base, press T to link / unlink it. Big ships can have a pilot bridge and a gunner bridge.", "CommanderHelp", wrap=True),
+                pilot_check,
+                label("", "CommanderLinkLabel", unique=True, wrap=True)], unique=True),
+            vbox("TurretSection", [
+                heading("TURRET BASE (crew station + swivel)", "TurretHeading"),
+                label("The barrel (a separate 'Turret barrel' module, link it with T) swivels around the centre of this base. Mount axis = the 'up' of the swivel.", "TurretHelp", wrap=True),
+                hbox("TurretAxisRow", [spin("TurretAxisXSpin", -1, 1, 0.05, 0), spin("TurretAxisYSpin", -1, 1, 0.05, 1), spin("TurretAxisZSpin", -1, 1, 0.05, 0)]),
+                hbox("TurretAxisPresetRow1", [b for b, _ in turret_axis_buttons[:3]]),
+                hbox("TurretAxisPresetRow2", [b for b, _ in turret_axis_buttons[3:]]),
+                row("Yaw min (deg)", "TurretYawMin", spin("TurretYawMinSpin", -180, 0, 5, -180)),
+                row("Yaw max (deg)", "TurretYawMax", spin("TurretYawMaxSpin", 0, 180, 5, 180)),
+                row("Pitch min (deg)", "TurretPitchMin", spin("TurretPitchMinSpin", -90, 0, 5, -10)),
+                row("Pitch max (deg)", "TurretPitchMax", spin("TurretPitchMaxSpin", 0, 90, 5, 85)),
+                label("", "TurretLinkLabel", unique=True, wrap=True)], unique=True),
             vbox("ThrusterSection", [
                 heading("THRUSTER", "ThrusterHeading"),
                 label("Direction the thruster PUSHES the ship.\n(The flame goes the opposite way.)", "ThrusterDirHelp", wrap=True),
                 hbox("ThrustDirRow", [spin("ThrustDirXSpin", -1, 1, 0.05, 0), spin("ThrustDirYSpin", -1, 1, 0.05, 0), spin("ThrustDirZSpin", -1, 1, 0.05, -1)]),
                 hbox("ThrustDirPresetRow1", [b for b, _ in dir_buttons[:3]]),
-                hbox("ThrustDirPresetRow2", [b for b, _ in dir_buttons[3:]]),
-                row("Power (N)", "ThrustPower", spin("ThrustPowerSpin", 200, 8000, 50, 2000))], unique=True)], unique=True),
+                hbox("ThrustDirPresetRow2", [b for b, _ in dir_buttons[3:]])], unique=True)], unique=True),
     ])
     # --- Ship tab
     reactor = N("ReactorSlider", "HSlider", {"layout_mode": 2, "size_flags_horizontal": 3, "min_value": 0.15, "max_value": 2.0, "step": 0.05, "value": 1.0}, unique=True)
@@ -160,7 +222,7 @@ def build():
         heading("INTERNAL MODULES (no shell, cannot be shot)", "InternalHeading"),
         hbox("ReactorRow", [label("Electricity", "ReactorTitleLabel"), reactor, label("1.00", "ReactorValueLabel", unique=True)]),
         hbox("GyroRow", [label("Gyroscope", "GyroTitleLabel"), gyro, label("1.00", "GyroValueLabel", unique=True)]),
-        label("Electricity powers thrusters and turrets. The gyroscope turns the ship.\nRCS is automatic: always 5% of the ship's best-direction thrust.", "InternalTip", wrap=True, modulate="Color(1, 1, 1, 0.6)"),
+        label("Electricity powers thrusters and turrets. The gyroscope turns the ship.\nRCS is automatic: always 5% of the ship's best-direction thrust.", "InternalTip", wrap=True, modulate="Color(1, 1, 1, 0.55)"),
     ])
     for t in (add_tab, sel_tab, ship_tab):
         t.props["size_flags_horizontal"] = 3
@@ -169,8 +231,8 @@ def build():
         N("SelectionScroll", "ScrollContainer", {"layout_mode": 2, "horizontal_scroll_mode": 0}, [sel_tab]),
         N("ShipScroll", "ScrollContainer", {"layout_mode": 2, "horizontal_scroll_mode": 0}, [ship_tab])])
     # tab titles come from node names -> rename the scrolls to the titles we want
-    tabs.kids[0].name, tabs.kids[1].name, tabs.kids[2].name = "Add", "Selection", "Ship"
-    add_tab.name, sel_tab.name, ship_tab.name = "AddList", "SelectionList", "ShipList"
+    tabs.kids[0].name, tabs.kids[1].name, tabs.kids[2].name = "Create", "Properties", "Ship"
+    add_tab.name, sel_tab.name, ship_tab.name = "CreateList", "PropertiesList", "ShipList"
     side_panel = panel("SidePanel", {"anchors_preset": 11, "anchor_left": 1.0, "anchor_right": 1.0, "anchor_bottom": 1.0,
                                      "offset_left": -358.0, "offset_top": 64.0, "offset_right": -8.0, "offset_bottom": -48.0,
                                      "grow_horizontal": 0, "grow_vertical": 2}, [tabs])
@@ -179,10 +241,10 @@ def build():
     status_bar = panel("StatusBar", {"anchors_preset": 12, "anchor_top": 1.0, "anchor_right": 1.0, "anchor_bottom": 1.0,
                                      "offset_left": 8.0, "offset_top": -40.0, "offset_right": -8.0, "offset_bottom": -8.0,
                                      "grow_horizontal": 2, "grow_vertical": 0},
-        [hbox("StatusRow", [label("Click an element to select it. Right mouse = orbit, wheel = zoom.", "StatusLabel", unique=True, size_flags_horizontal=3),
-                            label("Forward is -Z  |  Shift+click = multi-select  |  A = all, Alt+A = none  |  Ctrl+Z / Ctrl+Y = undo / redo", "KeyHelpLabel", modulate="Color(1, 1, 1, 0.6)")])])
-    builder_ui = N("BuilderUI", "Control", {**full_rect(), "mouse_filter": 2, "theme": 'SubResource("Theme_builder")'},
-                   [top_bar, tool_panel, side_panel, status_bar], script='ExtResource("2_ui")')
+        [hbox("StatusRow", [label("Click an element to select it. Drag on empty space = box select. Right mouse = orbit, wheel = zoom.", "StatusLabel", unique=True, size_flags_horizontal=3),
+                            label("Forward is -Z  |  Shift+click = add  |  G/R/S then a number = exact  |  Ctrl+Z undo", "KeyHelpLabel", modulate="Color(1, 1, 1, 0.55)")])])
+    builder_ui = N("BuilderUI", "Control", {**full_rect(), "mouse_filter": 2},
+                   [box_overlay, top_bar, tool_panel, viewport_bar, op_panel, side_panel, status_bar, N("PlanView", None, {}, unique=True, instance='ExtResource("6_plan")')], script='ExtResource("2_ui")')
     ui = N("UI", "CanvasLayer", {}, [builder_ui])
     root = N("ShipBuilder", "Node3D", {}, [env_node, sun, fill, ground, camera_rig, view, transform_tool, ui], script='ExtResource("1_builder")')
 
@@ -192,8 +254,12 @@ def build():
     scene.ext_res("3_cam", "Script", "res://scripts/builder/builder_camera.gd")
     scene.ext_res("4_view", "Script", "res://scripts/builder/builder_view.gd")
     scene.ext_res("5_tool", "Script", "res://scripts/builder/transform_tool.gd")
-    scene.sub("ButtonGroup_modes", "ButtonGroup")
-    scene.sub("Theme_builder", "Theme", default_font_size=15)
+    scene.ext_res("6_plan", "PackedScene", "res://scenes/plan_view.tscn")
+    scene.ext_res("7_op", "Script", "res://scripts/builder/operator_panel.gd")
+    scene.ext_res("8_box", "Script", "res://scripts/builder/box_select_overlay.gd")
+    scene.sub("ButtonGroup_create", "ButtonGroup")
+    scene.sub("ButtonGroup_types", "ButtonGroup")
+    scene.sub("ButtonGroup_shapes", "ButtonGroup")
     envid = scene.sub("Env_builder", "Environment", background_mode=1, background_color="Color(0.04, 0.05, 0.08, 1)",
                       ambient_light_source=2, ambient_light_color="Color(0.75, 0.8, 0.95, 1)", ambient_light_energy=0.7)
     env_node.props["environment"] = envid
@@ -203,42 +269,49 @@ def build():
     ground.props.update({"mesh": pm, "material_override": gm, "cast_shadow": 0})
     ship_mat = scene.sub("Mat_ship", "StandardMaterial3D", vertex_color_use_as_albedo="true", metallic=0.2, roughness=0.6, cull_mode=2)
     ship_mesh.props["material_override"] = ship_mat
-    dot_mat = scene.sub("Mat_dots", "StandardMaterial3D", shading_mode=0, vertex_color_use_as_albedo="true", no_depth_test="true", render_priority=5)
-    dot_mesh = scene.sub("Mesh_dot", "SphereMesh", material=dot_mat, radius=0.5, height=1.0, radial_segments=10, rings=5)
+    # (the overlay / dot materials are shaders made by builder_view.gd, they depend on the shading mode)
+    dot_mesh = scene.sub("Mesh_dot", "SphereMesh", radius=0.5, height=1.0, radial_segments=10, rings=5)
     dots_mm = scene.sub("MM_dots", "MultiMesh", transform_format=1, use_colors="true", mesh=dot_mesh)
     vertex_dots.props.update({"multimesh": dots_mm, "cast_shadow": 0})
-    ov_mat = scene.sub("Mat_overlay", "StandardMaterial3D", shading_mode=0, vertex_color_use_as_albedo="true", no_depth_test="true",
-                       transparency=1, cull_mode=2, render_priority=4)
     ov_mesh = scene.sub("IM_overlay", "ImmediateMesh")
-    overlay.props.update({"mesh": ov_mesh, "material_override": ov_mat, "cast_shadow": 0})
+    overlay.props.update({"mesh": ov_mesh, "cast_shadow": 0})
 
     # ---------------- signals -> BuilderUI functions
     def C(sig, frm, method, binds=None):
         scene.connect(sig, frm, method, binds, to=builder_ui)
     C("text_changed", ship_name_edit, "_on_ship_name_changed")
-    for b, m in [(new_b, "new"), (save_b, "save"), (load_b, "load"), (undo_b, "undo"), (redo_b, "redo"), (back_b, "back"),
-                 (mode_obj, "mode_object"), (mode_vert, "mode_vertex"), (mode_edge, "mode_edge"), (mode_face, "mode_face"),
-                 (grab_b, "grab"), (rot_b, "rotate"), (scale_b, "scale"), (extrude_b, "extrude"), (addv_b, "add_vertex"),
-                 (conn_b, "connect"), (link_b, "link"), (unlink_b, "unlink"), (mirror_b, "mirror"), (dup_b, "duplicate"),
-                 (del_b, "delete"), (frame_b, "frame")]:
+    for b, m in [(new_b, "new"), (save_b, "save"), (load_b, "load"), (undo_b, "undo"), (redo_b, "redo"), (back_b, "back")]:
         C("pressed", b, "_on_%s_pressed" % m)
     C("value_changed", snap_spin, "_on_snap_changed")
+    C("pressed", premade_b, "_on_save_premade_pressed")
+    C("pressed", plan_b, "_on_plan_pressed")
     C("toggled", auto_link, "_on_auto_link_toggled")
+    C("toggled", pilot_check, "_on_pilot_toggled")
     def find_named(node, name):
         if node.name == name: return node
         for k in node.kids:
             r = find_named(k, name)
             if r: return r
-    C("item_selected", find_named(add_tab, "NewTypePicker"), "_on_new_type_selected")
-    C("item_selected", find_named(add_tab, "NewShapePicker"), "_on_new_shape_selected")
+    C("pressed", ship_btn, "_on_create_mode_pressed", '"ship"')
+    C("pressed", mod_btn, "_on_create_mode_pressed", '"module"')
+    C("pressed", find_named(ship_section, "NewStarterShipButton"), "_on_new_ship_template_pressed", '"starter"')
+    C("pressed", find_named(ship_section, "NewBlankShipButton"), "_on_new_ship_template_pressed", '"blank"')
+    for t, b in zip(TYPES, type_buttons): C("pressed", b, "_on_type_button_pressed", '"%s"' % t)
+    for n, b in zip(SHAPES, shape_buttons): C("pressed", b, "_on_shape_button_pressed", '"%s"' % n)
     C("pressed", find_named(add_tab, "AddModuleButton"), "_on_add_module_pressed")
     for n in ("CenterXSpin", "CenterYSpin", "CenterZSpin"): C("value_changed", find_named(sel_tab, n), "_on_center_changed")
+    for n in ("SizeXSpin", "SizeYSpin", "SizeZSpin"): C("value_changed", find_named(sel_tab, n), "_on_size_changed")
     C("item_selected", find_named(sel_tab, "ActiveTypePicker"), "_on_active_type_selected")
     for n in ("ThrustDirXSpin", "ThrustDirYSpin", "ThrustDirZSpin"): C("value_changed", find_named(sel_tab, n), "_on_thrust_dir_changed")
     C("item_selected", find_named(sel_tab, "MaterialPicker"), "_on_material_selected")
-    C("value_changed", find_named(sel_tab, "CrewSeatsSpin"), "_on_crew_seats_changed")
+    C("item_selected", find_named(sel_tab, "PresetPicker"), "_on_preset_selected")
+    C("item_selected", find_named(add_tab, "NewPresetPicker"), "_on_new_preset_selected")
+    C("pressed", find_named(sel_tab, "SavePresetButton"), "_on_save_preset_pressed")
     for b, v in dir_buttons: C("pressed", b, "_on_thrust_dir_preset_pressed", v)
-    C("value_changed", find_named(sel_tab, "ThrustPowerSpin"), "_on_thrust_power_changed")
+    for b, v in turret_axis_buttons: C("pressed", b, "_on_thrust_dir_preset_pressed", v)
+    for n in ("TurretAxisXSpin", "TurretAxisYSpin", "TurretAxisZSpin"): C("value_changed", find_named(sel_tab, n), "_on_turret_axis_changed")
+    for n, k in (("TurretYawMinSpin", "yaw_min"), ("TurretYawMaxSpin", "yaw_max"), ("TurretPitchMinSpin", "pitch_min"), ("TurretPitchMaxSpin", "pitch_max")):
+        C("value_changed", find_named(sel_tab, n), "_on_turret_value_changed", '"%s"' % k)
     C("value_changed", reactor, "_on_reactor_changed")
     C("value_changed", gyro, "_on_gyro_changed")
     return scene

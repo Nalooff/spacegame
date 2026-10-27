@@ -1,8 +1,9 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/game_world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/world/projectile_pool.gd" id="2_pool"]
 [ext_resource type="Script" path="res://scripts/world/chase_camera.gd" id="3_cam"]
+[ext_resource type="Script" path="res://scripts/world/station_camera.gd" id="6_stcam"]
 [ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="5_hud"]
 
 [sub_resource type="Shader" id="Shader_sky"]
@@ -40,17 +41,6 @@ roughness = 0.95
 [sub_resource type="StandardMaterial3D" id="Mat_rock_2"]
 albedo_color = Color(0.36, 0.30, 0.26, 1)
 roughness = 0.95
-
-[sub_resource type="StandardMaterial3D" id="Mat_bolt"]
-shading_mode = 0
-albedo_color = Color(1, 0.92, 0.35, 1)
-
-[sub_resource type="SphereMesh" id="Mesh_bolt"]
-material = SubResource("Mat_bolt")
-radius = 0.22
-height = 0.44
-radial_segments = 8
-rings = 4
 
 [sub_resource type="StandardMaterial3D" id="Mat_marker"]
 shading_mode = 0
@@ -457,7 +447,6 @@ spawn_path = NodePath("../Ships")
 
 [node name="ProjectilePool" type="Node3D" parent="."]
 script = ExtResource("2_pool")
-bolt_mesh = SubResource("Mesh_bolt")
 
 [node name="CameraRig" type="Node3D" parent="."]
 script = ExtResource("3_cam")
@@ -468,6 +457,11 @@ script = ExtResource("3_cam")
 current = true
 far = 6000.0
 fov = 70.0
+
+[node name="StationCamera" type="Camera3D" parent="."]
+script = ExtResource("6_stcam")
+fov = 80.0
+far = 6000.0
 
 [node name="TargetMarker" type="MeshInstance3D" parent="."]
 visible = false

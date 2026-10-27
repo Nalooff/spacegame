@@ -18,6 +18,9 @@ var axis_lock: Vector3 = Vector3.ZERO
 ## Quick-drag mode: the move ends when the mouse button is released (used for click-and-drag).
 var confirm_on_release: bool = false
 
+## Numbers typed while the tool is active ("2.5" then Enter = exactly 2.5 m / degrees / times). Empty = use the mouse.
+var typed: String = ""
+
 var builder: ShipBuilder
 var _ids: PackedInt32Array = PackedInt32Array()
 var _original: Dictionary = {}   # vertex id -> position when the tool started
@@ -43,6 +46,7 @@ func begin(new_kind: Kind, vertex_ids: PackedInt32Array, mouse: Vector2, quick_d
 		_pivot += builder.design.vertices[id]
 	_pivot /= _ids.size()
 	_start_mouse = mouse
+	typed = ""
 	builder.camera_rig.locked = true
 
 
@@ -52,11 +56,70 @@ func set_axis(axis: Vector3) -> void:
 
 
 func update(mouse: Vector2) -> void:
-	match kind:
-		Kind.GRAB: _update_grab(mouse)
-		Kind.ROTATE: _update_rotate(mouse)
-		Kind.SCALE: _update_scale(mouse)
+	var v := typed_value()
+	if not is_nan(v):
+		_apply_typed(v)
+	else:
+		match kind:
+			Kind.GRAB: _update_grab(mouse)
+			Kind.ROTATE: _update_rotate(mouse)
+			Kind.SCALE: _update_scale(mouse)
 	builder.on_geometry_changed()
+
+
+func type_char(c: String) -> void:
+	if c == "-":
+		typed = typed.substr(1) if typed.begins_with("-") else "-" + typed
+	elif c == "." and typed.contains("."):
+		return
+	else:
+		typed += c
+	update(builder.get_viewport().get_mouse_position())
+	builder.say(hud_text())
+
+
+func type_backspace() -> void:
+	typed = typed.left(typed.length() - 1)
+	update(builder.get_viewport().get_mouse_position())
+	builder.say(hud_text())
+
+
+func typed_value() -> float:
+	if typed == "" or typed == "-" or typed == ".":
+		return NAN
+	return typed.to_float()
+
+
+## What the tool is doing, for the status bar.
+func hud_text() -> String:
+	var axis := "free" if axis_lock == Vector3.ZERO else ("X" if axis_lock == Vector3.RIGHT else ("Y" if axis_lock == Vector3.UP else "Z"))
+	var unit: String = {Kind.GRAB: "m", Kind.ROTATE: "deg", Kind.SCALE: "x"}.get(kind, "")
+	return "%s  axis: %s  value: %s %s   (type a number, Enter = confirm, Esc = cancel)" % [
+		{Kind.GRAB: "MOVE", Kind.ROTATE: "ROTATE", Kind.SCALE: "SCALE"}.get(kind, ""), axis, typed if typed != "" else "(mouse)", unit]
+
+
+## The typed number applied: grab = metres along the axis (X when none is locked), rotate = degrees, scale = factor.
+func _apply_typed(v: float) -> void:
+	match kind:
+		Kind.GRAB:
+			if axis_lock == Vector3.ZERO:
+				axis_lock = Vector3.RIGHT
+			for id in _ids:
+				builder.design.vertices[id] = _original[id] + axis_lock * v
+		Kind.ROTATE:
+			var axis := axis_lock if axis_lock != Vector3.ZERO else -builder.camera.global_transform.basis.z
+			var basis := Basis(axis.normalized(), deg_to_rad(v))
+			for id in _ids:
+				builder.design.vertices[id] = _pivot + basis * ((_original[id] as Vector3) - _pivot)
+		Kind.SCALE:
+			var factor := maxf(v, 0.01)
+			for id in _ids:
+				var rel: Vector3 = (_original[id] as Vector3) - _pivot
+				if axis_lock == Vector3.ZERO:
+					rel *= factor
+				else:
+					rel += axis_lock * rel.dot(axis_lock) * (factor - 1.0)
+				builder.design.vertices[id] = _pivot + rel
 
 
 func confirm() -> void:
@@ -72,6 +135,7 @@ func cancel() -> void:
 func _end(confirmed: bool) -> void:
 	kind = Kind.NONE
 	axis_lock = Vector3.ZERO
+	typed = ""
 	builder.camera_rig.locked = false
 	finished.emit(confirmed)
 

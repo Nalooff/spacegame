@@ -2,13 +2,13 @@ extends Node3D
 ## Orbit camera that follows `target`. RMB drag = orbit, wheel = zoom.
 ## Node layout (in game_world.tscn): CameraRig > Pivot > Camera3D.
 
-@export var min_dist: float = 4.0
-@export var max_dist: float = 80.0
+@export var min_dist: float = 10.0
+@export var max_dist: float = 300.0
 
 var target: Node3D
 var _yaw: float = 0.0
 var _pitch: float = -0.35
-var _dist: float = 14.0
+var _dist: float = 40.0
 var _orbit: bool = false
 
 

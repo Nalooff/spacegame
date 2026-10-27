@@ -11,8 +11,9 @@ extends RefCounted
 ## Module dictionary layout:
 ##   { "type": "hull"|"armor"|"thruster"|"turret"|"commander",
 ##     "fs": FaceSet,
-##     "material": String ("" = default of the type),  "crew": int (commander only)
-##     "dir": Vector3, "power": float }                (thrusters only)
+##     "material": String ("" = default of the type),
+##     "dir": Vector3,                                   (thrusters: exhaust direction, turrets: rest direction)
+##     "cfg": {preset, kind, stats{per-m3 numbers}, barrels[], link}   see ModulePresets }
 ##   runtime only (never saved by JSON): "sums": PackedFloat64Array, see module_sums()
 ##
 ## SCALE: every function here is linear in the size of the module (no nested scans over all vertices),
@@ -23,10 +24,15 @@ extends RefCounted
 
 const PRETTY_JSON_MAX_VERTICES := 20000  # bigger ships are saved as compressed binary (.ship)
 const BINARY_MAGIC := "VSHP"
+## Extra per-module settings (turret base: arc and speed; barrel link). Saved only when present.
+const MODULE_EXTRA_KEYS := ["yaw_min", "yaw_max", "pitch_min", "pitch_max"]
+const EXTRA_DEFAULTS := {"yaw_min": -180.0, "yaw_max": 180.0, "pitch_min": -10.0, "pitch_max": 85.0}
 
 var ship_name: String = "New Ship"
 var vertices: PackedVector3Array = PackedVector3Array()
 var modules: Array[Dictionary] = []
+## Player edits of the corridor plan (see ShipPlan): {"removed": [], "free": {}, "added": [], "uid": 0}. Empty = fully automatic.
+var plan: Dictionary = {}
 var reactor_scale: float = 1.0 # electricity output vs. recommended
 var gyro_scale: float = 1.0    # gyroscope torque vs. recommended
 
@@ -35,16 +41,25 @@ var gyro_scale: float = 1.0    # gyroscope torque vs. recommended
 #  Adding / removing modules
 # =====================================================================
 ## Adds a primitive ("box", "cylinder", ...) scaled by `half_size`, centred on `center`.
-func add_module(type: String, primitive: String, center: Vector3, half_size: Vector3, segments: int = 12) -> int:
+func add_module(type: String, primitive: String, center: Vector3, half_size: Vector3, segments: int = 12, preset: String = "") -> int:
 	var p: Dictionary = Primitives.make(primitive, segments)
 	var local_verts: Array[Vector3] = []
 	for v in p["verts"]:
 		local_verts.append(center + (v as Vector3) * half_size)
-	return add_module_from_mesh(type, local_verts, p["faces"])
+	return add_module_from_mesh(type, local_verts, p["faces"], preset)
+
+
+## A new module dictionary. `cfg` holds everything the module type needs beyond its shape:
+##   preset (id), kind ("projectile"/"beam"/"electronic"/"thermal"), stats {per-m3 numbers}, barrels [module ids] (turret base),
+##   link (commander -> turret base that can be fired from the bridge)
+static func new_module(type: String, fs: FaceSet, preset: String = "") -> Dictionary:
+	var id := preset if preset != "" else ModulePresets.default_preset(type)
+	return {"type": type, "fs": fs, "dir": Vector3(0, 0, -1) if type != ModuleCatalog.TURRET else Vector3(0, 1, 0),
+		"material": "", "cfg": ModulePresets.make_cfg(type, id)}
 
 
 ## Adds a module from raw data. `local_faces` index into `local_verts`.
-func add_module_from_mesh(type: String, local_verts: Array[Vector3], local_faces: Array) -> int:
+func add_module_from_mesh(type: String, local_verts: Array[Vector3], local_faces: Array, preset: String = "") -> int:
 	var first := vertices.size()
 	for v in local_verts:
 		vertices.append(v)
@@ -54,15 +69,289 @@ func add_module_from_mesh(type: String, local_verts: Array[Vector3], local_faces
 		for i in (f as PackedInt32Array):
 			loop.append(first + i)
 		fs.append(loop)
-	modules.append({"type": type, "fs": fs, "dir": Vector3(0, 0, -1),
-		"power": ModuleCatalog.THRUSTER_DEFAULT_POWER, "material": "", "crew": 1})
+	modules.append(new_module(type, fs, preset))
 	fix_winding(modules.size() - 1)
 	return modules.size() - 1
 
 
 func remove_module(mi: int) -> void:
+	if not plan.is_empty():
+		var id_map := {}
+		for i in modules.size():
+			if i != mi:
+				id_map[i] = i - 1 if i > mi else i
+		plan = ShipPlan.remap_overrides(plan, id_map)
 	modules.remove_at(mi)
+	for m in modules: # keep turret -> barrel and commander -> turret links valid
+		var c: Dictionary = m["cfg"]
+		if c.has("barrels"):
+			var out: Array = []
+			for b in c["barrels"]:
+				if int(b) != mi:
+					out.append(int(b) - 1 if int(b) > mi else int(b))
+			c["barrels"] = out
+		if c.has("links"):
+			var kept: Array = []
+			for l in c["links"]:
+				if int(l) != mi:
+					kept.append(int(l) - 1 if int(l) > mi else int(l))
+			c["links"] = kept
 	prune_vertices()
+
+
+## Setting `key` of module `mi` (EXTRA_DEFAULTS when it was never set): turret arcs.
+func extra(mi: int, key: String) -> Variant:
+	return modules[mi].get(key, EXTRA_DEFAULTS[key])
+
+
+# ---- module configuration (see ModulePresets) --------------------------------------------------------------------
+func cfg(mi: int) -> Dictionary:
+	return modules[mi]["cfg"]
+
+
+## One per-m3 / preset number of module `mi` (0.0 when the type does not have it).
+## Is module `mi` a ROOM (people walk there: it needs a corridor)? By type, or because its preset says kind "room".
+func is_room(mi: int) -> bool:
+	return ModuleCatalog.ROOM_TYPES.has(modules[mi]["type"]) or kind_of(mi) == "room"
+
+
+func stat(mi: int, key: String) -> float:
+	return float((modules[mi]["cfg"].get("stats", {}) as Dictionary).get(key, 0.0))
+
+
+func kind_of(mi: int) -> String:
+	var k := str(modules[mi]["cfg"].get("kind", ""))
+	if k == "" and modules[mi]["type"] == ModuleCatalog.ANTENNA:
+		return "external"          # ships saved before the antenna presets had kinds
+	return k
+
+
+## Module ids of the barrels linked to turret base `mi`.
+func barrels_of(mi: int) -> Array[int]:
+	var out: Array[int] = []
+	for b in modules[mi]["cfg"].get("barrels", []):
+		out.append(int(b))
+	return out
+
+
+## Turret base module that barrel `bi` is linked to (-1 = none).
+func base_of_barrel(bi: int) -> int:
+	for i in modules.size():
+		if modules[i]["type"] == ModuleCatalog.TURRET and barrels_of(i).has(bi):
+			return i
+	return -1
+
+
+## COMMANDER LINKS. A commander module only controls what is linked to it:
+##   cfg["links"] = turret bases it fires (a commander can have several; one turret may be linked to several commanders)
+##   cfg["pilot"] = it holds the flight controls (default true). A big ship can have one "pilot" bridge and one "gunner" bridge.
+## A ship where NO commander has any link or a pilot flag set up keeps the simple rule: every commander does everything.
+func linked_turrets(mi: int) -> Array[int]:
+	var out: Array[int] = []
+	for l in modules[mi]["cfg"].get("links", []):
+		out.append(int(l))
+	return out
+
+
+func can_pilot(mi: int) -> bool:
+	return bool(modules[mi]["cfg"].get("pilot", true))
+
+
+## Does commander `cmd` control module `mi` (a turret base)? cmd < 0 = nobody in particular (no roster): everything.
+func controls(cmd: int, mi: int) -> bool:
+	if cmd < 0 or cmd >= modules.size() or not has_links():
+		return true
+	return linked_turrets(cmd).has(mi)
+
+
+## Does commander `cmd` fly the ship?
+func controls_flight(cmd: int) -> bool:
+	if cmd < 0 or cmd >= modules.size():
+		return true
+	return can_pilot(cmd)
+
+
+## True if somebody set up links (then turrets WITHOUT a commander link are only reachable through the gun station).
+func has_links() -> bool:
+	for c in commander_modules():
+		if not (modules[c]["cfg"].get("links", []) as Array).is_empty():
+			return true
+	return false
+
+
+## Link / unlink turret base `base` to commander `cmd`. Returns true if it is linked now.
+func toggle_link(cmd: int, base: int) -> bool:
+	var c: Dictionary = modules[cmd]["cfg"]
+	var list: Array = c.get("links", [])
+	var at := list.find(base)
+	if at >= 0:
+		list.remove_at(at)
+	else:
+		list.append(base)
+	c["links"] = list
+	return at < 0
+
+
+## Change the preset of a module: its stats are replaced by the preset's.
+func set_preset(mi: int, preset: String) -> void:
+	var old: Dictionary = modules[mi]["cfg"]
+	var fresh := ModulePresets.make_cfg(modules[mi]["type"], preset)
+	for key in ["barrels", "links", "pilot"]:
+		if old.has(key):
+			fresh[key] = old[key]
+	modules[mi]["cfg"] = fresh
+
+
+## Set the MAIN stat of a module; the other stats follow (ModulePresets.set_main).
+func set_main_stat(mi: int, value: float) -> void:
+	var cfg_: Dictionary = modules[mi]["cfg"]
+	ModulePresets.set_main(modules[mi]["type"], kind_of(mi), cfg_["stats"], value)
+
+
+## Thrust (N) of thruster module `mi` at full throttle: thrust per m3 times its volume.
+func thruster_power(mi: int) -> float:
+	return stat(mi, "thrust_per_m3") * module_volume(mi)
+
+## Indices of the commander modules.
+func commander_modules() -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for i in modules.size():
+		if modules[i]["type"] == ModuleCatalog.COMMANDER:
+			out.append(i)
+	return out
+
+
+## The LOOSE module (unassigned faces), or -1.
+func loose_module() -> int:
+	for i in modules.size():
+		if modules[i]["type"] == ModuleCatalog.LOOSE:
+			return i
+	return -1
+
+
+## Index of the loose-faces pseudo-module, created when missing.
+func ensure_loose() -> int:
+	var l := loose_module()
+	if l >= 0:
+		return l
+	modules.append(new_module(ModuleCatalog.LOOSE, FaceSet.new()))
+	return modules.size() - 1
+
+
+## "Create face": one polygon (vertex ids in order) that belongs to no module yet. It is drawn red until it is put into a
+## closed container with "Make module"; the ship cannot be saved while loose faces exist.
+func add_loose_face(ids: PackedInt32Array) -> void:
+	var l := ensure_loose()
+	var faces := faces_array(l)
+	faces.append(ids)
+	set_faces_array(l, faces)
+
+
+## "Make module": moves the faces `face_indices` of module `src` into a NEW module of `type`. The loose pseudo-module
+## disappears when it is empty. Returns the new module index (the indices of other modules can shift when the loose
+## module is removed: use the returned value only right away).
+func move_faces_to_new_module(src: int, face_indices: Array[int], type: String) -> int:
+	var faces := faces_array(src)
+	var taken: Array = []
+	var rest: Array = []
+	for fi in faces.size():
+		if face_indices.has(fi):
+			taken.append(faces[fi])
+		else:
+			rest.append(faces[fi])
+	if taken.is_empty():
+		return -1
+	set_faces_array(src, rest)
+	var fs := FaceSet.from_array(taken)
+	modules.append(new_module(type, fs))
+	var n := modules.size() - 1
+	if rest.is_empty() and modules[src]["type"] == ModuleCatalog.LOOSE:
+		modules.remove_at(src)    # (the new module was appended after it, so its index shifts down by one)
+		n -= 1
+	elif rest.is_empty():
+		modules.remove_at(src)
+		n -= 1
+	if modules[n]["type"] != ModuleCatalog.LOOSE and count_open_edges(n) == 0:
+		fix_winding(n)
+	return n
+
+
+## Indices of the alive faces of module `mi`.
+func faces_alive(mi: int) -> PackedInt32Array:
+	var fs: FaceSet = modules[mi]["fs"]
+	var out := PackedInt32Array()
+	for fi in fs.count():
+		if fs.sizes[fi] >= 3:
+			out.append(fi)
+	return out
+
+
+## Number of faces that are not part of a real module.
+func loose_face_count() -> int:
+	var l := loose_module()
+	return 0 if l < 0 else (modules[l]["fs"] as FaceSet).alive_count()
+
+
+## Drop loose faces (the game never flies them).
+func strip_loose() -> void:
+	var l := loose_module()
+	if l >= 0:
+		remove_module(l)
+
+
+## New design made of only the modules in `ids` (vertices are copied and renumbered). Cached sums are kept.
+## Module `ids[k]` becomes module `k`. Used when a ship splits.
+func extract(ids: PackedInt32Array) -> ShipDesign:
+	var s := ShipDesign.new()
+	s.ship_name = ship_name
+	s.reactor_scale = reactor_scale
+	s.gyro_scale = gyro_scale
+	var map := PackedInt32Array()
+	map.resize(vertices.size())
+	map.fill(-1)
+	var new_index := {}
+	for k in ids.size():
+		new_index[ids[k]] = k
+	for mi in ids:
+		var m: Dictionary = modules[mi]
+		var src: FaceSet = m["fs"]
+		src.compact()
+		var fs := src.duplicate()
+		for k in fs.ids.size():
+			var id := fs.ids[k]
+			if map[id] < 0:
+				s.vertices.append(vertices[id])
+				map[id] = s.vertices.size() - 1
+			fs.ids[k] = map[id]
+		var entry := {"type": m["type"], "fs": fs, "dir": m["dir"], "material": m.get("material", ""),
+			"cfg": _copy_cfg(m["cfg"], new_index)}
+		for key in MODULE_EXTRA_KEYS:
+			if m.has(key):
+				entry[key] = m[key]
+		if m.has("sums"):
+			entry["sums"] = (m["sums"] as PackedFloat64Array).duplicate()
+		s.modules.append(entry)
+	if not plan.is_empty():
+		s.plan = ShipPlan.remap_overrides(plan, new_index)
+	return s
+
+
+## Deep copy of a cfg. `id_map` (old module id -> new id) fixes barrel / link references; ids not in it are dropped.
+static func _copy_cfg(cfg_: Dictionary, id_map: Dictionary = {}) -> Dictionary:
+	var out := cfg_.duplicate(true)
+	if out.has("barrels"):
+		var list: Array = []
+		for b in cfg_["barrels"]:
+			if id_map.has(int(b)):
+				list.append(int(id_map[int(b)]))
+		out["barrels"] = list
+	if out.has("links"):
+		var ls: Array = []
+		for l in cfg_["links"]:
+			if id_map.has(int(l)):
+				ls.append(int(id_map[int(l)]))
+		out["links"] = ls
+	return out
 
 
 ## Copy of module `mi` with its own (unlinked) vertices.
@@ -79,8 +368,14 @@ func duplicate_module(mi: int, offset: Vector3 = Vector3.ZERO) -> int:
 			vertices.append(vertices[id] + offset)
 			remap_ids[id] = vertices.size() - 1
 		fs.ids[k] = remap_ids[id]
-	modules.append({"type": modules[mi]["type"], "fs": fs, "dir": modules[mi]["dir"], "power": modules[mi]["power"],
-		"material": modules[mi].get("material", ""), "crew": modules[mi].get("crew", 1)})
+	var copy := {"type": modules[mi]["type"], "fs": fs, "dir": modules[mi]["dir"],
+		"material": modules[mi].get("material", ""), "cfg": _copy_cfg(modules[mi]["cfg"])}
+	copy["cfg"].erase("barrels")      # a copy of a turret base has no barrels yet; a copied commander no link
+	copy["cfg"].erase("links")
+	for key in MODULE_EXTRA_KEYS:
+		if modules[mi].has(key):
+			copy[key] = modules[mi][key]
+	modules.append(copy)
 	return modules.size() - 1
 
 
@@ -90,21 +385,39 @@ func material_of(mi: int) -> String:
 	return m if MaterialCatalog.MATERIALS.has(m) else MaterialCatalog.default_for(modules[mi]["type"])
 
 
-## How many people (pilot included) this ship holds. Set on the COMMANDER module.
+## Seats of ONE commander module (pilot included).
+func crew_capacity_of(mi: int) -> int:
+	var per_seat := maxf(stat(mi, "seat_volume"), 0.5)
+	return clampi(int(floor(module_volume(mi) / per_seat)), 1, 12)
+
+
+## How many people (pilot included) this ship holds = the sum over all its commander modules.
 func crew_capacity() -> int:
-	for m in modules:
-		if m["type"] == ModuleCatalog.COMMANDER:
-			return clampi(int(m.get("crew", 1)), ModuleCatalog.CREW_MIN, ModuleCatalog.CREW_MAX)
-	return 1
+	var total := 0
+	for i in commander_modules():
+		total += crew_capacity_of(i)
+	return maxi(total, 1)
+
+
+## {commander module index: seats} - what the lobby shows over each commander.
+func seat_slots() -> Dictionary:
+	var out := {}
+	for i in commander_modules():
+		out[i] = crew_capacity_of(i)
+	return out
 
 
 ## Mirror copy of module `mi` across the YZ plane (x -> -x).
-func mirror_module(mi: int) -> int:
+## Copy of module `mi` mirrored across the plane perpendicular to `axis` (0 = X, 1 = Y, 2 = Z) at `offset` metres.
+func mirror_module(mi: int, axis: int = 0, offset: float = 0.0) -> int:
 	var n := duplicate_module(mi)
 	for id in module_vertex_ids(n):
-		vertices[id] = Vector3(-vertices[id].x, vertices[id].y, vertices[id].z)
+		var v := vertices[id]
+		v[axis] = 2.0 * offset - v[axis]
+		vertices[id] = v
 	var d: Vector3 = modules[n]["dir"]
-	modules[n]["dir"] = Vector3(-d.x, d.y, d.z)
+	d[axis] = -d[axis]
+	modules[n]["dir"] = d
 	fix_winding(n) # mirroring flips the winding
 	return n
 
@@ -124,6 +437,11 @@ func set_faces_array(mi: int, faces: Array) -> void:
 ## Move every vertex (and keep the cached physical sums valid, so nothing has to be recomputed).
 func translate_all(offset: Vector3) -> void:
 	vertices = Transform3D(Basis.IDENTITY, offset) * vertices
+	for k in plan.get("free", {}):      # free corridor nodes move with the ship
+		var f: Array = plan["free"][k]
+		f[0] += offset.x
+		f[1] += offset.y
+		f[2] += offset.z
 	for m in modules:
 		if m.has("sums"):
 			var s: PackedFloat64Array = m["sums"]
@@ -436,7 +754,9 @@ func module_sums(mi: int) -> PackedFloat64Array:
 ## Returns {mass, shell_mass, com, inertia: Vector3, modules: [{centroid, volume, mass, hp, type, material}],
 ##          thrusters: [{pos, dir, power, module}], turrets: [{pos, module}], commander_pos}
 ## Positions are in design space (origin = design origin).
-func compute_props() -> Dictionary:
+## `alive` (optional, one byte per module, 0 = destroyed): destroyed / detached modules add no mass and no thrust.
+## `working` (optional): modules that also FUNCTION. A dead wreck still has mass but gives no thrust, no guns, no command.
+func compute_props(alive: PackedByteArray = PackedByteArray(), working: PackedByteArray = PackedByteArray()) -> Dictionary:
 	var total_m := 0.0
 	var mom := Vector3.ZERO
 	var s2 := Vector3.ZERO
@@ -448,6 +768,12 @@ func compute_props() -> Dictionary:
 	for i in modules.size():
 		var type: String = modules[i]["type"]
 		var info: Dictionary = ModuleCatalog.TYPE_INFO[type]
+		if type == ModuleCatalog.LOOSE or (not alive.is_empty() and alive[i] == 0):
+			# placeholder so that indices stay aligned (loose faces are not a real module; dead ones are gone)
+			var gone_sums := module_sums(i) if type != ModuleCatalog.LOOSE else PackedFloat64Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+			mod_info.append({"centroid": Vector3(gone_sums[8], gone_sums[9], gone_sums[10]), "volume": 0.0, "mass": 0.0,
+				"type": type, "material": material_of(i), "hp": maxf(ModuleCatalog.MIN_HP, module_volume(i) * info["hp_per_m3"]) if type != ModuleCatalog.LOOSE else 0.0})
+			continue
 		var density: float = float(info["density"]) * float(MaterialCatalog.info(material_of(i))["density_mult"])
 		var sums := module_sums(i)
 		var c := Vector3(sums[8], sums[9], sums[10])
@@ -460,12 +786,15 @@ func compute_props() -> Dictionary:
 			"centroid": c, "volume": vol, "mass": vol * density, "type": type, "material": material_of(i),
 			"hp": maxf(ModuleCatalog.MIN_HP, vol * info["hp_per_m3"]),
 		})
+		if not working.is_empty() and working[i] == 0:
+			continue   # dead wreck: heavy, but it does nothing
 		if type == ModuleCatalog.THRUSTER:
 			var d: Vector3 = modules[i]["dir"]
 			thr.append({"pos": c, "dir": d.normalized() if d.length() > 0.0001 else Vector3(0, 0, -1),
-				"power": float(modules[i]["power"]), "module": i})
+				"power": stat(i, "thrust_per_m3") * vol, "elec_per_n": stat(i, "elec_per_n"),
+				"heat_per_n": stat(i, "heat_per_n"), "module": i})
 		elif type == ModuleCatalog.TURRET:
-			tur.append({"pos": c, "module": i})
+			tur.append({"pos": c, "module": i, "barrels": barrels_of(i)})
 		elif type == ModuleCatalog.COMMANDER:
 			cmd_pos = c
 	var com := mom / total_m if total_m > 0.0 else Vector3.ZERO
@@ -490,26 +819,156 @@ func validate() -> Array[String]:
 	var errors: Array[String] = []
 	var commanders := 0
 	var thrusters := 0
+	var loose := loose_face_count()
+	if loose > 0:
+		errors.append("%d unassigned face(s) (red). Select them and press 'Make module', or delete them." % loose)
 	for i in modules.size():
 		var t: String = modules[i]["type"]
+		if t == ModuleCatalog.LOOSE:
+			continue
 		if t == ModuleCatalog.COMMANDER:
 			commanders += 1
 		elif t == ModuleCatalog.THRUSTER:
 			thrusters += 1
 		if (modules[i]["fs"] as FaceSet).alive_count() < 4 or module_volume(i) < 0.001:
 			errors.append("Module %d (%s) is flat or has no volume." % [i, t])
-	if commanders != 1:
-		errors.append("A ship needs exactly ONE Commander module (it has %d)." % commanders)
+		elif ModuleCatalog.MIN_EXTENT.has(t):
+			var need: float = ModuleCatalog.MIN_EXTENT[t]
+			var ext := module_extent(i)
+			if minf(ext.x, minf(ext.y, ext.z)) < need - 0.01:
+				errors.append("Module %d (%s) is too small to walk in: its thinnest side is %.2f m, the minimum is %.1f m." % [
+					i, t, minf(ext.x, minf(ext.y, ext.z)), need])
+		var open_edges := count_open_edges(i)
+		if open_edges > 0:
+			errors.append("Module %d (%s) is not a closed container: %d open edge(s)." % [i, t, open_edges])
+	if commanders < 1:
+		errors.append("A ship needs at least one Commander module.")
 	if thrusters < 1:
 		errors.append("A ship needs at least one thruster.")
+	if commanders > 0:
+		var pl := ShipPlan.generate(self)
+		for e in pl.edges:
+			if not pl.segment_inside(self, pl.nodes[e["a"]]["pos"], pl.nodes[e["b"]]["pos"]):
+				errors.append("A corridor between modules leaves the ship (%s): the modules touch too little. Make them overlap or share a face." % e["key"])
+				break
+		for r in unwalkable_rooms():
+			errors.append("Room %d (%s) has no corridor to a commander: nobody could ever walk there. Draw a corridor in the plan." % [r, modules[r]["type"]])
+	for m in ModuleGraph.unreachable(self):
+		errors.append("Module %d (%s) is not connected to a commander (share a vertex with a module that is). It would fall off." % [m, modules[m]["type"]])
+	errors.append_array(exhaust_errors())
+	errors.append_array(turret_errors())
 	return errors
+
+
+## Rooms (modules a person has to be able to reach) that no corridor leads to from a commander.
+func unwalkable_rooms() -> PackedInt32Array:
+	var pl := ShipPlan.generate(self)
+	var cmds := PackedInt32Array()
+	for r in pl.rooms:
+		if modules[r]["type"] == ModuleCatalog.COMMANDER:
+			cmds.append(r)
+	return pl.unlinked_rooms(cmds)
+
+
+## Errors for modules standing in a thruster's exhaust (see ExhaustZone).
+func exhaust_errors() -> Array[String]:
+	var out: Array[String] = []
+	for c in ExhaustZone.conflicts(self):
+		out.append("Module %d (%s) is in the exhaust of thruster %d. Move it out of the orange cone." % [c.y, modules[c.y]["type"], c.x])
+	return out
+
+
+## Size (x, y, z) of the box around module `mi`.
+func module_extent(mi: int) -> Vector3:
+	var fs: FaceSet = modules[mi]["fs"]
+	var lo := Vector3(INF, INF, INF)
+	var hi := Vector3(-INF, -INF, -INF)
+	for fi in fs.count():
+		if fs.sizes[fi] == 0:
+			continue
+		for k in fs.sizes[fi]:
+			var v := vertices[fs.ids[fs.starts[fi] + k]]
+			lo = lo.min(v)
+			hi = hi.max(v)
+	return hi - lo if lo.x != INF else Vector3.ZERO
+
+
+## Errors for turret bases / barrels.
+func turret_errors() -> Array[String]:
+	var out: Array[String] = []
+	var mounted := {}
+	for i in modules.size():
+		if modules[i]["type"] != ModuleCatalog.TURRET:
+			continue
+		for b in barrels_of(i):
+			if b < 0 or b >= modules.size() or modules[b]["type"] != ModuleCatalog.BARREL:
+				out.append("Turret %d is linked to module %d, which is not a Barrel." % [i, b])
+			elif mounted.has(b):
+				out.append("Barrel %d is linked to two turrets." % b)
+			else:
+				mounted[b] = i
+		if float(extra(i, "yaw_min")) >= float(extra(i, "yaw_max")) or float(extra(i, "pitch_min")) >= float(extra(i, "pitch_max")):
+			out.append("Turret %d has an empty firing arc (min must be below max)." % i)
+	for i in modules.size():
+		if modules[i]["type"] == ModuleCatalog.BARREL and not mounted.has(i):
+			out.append("Barrel %d is not mounted on a turret base (select the base and link it)." % i)
+	return out
+
+
+## Edges of module `mi` that are not shared by exactly two of its faces (0 = closed surface).
+func count_open_edges(mi: int) -> int:
+	var fs: FaceSet = modules[mi]["fs"]
+	var uses := {}
+	for fi in fs.count():
+		var n := fs.sizes[fi]
+		if n == 0:
+			continue
+		var s := fs.starts[fi]
+		for k in n:
+			var a := fs.ids[s + k]
+			var b := fs.ids[s + (k + 1) % n]
+			var key: int = (mini(a, b) << 32) | maxi(a, b)
+			uses[key] = int(uses.get(key, 0)) + 1
+	var bad := 0
+	for key in uses:
+		if uses[key] != 2:
+			bad += 1
+	return bad
+
+
+## Face indices of module `mi` that touch an open edge (the builder paints them).
+func open_edge_faces(mi: int) -> PackedInt32Array:
+	var fs: FaceSet = modules[mi]["fs"]
+	var uses := {}
+	for fi in fs.count():
+		var n := fs.sizes[fi]
+		if n == 0:
+			continue
+		var s := fs.starts[fi]
+		for k in n:
+			var a := fs.ids[s + k]
+			var b := fs.ids[s + (k + 1) % n]
+			var key: int = (mini(a, b) << 32) | maxi(a, b)
+			uses[key] = int(uses.get(key, 0)) + 1
+	var out := PackedInt32Array()
+	for fi in fs.count():
+		var n := fs.sizes[fi]
+		var s := fs.starts[fi]
+		for k in n:
+			var a := fs.ids[s + k]
+			var b := fs.ids[s + (k + 1) % n]
+			if uses[(mini(a, b) << 32) | maxi(a, b)] != 2:
+				out.append(fi)
+				break
+	return out
 
 
 # =====================================================================
 #  Meshing for the BUILDER (flat shaded, vertex colours). The game uses HullRenderer instead.
 # =====================================================================
 ## `health_ratio[i]` in 0..1 (<= 0 = destroyed, skipped). `highlight` = module indices drawn lighter.
-func build_mesh(health_ratio: PackedFloat32Array = PackedFloat32Array(), highlight: Array = []) -> ArrayMesh:
+## `hidden` = module indices that are left out (the builder's Hide / Isolate).
+func build_mesh(health_ratio: PackedFloat32Array = PackedFloat32Array(), highlight: Array = [], hidden: Array = []) -> ArrayMesh:
 	var verts := PackedVector3Array()
 	var norms := PackedVector3Array()
 	var cols := PackedColorArray()
@@ -517,7 +976,7 @@ func build_mesh(health_ratio: PackedFloat32Array = PackedFloat32Array(), highlig
 		var ratio := 1.0
 		if i < health_ratio.size():
 			ratio = health_ratio[i]
-		if ratio <= 0.0:
+		if ratio <= 0.0 or hidden.has(i):
 			continue
 		var col := ModuleCatalog.color_of(modules[i]["type"]).lerp(Color(0.12, 0.05, 0.04), (1.0 - ratio) * 0.8)
 		if highlight.has(i):
@@ -562,15 +1021,19 @@ func to_dict() -> Dictionary:
 		var entry := {"type": m["type"], "faces": faces}
 		if m.get("material", "") != "":
 			entry["material"] = m["material"]
-		if m["type"] == ModuleCatalog.COMMANDER:
-			entry["crew"] = int(m.get("crew", 1))
-		if m["type"] == ModuleCatalog.THRUSTER:
+		if m["type"] == ModuleCatalog.THRUSTER or m["type"] == ModuleCatalog.TURRET:
 			var d: Vector3 = m["dir"]
 			entry["dir"] = [d.x, d.y, d.z]
-			entry["power"] = m["power"]
+		entry["cfg"] = (m["cfg"] as Dictionary).duplicate(true)
+		for key in MODULE_EXTRA_KEYS:
+			if m.has(key):
+				entry[key] = m[key]
 		ms.append(entry)
-	return {"name": ship_name, "reactor_scale": reactor_scale, "gyro_scale": gyro_scale,
+	var out := {"name": ship_name, "reactor_scale": reactor_scale, "gyro_scale": gyro_scale,
 		"vertices": vs, "modules": ms}
+	if not plan.is_empty():
+		out["plan"] = plan.duplicate(true)
+	return out
 
 
 static func from_dict(data: Dictionary) -> ShipDesign:
@@ -578,6 +1041,7 @@ static func from_dict(data: Dictionary) -> ShipDesign:
 	s.ship_name = str(data.get("name", "Ship"))
 	s.reactor_scale = float(data.get("reactor_scale", 1.0))
 	s.gyro_scale = float(data.get("gyro_scale", 1.0))
+	s.plan = _clean_plan(data.get("plan", {}))
 	for v in data.get("vertices", []):
 		s.vertices.append(Vector3(v[0], v[1], v[2]))
 	for m in data.get("modules", []):
@@ -597,13 +1061,100 @@ static func from_dict(data: Dictionary) -> ShipDesign:
 					ids.append(int(v_ids[li]))
 				fs.append(ids)
 		var d: Array = m.get("dir", [0, 0, -1])
-		s.modules.append({"type": str(m["type"]), "fs": fs,
-			"dir": Vector3(d[0], d[1], d[2]), "power": float(m.get("power", ModuleCatalog.THRUSTER_DEFAULT_POWER)),
-			"material": str(m.get("material", "")), "crew": int(m.get("crew", 1))})
+		var entry := {"type": str(m["type"]), "fs": fs,
+			"dir": Vector3(d[0], d[1], d[2]), "material": str(m.get("material", "")),
+			"cfg": _clean_cfg(m.get("cfg", {}))}
+		for key in MODULE_EXTRA_KEYS:
+			if m.has(key):
+				entry[key] = float(m[key])
+		# older files: a single "barrel", a thruster "power", commander "crew", turret "turn_speed"
+		entry["_legacy"] = {"barrel": int(m.get("barrel", -1)), "power": float(m.get("power", 0.0)),
+			"crew": int(m.get("crew", 0)), "turn_speed": float(m.get("turn_speed", 0.0))}
+		s.modules.append(entry)
 	# older / hand-made files may have any winding: make it canonical once
 	for i in s.modules.size():
 		s.fix_winding(i)
+	s._migrate()
 	return s
+
+
+## JSON gives floats for every number: restore the integer fields of the plan overrides.
+static func _clean_plan(raw: Variant) -> Dictionary:
+	if typeof(raw) != TYPE_DICTIONARY or (raw as Dictionary).is_empty():
+		return {}
+	var r: Dictionary = raw
+	var out := {"removed": [], "free": {}, "added": [], "uid": int(r.get("uid", 0)), "doors": []}
+	for pair in r.get("doors", []):
+		out["doors"].append([str(pair[0]), float(pair[1])])
+	for k in r.get("removed", []):
+		out["removed"].append(str(k))
+	var free: Dictionary = r.get("free", {})
+	for k in free:
+		var f: Array = free[k]
+		out["free"][str(k)] = [float(f[0]), float(f[1]), float(f[2]), int(f[3])]
+	for pair in r.get("added", []):
+		out["added"].append([str(pair[0]), str(pair[1])])
+	return out
+
+
+## JSON gives floats for every number: restore the integer fields of a cfg.
+static func _clean_cfg(raw: Variant) -> Dictionary:
+	if typeof(raw) != TYPE_DICTIONARY:
+		return {}
+	var out: Dictionary = (raw as Dictionary).duplicate(true)
+	if out.has("barrels"):
+		var list: Array = []
+		for b in out["barrels"]:
+			list.append(int(b))
+		out["barrels"] = list
+	if out.has("link"):       # older files: ONE linked turret
+		var one := int(out["link"])
+		out.erase("link")
+		out["links"] = [one] if one >= 0 else []
+	if out.has("links"):
+		var ls: Array = []
+		for l in out["links"]:
+			ls.append(int(l))
+		out["links"] = ls
+	return out
+
+
+## Fills in cfg for modules that have none (files from before the preset system) and converts the old numbers.
+func _migrate() -> void:
+	for i in modules.size():
+		var m: Dictionary = modules[i]
+		var legacy: Dictionary = m.get("_legacy", {})
+		m.erase("_legacy")
+		var type: String = m["type"]
+		if type == ModuleCatalog.LOOSE:
+			m["cfg"] = {}
+			continue
+		var cfg_: Dictionary = m["cfg"]
+		if cfg_.has("preset") and not cfg_.has("stats"):
+			cfg_["stats"] = {}
+		if cfg_.has("preset") and cfg_.has("stats"):    # hand-written files may give only the numbers they change
+			var base := ModulePresets.make_cfg(type, str(cfg_["preset"]))
+			if not base.is_empty():
+				for key in base["stats"]:
+					if not (cfg_["stats"] as Dictionary).has(key):
+						cfg_["stats"][key] = base["stats"][key]
+				if not cfg_.has("kind") and base.has("kind"):
+					cfg_["kind"] = base["kind"]
+		if cfg_.is_empty() or not cfg_.has("stats"):
+			var fresh := ModulePresets.make_cfg(type, ModulePresets.default_preset(type))
+			for key in cfg_:
+				fresh[key] = cfg_[key]
+			cfg_ = fresh
+			m["cfg"] = cfg_
+			var vol := maxf(module_volume(i), 0.001)
+			if type == ModuleCatalog.THRUSTER and float(legacy.get("power", 0.0)) > 0.0:
+				cfg_["stats"]["thrust_per_m3"] = float(legacy["power"]) / vol
+			elif type == ModuleCatalog.COMMANDER and int(legacy.get("crew", 0)) > 0:
+				cfg_["stats"]["seat_volume"] = vol / int(legacy["crew"])
+			elif type == ModuleCatalog.TURRET and float(legacy.get("turn_speed", 0.0)) > 0.0:
+				cfg_["stats"]["turn_speed"] = float(legacy["turn_speed"])
+		if type == ModuleCatalog.TURRET and not cfg_.has("barrels") and int(legacy.get("barrel", -1)) >= 0:
+			cfg_["barrels"] = [int(legacy["barrel"])]
 
 
 ## Compact JSON (small ships, tests).
@@ -629,17 +1180,23 @@ func to_pretty_json() -> String:
 		var b := "\t\t{\n\t\t\t\"type\": %s,\n" % JSON.stringify(m["type"])
 		if m.has("material"):
 			b += "\t\t\t\"material\": %s,\n" % JSON.stringify(m["material"])
-		if m.has("crew"):
-			b += "\t\t\t\"crew\": %d,\n" % int(m["crew"])
 		if m.has("dir"):
-			b += "\t\t\t\"dir\": %s,\n\t\t\t\"power\": %s,\n" % [JSON.stringify(m["dir"]), str(m["power"])]
+			b += "\t\t\t\"dir\": %s,\n" % JSON.stringify(m["dir"])
+		if m.has("cfg"):
+			b += "\t\t\t\"cfg\": %s,\n" % JSON.stringify(m["cfg"])
+		for key in MODULE_EXTRA_KEYS:
+			if m.has(key):
+				b += "\t\t\t%s: %s,\n" % [JSON.stringify(key), str(m[key])]
 		b += "\t\t\t\"faces\": [\n"
 		var flines: Array[String] = []
 		for f in m["faces"]:
 			flines.append("\t\t\t\t" + JSON.stringify(f))
 		b += ",\n".join(flines) + "\n\t\t\t]\n\t\t}"
 		mblocks.append(b)
-	out += ",\n".join(mblocks) + "\n\t]\n}\n"
+	out += ",\n".join(mblocks) + "\n\t]"
+	if d.has("plan"):
+		out += ",\n\t\"plan\": %s" % JSON.stringify(d["plan"])
+	out += "\n}\n"
 	return out
 
 
@@ -657,10 +1214,14 @@ func to_bytes() -> PackedByteArray:
 		var m: Dictionary = modules[i]
 		var fs: FaceSet = m["fs"]
 		fs.compact()
-		mods.append({"type": m["type"], "material": m.get("material", ""), "crew": int(m.get("crew", 1)),
-			"dir": m["dir"], "power": m["power"], "ids": fs.ids, "sizes": fs.sizes, "sums": module_sums(i)})
+		var packed := {"type": m["type"], "material": m.get("material", ""), "cfg": m["cfg"],
+			"dir": m["dir"], "ids": fs.ids, "sizes": fs.sizes, "sums": module_sums(i)}
+		for key in MODULE_EXTRA_KEYS:
+			if m.has(key):
+				packed[key] = m[key]
+		mods.append(packed)
 	var raw := var_to_bytes({"name": ship_name, "reactor_scale": reactor_scale, "gyro_scale": gyro_scale,
-		"vertices": vertices, "modules": mods})
+		"vertices": vertices, "modules": mods, "plan": plan})
 	var out := BINARY_MAGIC.to_utf8_buffer()
 	out.append_array(PackedByteArray([0, 0, 0, 0]))
 	out.encode_u32(4, raw.size())
@@ -684,13 +1245,17 @@ static func from_bytes(blob: PackedByteArray) -> ShipDesign:
 	s.reactor_scale = float(data["reactor_scale"])
 	s.gyro_scale = float(data["gyro_scale"])
 	s.vertices = data["vertices"]
+	s.plan = _clean_plan(data.get("plan", {}))
 	for m in data["modules"]:
 		var fs := FaceSet.new()
 		fs.ids = m["ids"]
 		fs.sizes = m["sizes"]
 		fs.rebuild_starts()
-		var entry := {"type": str(m["type"]), "fs": fs, "dir": m["dir"], "power": float(m["power"]),
-			"material": str(m["material"]), "crew": int(m["crew"])}
+		var entry := {"type": str(m["type"]), "fs": fs, "dir": m["dir"],
+			"material": str(m["material"]), "cfg": _clean_cfg(m.get("cfg", {}))}
+		for key in MODULE_EXTRA_KEYS:
+			if m.has(key):
+				entry[key] = m[key]
 		if m.get("sums") != null and (m["sums"] as PackedFloat64Array).size() == 11:
 			entry["sums"] = m["sums"]
 		s.modules.append(entry)
@@ -707,6 +1272,20 @@ func to_blob() -> PackedByteArray:
 	if vertices.size() <= PRETTY_JSON_MAX_VERTICES:
 		return to_json().to_utf8_buffer()
 	return to_bytes()
+
+
+## Editor only (the game is started from the Godot editor): save into res://ships/ as a PREMADE ship.
+func save_premade() -> Error:
+	var big := vertices.size() > PRETTY_JSON_MAX_VERTICES
+	var path := "res://ships/" + ship_name.validate_filename() + (".ship" if big else ".json")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return FileAccess.get_open_error()
+	if big:
+		f.store_buffer(to_bytes())
+	else:
+		f.store_string(to_pretty_json())
+	return OK
 
 
 func save_user() -> Error:

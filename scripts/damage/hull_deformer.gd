@@ -21,7 +21,8 @@ const MAX_NEW_FACES := 4000        # safety limit per dent
 const MAX_WORK_FACES := 500        # faces cut per refine pass (= MAX_NEW_FACES / 8)
 
 ## Result: { "changed": {module: PackedInt32Array of alive face indices near the impact},
-##           "new_vertices": int }
+##           "new_vertices": int,
+##           "moved": PackedInt32Array (vertex ids that were pushed), "moved_from": PackedVector3Array (where they were) }
 static func dent(d: ShipDesign, idx: Array, mi: int, p: Vector3, dir: Vector3, depth: float, radius: float) -> Dictionary:
 	var target_edge := maxf(radius / Data.DENT_DETAIL, Data.DENT_MIN_EDGE)
 	var query_r := radius * 1.3
@@ -51,6 +52,8 @@ static func dent(d: ShipDesign, idx: Array, mi: int, p: Vector3, dir: Vector3, d
 	var fs: FaceSet = d.modules[mi]["fs"]
 	var index: HullIndex = idx[mi]
 	var seen := {}
+	var moved := PackedInt32Array()
+	var moved_from := PackedVector3Array()
 	for fi in touched[mi]:
 		var s := fs.starts[fi]
 		for k in fs.sizes[fi]:
@@ -68,6 +71,8 @@ static func dent(d: ShipDesign, idx: Array, mi: int, p: Vector3, dir: Vector3, d
 			if disp.length() > cap:
 				disp = disp.normalized() * cap
 			d.vertices[id] = v + disp
+			moved.append(id)
+			moved_from.append(v)
 	for m in d.modules.size():
 		for fi in touched[m]:
 			_add_face_sums(d, idx, delta, m, fi, (d.modules[m]["fs"] as FaceSet).sizes[fi], 1.0)
@@ -80,7 +85,7 @@ static func dent(d: ShipDesign, idx: Array, mi: int, p: Vector3, dir: Vector3, d
 			sums[i] += delta[m][i]
 		d.modules[m]["sums"] = sums
 		changed[m] = (idx[m] as HullIndex).faces_near(p, query_r)
-	return {"changed": changed, "new_vertices": d.vertices.size() - vertices_before}
+	return {"changed": changed, "new_vertices": d.vertices.size() - vertices_before, "moved": moved, "moved_from": moved_from}
 
 
 static func _add_face_sums(d: ShipDesign, idx: Array, delta: Dictionary, m: int, fi: int, size: int, factor: float) -> void:

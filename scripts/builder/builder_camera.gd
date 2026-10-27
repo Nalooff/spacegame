@@ -16,6 +16,13 @@ var pitch: float = -0.45
 var distance: float = 9.0
 var pivot: Vector3 = Vector3.ZERO
 
+## Standard views: name -> [yaw, pitch]. The ship's nose points to -Z; "front" looks at the nose.
+const VIEWS := {
+	"front": [PI, 0.0], "back": [0.0, 0.0], "right": [PI * 0.5, 0.0], "left": [-PI * 0.5, 0.0],
+	"top": [0.0, -PI * 0.5], "bottom": [0.0, PI * 0.5], "perspective": [0.6, -0.45],
+}
+var orthographic: bool = false
+
 var _orbiting: bool = false
 var _panning: bool = false
 
@@ -56,6 +63,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			_apply()
 
 
+## Jump to a standard view (see VIEWS). Standard views of a ship are usually wanted without perspective.
+func set_view(view_name: String) -> void:
+	if not VIEWS.has(view_name):
+		return
+	yaw = VIEWS[view_name][0]
+	pitch = VIEWS[view_name][1]
+	_apply()
+
+
+func set_orthographic(on: bool) -> void:
+	orthographic = on
+	_apply()
+
+
 ## Smoothly-less "frame this": centre the view on `point` and zoom so `radius` fits.
 func focus_on(point: Vector3, radius: float) -> void:
 	pivot = point
@@ -66,5 +87,9 @@ func focus_on(point: Vector3, radius: float) -> void:
 func _apply() -> void:
 	position = pivot
 	rotation = Vector3(pitch, yaw, 0.0)
-	camera.position = Vector3(0, 0, distance)
+	camera.position = Vector3(0, 0, 150.0 if orthographic else distance)   # orthographic: far back so nothing is cut
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE
+	camera.size = distance * 0.9        # orthographic: how many metres fit on screen (zoom = distance)
+	camera.near = 0.05
+	camera.far = 600.0
 	view_changed.emit()

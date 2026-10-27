@@ -11,7 +11,7 @@ extends Node3D
 ## Usage (see Ship):
 ##   var prepared := HullRenderer.prepare(design)     # heavy, may run in a worker thread
 ##   hull.attach(design, prepared)                    # main thread; meshes appear a few per frame
-##   hull.set_health(ratios)                          # tint / hide destroyed modules
+##   hull.set_health(ratios)                          # ratio 0 = dead wreck (charred, stays), < 0 = gone (hidden)
 ##   hull.rebuild(changed_faces)                      # after a dent
 
 const FACES_PER_CHUNK := 8000
@@ -24,6 +24,7 @@ var design: ShipDesign
 var _mods: Array = []
 var _queue: Array = []     # [module, chunk index] waiting for its mesh to be created
 var _health: PackedFloat32Array = PackedFloat32Array()
+var _pivots: Dictionary = {}        # module -> Node3D its chunk meshes live in (turret barrels swivel as a whole)
 var _scratch := PackedInt32Array()   # vertex id -> local index while building one chunk (all -1 between uses)
 
 
@@ -126,6 +127,26 @@ static func build_arrays(d: ShipDesign, mi: int, faces: PackedInt32Array, map: P
 # =====================================================================
 #  Main thread: nodes, materials, health
 # =====================================================================
+## Put the meshes of module `mi` (a turret barrel) into a pivot node located at `pivot`. Rotate the returned node
+## (position = pivot) to swivel the barrel. Call BEFORE attach().
+func add_pivot(mi: int, pivot: Vector3) -> Node3D:
+	var n := Node3D.new()
+	n.name = "BarrelPivot%d" % mi
+	n.position = pivot
+	add_child(n)
+	_pivots[mi] = n
+	return n
+
+
+func _place(mi: int, node: MeshInstance3D) -> void:
+	var pivot: Node3D = _pivots.get(mi)
+	if pivot == null:
+		add_child(node)
+	else:
+		pivot.add_child(node)
+		node.position = -pivot.position      # mesh vertices are in ship space, the pivot sits at the swivel point
+
+
 func attach(d: ShipDesign, prepared: Array) -> void:
 	design = d
 	for mi in prepared.size():
@@ -172,7 +193,7 @@ func _make_next() -> void:
 	node.material_override = _mods[job[0]]["material"]
 	node.visible = job[0] >= _health.size() or _health[job[0]] > 0.0
 	chunk["node"] = node
-	add_child(node)
+	_place(job[0], node)
 
 
 ## ratios[i] = module health 0..1. A destroyed module (0) disappears.
@@ -183,7 +204,7 @@ func set_health(ratios: PackedFloat32Array) -> void:
 		(_mods[mi]["material"] as ShaderMaterial).set_shader_parameter("damage", 1.0 - clampf(r, 0.0, 1.0))
 		for chunk in _mods[mi]["chunks"]:
 			if chunk["node"] != null:
-				(chunk["node"] as MeshInstance3D).visible = r > 0.0
+				(chunk["node"] as MeshInstance3D).visible = r >= 0.0   # dead wrecks (0) stay, GONE modules (< 0) vanish
 
 
 ## After a dent: `changed` = {module: PackedInt32Array of faces whose shape changed or that are new}.
@@ -238,7 +259,7 @@ func rebuild(changed: Dictionary) -> void:
 				node.name = "Module%d_Chunk%d" % [mi, ci]
 				node.material_override = info["material"]
 				chunk["node"] = node
-				add_child(node)
+				_place(mi, node)
 			var mesh := ArrayMesh.new()
 			if not arrays.is_empty():
 				mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)

@@ -26,33 +26,59 @@ def hud():
         return N(name, "ProgressBar", {"layout_mode": 2, "show_percentage": "false", "value": 100.0, "custom_minimum_size": "Vector2(0, 14)"}, unique=True)
     flight = label("", "FlightLabel", unique=True)
     left_panel = N("FlightStatusPanel", "PanelContainer", {"layout_mode": 1, "offset_left": 10.0, "offset_top": 10.0, "offset_right": 360.0, "offset_bottom": 270.0},
-        [vbox("StatusColumn", [flight, label("Hull", "HullLabel"), bar("HullBar"), label("Commander module", "CommanderLabel"), bar("CommanderBar"),
+        [vbox("StatusColumn", [flight, label("Commander module", "CommanderLabel"), bar("CommanderBar"),
                       label("", "PowerLabel", unique=True), bar("PowerBar"), label("", "RcsLabel", unique=True, wrap=True)])])
     banner = N("BannerLabel", "Label", {"layout_mode": 1, "anchors_preset": 5, "anchor_left": 0.5, "anchor_right": 0.5, "offset_left": -300.0, "offset_top": 30.0, "offset_right": 300.0,
                 "offset_bottom": 80.0, "grow_horizontal": 2, "horizontal_alignment": 1, "theme_override_font_sizes/font_size": 30, "modulate": "Color(1, 0.8, 0.3, 1)"}, unique=True)
     leave = button("Leave game", "LeaveButton")
     right_top = N("PlayersPanel", "PanelContainer", {"layout_mode": 1, "anchors_preset": 1, "anchor_left": 1.0, "anchor_right": 1.0, "offset_left": -220.0, "offset_top": 10.0,
                   "offset_right": -10.0, "offset_bottom": 160.0, "grow_horizontal": 0}, [vbox("PlayersColumn", [label("", "PlayersLabel", unique=True), leave])])
-    xs, ys, zs = spin("XSpin", -100000, 100000, 0.1, 0, allow_greater="true", allow_lesser="true", update_on_text_changed="true"), \
-                 spin("YSpin", -100000, 100000, 0.1, 0, allow_greater="true", allow_lesser="true", update_on_text_changed="true"), \
-                 spin("ZSpin", -100000, 100000, 0.1, 0, allow_greater="true", allow_lesser="true", update_on_text_changed="true")
-    go, brake, cancel, here = button("GO", "GoButton"), button("Brake (X)", "BrakeButton"), button("Cancel", "CancelButton"), button("Use my position", "HereButton")
+    map_btn = button("Tactical map  (M)", "OpenMapButton")
+    brake, cancel = button("Brake (X)", "BrakeButton"), button("Cancel order", "CancelButton")
+    fire_state = label("", "FireStateLabel", unique=True)
     ap = N("AutopilotPanel", "PanelContainer", {"layout_mode": 1, "anchors_preset": 3, "anchor_left": 1.0, "anchor_top": 1.0, "anchor_right": 1.0, "anchor_bottom": 1.0,
-              "offset_left": -430.0, "offset_top": -170.0, "offset_right": -10.0, "offset_bottom": -10.0, "grow_horizontal": 0, "grow_vertical": 0},
-        [vbox("AutopilotColumn", [label("COORDINATE AUTOPILOT  (flies there and stops)", "AutopilotTitleLabel", wrap=True),
-                      hbox("CoordinatesRow", [label("X", "XLabel"), xs, label("Y", "YLabel"), ys, label("Z", "ZLabel"), zs]),
-                      hbox("AutopilotButtonsRow", [go, brake, cancel]), here])])
+              "offset_left": -300.0, "offset_top": -150.0, "offset_right": -10.0, "offset_bottom": -10.0, "grow_horizontal": 0, "grow_vertical": 0},
+        [vbox("AutopilotColumn", [label("FLIGHT ORDERS", "AutopilotTitleLabel"), map_btn, hbox("AutopilotButtonsRow", [brake, cancel]), fire_state])])
     help_ = N("ControlsHelpLabel", "Label", {"layout_mode": 1, "anchors_preset": 2, "anchor_top": 1.0, "anchor_bottom": 1.0, "offset_left": 10.0, "offset_top": -150.0, "offset_right": 600.0,
                "offset_bottom": -10.0, "grow_vertical": 0, "vertical_alignment": 2, "modulate": "Color(1, 1, 1, 0.6)",
-               "text": s("W/S forward/back  A/D strafe  Space/C up/down  Arrows pitch/yaw  Q/E roll\nLMB fire at cursor   RMB drag orbit camera   Wheel zoom\nX brake   T flight-assist on/off   Any manual key cancels the autopilot")})
+               "text": s("W/S forward/back  A/D strafe  Space/C up/down  Arrows pitch/yaw  Q/E roll\nLMB fire at cursor (commander mode: hold LMB to fire at the lock)   R lock next enemy (guns lead it)   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P ship plan   X brake   T flight-assist   M tactical map (click = waypoint)   H weapons free   Any manual key cancels the autopilot")})
     banner_timer = N("BannerTimer", "Timer", {"wait_time": 3.0, "one_shot": "true"}, unique=True)
-    root = N("HudRoot", "Control", {**full_rect(), "mouse_filter": 2}, [left_panel, banner, right_top, ap, help_, banner_timer])
+    markers = N("ContactMarkers", "Control", {**full_rect(), "mouse_filter": 2}, [], script='ExtResource("2_markers")')
+    plan_view = N("PlanView", None, {}, unique=True, instance='ExtResource("3_plan")')
+    tac_map = N("TacticalMap", None, {}, unique=True, instance='ExtResource("4_map")')
+    root = N("HudRoot", "Control", {**full_rect(), "mouse_filter": 2}, [markers, left_panel, banner, right_top, ap, help_, banner_timer, plan_view, tac_map])
     top = N("HUD", "CanvasLayer", {}, [root], script='ExtResource("1_s")')
-    sc = Scene(top); sc.ext_res("1_s", "Script", "res://scripts/ui/hud.gd")
+    sc = Scene(top); sc.ext_res("1_s", "Script", "res://scripts/ui/hud.gd"); sc.ext_res("2_markers", "Script", "res://scripts/ui/contact_markers.gd"); sc.ext_res("3_plan", "PackedScene", "res://scenes/plan_view.tscn"); sc.ext_res("4_map", "PackedScene", "res://scenes/tactical_map.tscn")
     C = sc.connect
-    C("pressed", go, "_on_go_pressed"); C("pressed", brake, "_on_brake_pressed"); C("pressed", cancel, "_on_cancel_pressed")
-    C("pressed", here, "_on_here_pressed"); C("pressed", leave, "_on_leave_pressed"); C("timeout", banner_timer, "_on_banner_timer_timeout")
+    C("pressed", map_btn, "_on_open_map_pressed"); C("pressed", brake, "_on_brake_pressed"); C("pressed", cancel, "_on_cancel_pressed")
+    C("pressed", leave, "_on_leave_pressed"); C("timeout", banner_timer, "_on_banner_timer_timeout")
     write("hud.tscn", sc)
+
+# =============================================================== tactical map (Nebulous-style orders)
+def tactical_map():
+    canvas = N("MapCanvas", "Control", {"layout_mode": 2, "size_flags_horizontal": 3, "size_flags_vertical": 3, "clip_contents": "true", "focus_mode": 2}, unique=True)
+    go_b = button("GO TO  (stop there)", "GoToButton", unique=True, toggle_mode="true", button_pressed="true")
+    drive_b = button("DRIVE  (never stops)", "DriveButton", unique=True, toggle_mode="true")
+    thrust = N("ThrustSlider", "HSlider", {"layout_mode": 2, "size_flags_horizontal": 3, "min_value": 0.0, "max_value": 100.0, "step": 1.0, "value": 100.0}, unique=True)
+    thrust_val = label("100%", "ThrustValueLabel", unique=True, custom_minimum_size="Vector2(48, 0)")
+    alt = spin("AltitudeSpin", -100000, 100000, 1, 0, allow_greater="true", allow_lesser="true", suffix=s(" m"))
+    face = N("FaceTurretsCheck", "CheckBox", {"layout_mode": 2, "text": s("Keep turrets facing the enemy"), "tooltip_text": s("The ship turns so the most turrets can bear on the locked enemy (or the destination) while it moves.")}, unique=True)
+    free = N("WeaponsFreeCheck", "CheckBox", {"layout_mode": 2, "text": s("Weapons free  (H)"), "tooltip_text": s("Off: radar locks and aims, the guns wait for you to hold the left mouse button.")}, unique=True)
+    chase = button("Drive at locked target", "ChaseButton", unique=True)
+    brake = button("Brake  (X)", "MapBrakeButton", unique=True)
+    cancel = button("Cancel order", "MapCancelButton", unique=True)
+    close = button("Close  (M)", "CloseMapButton", unique=True)
+    info = label("", "OrderInfoLabel", unique=True, wrap=True)
+    help_ = label("Click: set a waypoint (and go).  Click an enemy: lock it, and in DRIVE mode ram it.\nRight-drag: pan.  Wheel: zoom.  Right ruler: click to set the height.", "MapHelpLabel", wrap=True, modulate="Color(1, 1, 1, 0.6)")
+    col = vbox("OrdersColumn", [label("ORDERS", "OrdersTitleLabel"), go_b, drive_b,
+        hbox("ThrustRow", [label("Thrust", "ThrustLabel"), thrust, thrust_val]),
+        hbox("AltitudeRow", [label("Height", "AltitudeLabel"), alt]),
+        face, free, chase, hbox("StopRow", [brake, cancel]), info, help_, close], custom_minimum_size="Vector2(300, 0)")
+    inner = hbox("MapRow", [canvas, N("OrdersMargin", "MarginContainer", {"layout_mode": 2, "theme_override_constants/margin_left": 8, "theme_override_constants/margin_right": 8}, [col])])
+    panel = N("MapPanel", "PanelContainer", {**full_rect(), "offset_left": 40.0, "offset_top": 40.0, "offset_right": -40.0, "offset_bottom": -40.0}, [inner])
+    root = N("TacticalMap", "Control", {**full_rect(), "mouse_filter": 1}, [N("MapBackdrop", "ColorRect", {**full_rect(), "color": "Color(0.01, 0.015, 0.03, 0.97)", "mouse_filter": 0}), panel], script='ExtResource("1_s")')
+    sc = Scene(root); sc.ext_res("1_s", "Script", "res://scripts/ui/tactical_map.gd")
+    write("tactical_map.tscn", sc)
 
 # =============================================================== game world
 def world():
@@ -84,14 +110,16 @@ def world():
         N("SpawnPoints", "Node3D", {}, spawn),
         N("Ships", "Node3D", {}),
         N("ShipSpawner", "MultiplayerSpawner", {"spawn_path": 'NodePath("../Ships")'}),
-        N("ProjectilePool", "Node3D", {"bolt_mesh": 'SubResource("Mesh_bolt")'}, [], script='ExtResource("2_pool")'),
+        N("ProjectilePool", "Node3D", {}, [], script='ExtResource("2_pool")'),
         rig,
+        N("StationCamera", "Camera3D", {"fov": 80.0, "far": 6000.0}, [], script='ExtResource("6_stcam")'),
         N("TargetMarker", "MeshInstance3D", {"visible": "false", "mesh": 'SubResource("Mesh_marker")'}),
         hud_inst], script='ExtResource("1_world")')
     sc = Scene(root)
     sc.ext_res("1_world", "Script", "res://scripts/world/game_world.gd")
     sc.ext_res("2_pool", "Script", "res://scripts/world/projectile_pool.gd")
     sc.ext_res("3_cam", "Script", "res://scripts/world/chase_camera.gd")
+    sc.ext_res("6_stcam", "Script", "res://scripts/world/station_camera.gd")
     sc.ext_res("5_hud", "PackedScene", "res://scenes/hud.tscn")
     sh = sc.sub("Shader_sky", "Shader", code=sky_shader)
     skm = sc.sub("Mat_sky", "ShaderMaterial", shader=sh)
@@ -101,10 +129,8 @@ def world():
     sc.sub("Mesh_rock_1", "SphereMesh", radius=0.5, height=1.0, radial_segments=12, rings=6)
     for i, col in enumerate(["Color(0.32, 0.30, 0.28, 1)", "Color(0.26, 0.28, 0.34, 1)", "Color(0.36, 0.30, 0.26, 1)"]):
         sc.sub(f"Mat_rock_{i}", "StandardMaterial3D", albedo_color=col, roughness=0.95)
-    bm = sc.sub("Mat_bolt", "StandardMaterial3D", shading_mode=0, albedo_color="Color(1, 0.92, 0.35, 1)")
-    sc.sub("Mesh_bolt", "SphereMesh", material=bm, radius=0.22, height=0.44, radial_segments=8, rings=4)
     mm = sc.sub("Mat_marker", "StandardMaterial3D", shading_mode=0, transparency=1, albedo_color="Color(0.3, 1, 0.5, 0.45)")
     sc.sub("Mesh_marker", "SphereMesh", material=mm, radius=0.8, height=1.6)
     write("game_world.tscn", sc)
 
-main_menu(); hud(); world()
+main_menu(); tactical_map(); hud(); world()

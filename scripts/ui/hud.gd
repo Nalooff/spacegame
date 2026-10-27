@@ -1,5 +1,5 @@
 extends CanvasLayer
-## Flight HUD + coordinate autopilot panel. All controls are nodes in scenes/hud.tscn
+## Flight HUD + flight orders panel (the orders themselves are given on the TacticalMap). All controls are nodes in scenes/hud.tscn
 ## (unique names, used as %Name). The HUD learns about the game only through BusEvent.
 
 signal leave_requested
@@ -26,8 +26,6 @@ func _on_local_ship_changed(new_ship: Ship) -> void:
 		panel.visible = piloting
 	if ship != null and not piloting:
 		show_banner("You are CREW: aim with the mouse, hold left click to fire the turrets")
-	if ship != null:
-		show_coordinates(ship.global_position)
 
 
 func _on_autopilot_arrived(arrived_ship: Ship) -> void:
@@ -55,12 +53,6 @@ func _on_banner_timer_timeout() -> void:
 	%BannerLabel.text = ""
 
 
-func show_coordinates(p: Vector3) -> void:
-	%XSpin.value = snappedf(p.x, 0.1)
-	%YSpin.value = snappedf(p.y, 0.1)
-	%ZSpin.value = snappedf(p.z, 0.1)
-
-
 func _process(_dt: float) -> void:
 	%PlayersLabel.text = _players_text()
 	if not is_instance_valid(ship):
@@ -73,10 +65,10 @@ func _process(_dt: float) -> void:
 	var p := ship.global_position
 	var ap_text := "OFF (manual)"
 	if ap.is_active():
-		ap_text = "ON TARGET" if ap.on_target else "%s  dist %.2f m" % [ap.phase, ap.distance]
+		ap_text = "ON TARGET" if ap.on_target else "%s  dist %.1f m" % [ap.phase, ap.distance]
 	%FlightLabel.text = "Speed  %7.2f m/s\nVel    (%.1f, %.1f, %.1f)\nPos    (%.1f, %.1f, %.1f)\nAutopilot: %s\nFlight assist: %s" % [
 		v.length(), v.x, v.y, v.z, p.x, p.y, p.z, ap_text, "ON" if ship.flight_assist else "OFF (T)"]
-	%HullBar.value = ship.hull_ratio() * 100.0
+	%FireStateLabel.text = ("WEAPONS FREE" if ship.weapons_free else "WEAPONS HOLD (hold LMB to fire)") if ship.stations.is_commander_mode() else ""
 	%CommanderBar.value = ship.commander_ratio() * 100.0
 	%PowerBar.value = clampf(100.0 * ship.electricity.supply_w / maxf(ship.electricity.demand_w, 1.0), 0.0, 100.0)
 	%PowerLabel.text = "Electricity  %.0f / %.0f kW%s" % [ship.electricity.demand_w / 1000.0, ship.electricity.supply_w / 1000.0,
@@ -93,9 +85,8 @@ func _players_text() -> String:
 
 
 # ------------------------------------------------------------- button handlers
-func _on_go_pressed() -> void:
-	if is_instance_valid(ship) and ship.alive:
-		ship.autopilot.go_to(Vector3(%XSpin.value, %YSpin.value, %ZSpin.value))
+func _on_open_map_pressed() -> void:
+	%TacticalMap.open()
 
 
 func _on_cancel_pressed() -> void:
@@ -108,10 +99,25 @@ func _on_brake_pressed() -> void:
 		ship.autopilot.brake()
 
 
-func _on_here_pressed() -> void:
-	if is_instance_valid(ship):
-		show_coordinates(ship.global_position)
-
-
 func _on_leave_pressed() -> void:
 	leave_requested.emit()
+
+
+## P opens / closes the SHIP PLAN: live state of every room and corridor (see PlanView).
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_M \
+			and ship != null and is_instance_valid(ship) and ship.alive and ship.is_multiplayer_authority() \
+			and not (get_viewport().gui_get_focus_owner() is LineEdit):
+		if %TacticalMap.visible:
+			%TacticalMap.close()
+		else:
+			%TacticalMap.open()
+		return
+	if event.is_action_pressed("toggle_plan") and ship != null and is_instance_valid(ship) and ship.alive:
+		var view := get_node_or_null("HudRoot/PlanView") as PlanView
+		if view == null:
+			return
+		if view.visible:
+			view.visible = false
+		else:
+			view.open_ship(ship)

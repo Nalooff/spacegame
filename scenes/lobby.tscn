@@ -75,6 +75,16 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
+[node name="TeamLabel" type="Label" parent="RoomMargin/RoomColumn/RoomColumns/ShipColumn"]
+layout_mode = 2
+text = "Team (same team = friendly on the radar)"
+autowrap_mode = 3
+
+[node name="TeamPicker" type="OptionButton" parent="RoomMargin/RoomColumn/RoomColumns/ShipColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Players of the same team are friendly on the radar; everyone else is an enemy"
+
 [node name="ShipInfoLabel" type="Label" parent="RoomMargin/RoomColumn/RoomColumns/ShipColumn"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -87,6 +97,13 @@ layout_mode = 2
 text = "Lock in ship"
 custom_minimum_size = Vector2(0, 48)
 disabled = true
+
+[node name="MySeatButton" type="Button" parent="RoomMargin/RoomColumn/RoomColumns/ShipColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Choose my bridge (commander module)..."
+visible = false
+tooltip_text = "Big ships have several commander modules; each one only controls what it is linked to"
 
 [node name="CrewColumn" type="VBoxContainer" parent="RoomMargin/RoomColumn/RoomColumns"]
 layout_mode = 2
@@ -120,7 +137,7 @@ layout_mode = 2
 [node name="JoinCrewButton" type="Button" parent="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Join selected ship as crew"
+text = "Choose a seat on the selected ship..."
 disabled = true
 
 [node name="LeaveCrewButton" type="Button" parent="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow"]
@@ -153,6 +170,8 @@ custom_minimum_size = Vector2(160, 48)
 
 [connection signal="item_selected" from="RoomMargin/RoomColumn/RoomColumns/ShipColumn/ShipList" to="." method="_on_ship_selected"]
 [connection signal="pressed" from="RoomMargin/RoomColumn/RoomColumns/ShipColumn/LockButton" to="." method="_on_lock_pressed"]
+[connection signal="pressed" from="RoomMargin/RoomColumn/RoomColumns/ShipColumn/MySeatButton" to="." method="_on_my_seat_pressed"]
+[connection signal="item_selected" from="RoomMargin/RoomColumn/RoomColumns/ShipColumn/TeamPicker" to="." method="_on_team_selected"]
 [connection signal="item_selected" from="RoomMargin/RoomColumn/RoomColumns/CrewColumn/PlayerTree" to="." method="_on_player_selected"]
 [connection signal="nothing_selected" from="RoomMargin/RoomColumn/RoomColumns/CrewColumn/PlayerTree" to="." method="_on_player_deselected"]
 [connection signal="pressed" from="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow/JoinCrewButton" to="." method="_on_join_crew_pressed"]

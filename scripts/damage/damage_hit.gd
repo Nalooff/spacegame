@@ -13,16 +13,21 @@ var normal: Vector3 = Vector3.UP           # world, points OUT of the hit ship
 var relative_velocity: Vector3 = Vector3.ZERO  # attacker velocity as seen by the victim
 var effective_mass: float = 0.0            # ramming: reduced mass of both ships (kg)
 var attacker_hardness: float = 50.0        # ramming: hardness of what hit us
+var direction: Vector3 = Vector3.ZERO      # world direction the damage travelled (bullet velocity); ZERO = into the hull
+var reach: float = 0.0                     # metres it travelled inside the ship (0 = estimated from the damage)
 var source: Node = null                    # who did it (Ship) or null
 
 
-static func kinetic(module_index: int, damage: float, at: Vector3 = Vector3.ZERO, shooter: Node = null) -> DamageHit:
+static func kinetic(module_index: int, damage: float, at: Vector3 = Vector3.ZERO, shooter: Node = null,
+		dir: Vector3 = Vector3.ZERO, depth: float = 0.0) -> DamageHit:
 	var h := DamageHit.new()
 	h.type_id = &"kinetic"
 	h.module = module_index
 	h.amount = damage
 	h.point = at
 	h.source = shooter
+	h.direction = dir
+	h.reach = depth
 	return h
 
 
