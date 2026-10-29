@@ -12,6 +12,10 @@ func _on_creation_pressed() -> void:
 	Game.go_to(Game.BUILDER_SCENE)
 
 
+func _on_presets_pressed() -> void:
+	Game.go_to(Game.PRESETS_SCENE)
+
+
 func _on_play_pressed() -> void:
 	Game.go_to(Game.BROWSER_SCENE)
 

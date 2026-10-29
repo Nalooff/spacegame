@@ -60,11 +60,13 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 	var dirs := PackedVector3Array()
 	var speeds := PackedFloat32Array()
 	var damages := PackedFloat32Array()
+	var kinds := PackedInt32Array()
 	var b_origins := PackedVector3Array()
 	var b_dirs := PackedVector3Array()
 	var b_dmg := PackedFloat32Array()
 	var b_pen := PackedFloat32Array()
 	var b_range := PackedFloat32Array()
+	var b_kinds := PackedInt32Array()
 	var elec := 0.0
 	var heat := 0.0
 	var now := Time.get_ticks_msec()
@@ -84,12 +86,14 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 			b_dmg.append(r.dps * Data.BEAM_TICK * minf(power_factor, 1.0))
 			b_pen.append(r.penetration)
 			b_range.append(r.beam_range)
+			b_kinds.append(r.damage_type)
 		else:
 			r.cool = r.cooldown * slow
 			origins.append(shot["origin"])
 			dirs.append(shot["dir"])
 			speeds.append(r.muzzle_speed)
 			damages.append(r.damage)
+			kinds.append(r.damage_type)
 		elec += r.elec_w
 		heat += r.heat_w
 	if origins.is_empty() and b_origins.is_empty():
@@ -98,10 +102,10 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 	_glow_elec = elec
 	_glow_heat = heat
 	if not origins.is_empty():
-		fire.rpc(origins, dirs, speeds, damages, ship.linear_velocity)
+		fire.rpc(origins, dirs, speeds, damages, ship.linear_velocity, kinds)
 	if not b_origins.is_empty():
 		_beam_timer = Data.BEAM_TICK
-		beam.rpc(b_origins, b_dirs, b_dmg, b_pen, b_range)
+		beam.rpc(b_origins, b_dirs, b_dmg, b_pen, b_range, b_kinds)
 
 
 ## Called by a CREW member's peer (see Ship._crew_step). Runs on the pilot's peer, which owns the ship.
@@ -132,19 +136,19 @@ func request_aim(aim_point: Vector3) -> void:
 
 @rpc("authority", "call_local", "unreliable")
 func fire(origins: PackedVector3Array, dirs: PackedVector3Array, speeds: PackedFloat32Array,
-		damages: PackedFloat32Array, ship_vel: Vector3) -> void:
+		damages: PackedFloat32Array, ship_vel: Vector3, kinds: PackedInt32Array = PackedInt32Array()) -> void:
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if pool == null:
 		return
 	for i in mini(origins.size(), mini(speeds.size(), damages.size())):
-		pool.spawn_shot(origins[i], dirs[i] * speeds[i] + ship_vel, ship, damages[i])
+		pool.spawn_shot(origins[i], dirs[i] * speeds[i] + ship_vel, ship, damages[i], DamageRegistry.weapon_type_id(kinds[i] if i < kinds.size() else 0))
 
 
 @rpc("authority", "call_local", "unreliable")
 func beam(origins: PackedVector3Array, dirs: PackedVector3Array, damages: PackedFloat32Array,
-		pens: PackedFloat32Array, ranges: PackedFloat32Array) -> void:
+		pens: PackedFloat32Array, ranges: PackedFloat32Array, kinds: PackedInt32Array = PackedInt32Array()) -> void:
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if pool == null:
 		return
 	for i in mini(origins.size(), mini(damages.size(), mini(pens.size(), ranges.size()))):
-		pool.fire_beam(origins[i], dirs[i], damages[i], pens[i], ranges[i], ship)
+		pool.fire_beam(origins[i], dirs[i], damages[i], pens[i], ranges[i], ship, DamageRegistry.weapon_type_id(kinds[i] if i < kinds.size() else 1))

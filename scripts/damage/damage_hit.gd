@@ -31,6 +31,14 @@ static func kinetic(module_index: int, damage: float, at: Vector3 = Vector3.ZERO
 	return h
 
 
+## A weapon hit of any weapon damage type (see DamageRegistry.WEAPON_TYPES).
+static func weapon(type: StringName, module_index: int, damage: float, at: Vector3 = Vector3.ZERO, shooter: Node = null,
+		dir: Vector3 = Vector3.ZERO, depth: float = 0.0) -> DamageHit:
+	var h := DamageHit.kinetic(module_index, damage, at, shooter, dir, depth)
+	h.type_id = type
+	return h
+
+
 static func ramming(module_index: int, closing_speed: float, at: Vector3, out_normal: Vector3, rel_vel: Vector3,
 		reduced_mass: float, hardness_of_attacker: float, other: Node = null) -> DamageHit:
 	var h := DamageHit.new()

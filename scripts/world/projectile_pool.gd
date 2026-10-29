@@ -81,7 +81,7 @@ func _process(dt: float) -> void:
 
 
 ## Wakes up the next free bullet (round robin). Recycles the oldest if all are in flight.
-func spawn_shot(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float) -> void:
+func spawn_shot(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: StringName = &"kinetic") -> void:
 	var count := get_child_count() - BEAM_POOL_SIZE
 	if count <= 0:
 		return
@@ -89,16 +89,16 @@ func spawn_shot(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float) -> void
 		var p := get_child((_next + i) % count) as Projectile
 		if p != null and not p.active:
 			_next = (_next + i + 1) % count
-			p.activate(pos, vel, from_ship, dmg)
+			p.activate(pos, vel, from_ship, dmg, dtype)
 			return
 	var oldest := get_child(_next % count) as Projectile
 	_next = (_next + 1) % count
-	oldest.activate(pos, vel, from_ship, dmg)
+	oldest.activate(pos, vel, from_ship, dmg, dtype)
 
 
 ## One beam tick. The ray goes through modules: every module it crosses takes damage, which falls off with the
 ## penetration used up; hard materials use up more. Every peer traces it, the owner of a hit ship applies the damage.
-func fire_beam(origin: Vector3, dir: Vector3, damage: float, penetration: float, max_range: float, shooter: Ship) -> void:
+func fire_beam(origin: Vector3, dir: Vector3, damage: float, penetration: float, max_range: float, shooter: Ship, dtype: StringName = &"energy") -> void:
 	var space := get_world_3d().direct_space_state
 	var from := origin
 	var end := origin + dir * max_range
@@ -120,7 +120,7 @@ func fire_beam(origin: Vector3, dir: Vector3, damage: float, penetration: float,
 			break
 		var mi := int(shape_node.get_meta("module"))
 		if body.is_multiplayer_authority():
-			body.apply_hit(DamageHit.kinetic(mi, damage * clampf(left / maxf(penetration, 0.1), 0.0, 1.0), hit["position"], shooter, dir, maxf(left, 0.5)))
+			body.apply_hit(DamageHit.weapon(dtype, mi, damage * clampf(left / maxf(penetration, 0.1), 0.0, 1.0), hit["position"], shooter, dir, maxf(left, 0.5)))
 		var hardness := float(MaterialCatalog.info(body.design.material_of(mi))["hardness"])
 		left -= Data.BEAM_MODULE_COST * (1.0 + hardness / 100.0)
 		if left <= 0.0:

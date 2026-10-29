@@ -15,11 +15,19 @@ extends RefCounted
 ## The resolved numbers are COPIED into the module (cfg.stats), so a saved ship never depends on the preset list.
 ## Your own presets live in user://presets.json (see save_custom()).
 
-const CUSTOM_FILE := "user://presets.json"
+static var custom_file: String = "user://presets.json"   ## where the player's own presets live (tests point it elsewhere)
 
 ## Stat definitions per type, in the order the editor lists them.
 ## main = the editable one.  fmt = number of decimals.
 const DEFS := {
+	ModuleCatalog.ARMOR: [
+		{"key": "hp_mult", "label": "Toughness (HP per m3 x)", "unit": "x", "min": 0.2, "max": 6.0, "main": true},
+		{"key": "density_mult", "label": "Weight (density x)", "unit": "x", "derived": true},
+	],
+	ModuleCatalog.HULL: [
+		{"key": "hp_mult", "label": "Toughness (HP per m3 x)", "unit": "x", "min": 0.2, "max": 6.0, "main": true},
+		{"key": "density_mult", "label": "Weight (density x)", "unit": "x", "derived": true},
+	],
 	ModuleCatalog.THRUSTER: [
 		{"key": "thrust_per_m3", "label": "Thrust per m3", "unit": "N/m3", "min": 2000.0, "max": 900000.0, "main": true, "log": true},
 		{"key": "elec_per_n", "label": "Electricity", "unit": "W per N", "derived": true},
@@ -62,8 +70,12 @@ const DEFS := {
 
 ## Built-in presets: type -> id -> {label, kind (optional), stats, help}
 const PRESETS := {
-	ModuleCatalog.HULL: {"standard": {"label": "Standard hull", "stats": {}, "help": "Rooms people can walk in. Cheap, light, low HP."}},
-	ModuleCatalog.ARMOR: {"standard": {"label": "Armor plate", "stats": {}, "help": "Heavy and tough. Soaks up damage."}},
+	ModuleCatalog.HULL: {"standard": {"label": "Standard hull", "stats": {"hp_mult": 1.0, "density_mult": 1.0}, "help": "Rooms people can walk in. Cheap, light, low HP."}},
+	ModuleCatalog.ARMOR: {
+		"standard": {"label": "Armor plate", "stats": {"hp_mult": 1.0, "density_mult": 1.0}, "help": "Heavy and tough. Soaks up damage."},
+		"composite": {"label": "Composite plate", "stats": {"hp_mult": 1.6, "density_mult": 1.5}, "help": "Tougher, but much heavier."},
+		"ablative": {"label": "Light ablative", "stats": {"hp_mult": 0.6, "density_mult": 0.5}, "help": "Half the weight, a bit more than half the toughness."},
+	},
 	ModuleCatalog.THRUSTER: {
 		"chemical": {"label": "Chemical engine", "stats": {"thrust_per_m3": 50000.0, "elec_per_n": 6.0, "heat_per_n": 10.0},
 			"help": "Balanced. Cheap to run, hot exhaust."},
@@ -79,11 +91,11 @@ const PRESETS := {
 			"help": "Slow and very precise."},
 	},
 	ModuleCatalog.BARREL: {
-		"cannon": {"label": "Cannon", "kind": "projectile", "stats": {"damage_per_m3": 180.0, "cooldown": 0.25, "muzzle_speed": 260.0,
+		"cannon": {"label": "Cannon", "kind": "projectile", "damage_type": "kinetic", "stats": {"damage_per_m3": 180.0, "cooldown": 0.25, "muzzle_speed": 260.0,
 			"spread_deg": 1.0, "elec_per_dmg": 30.0, "heat_per_dmg": 20.0}, "help": "Shoots bullets. Good all-round damage."},
-		"railgun": {"label": "Railgun", "kind": "projectile", "stats": {"damage_per_m3": 900.0, "cooldown": 1.2, "muzzle_speed": 700.0,
+		"railgun": {"label": "Railgun", "kind": "projectile", "damage_type": "piercing", "stats": {"damage_per_m3": 900.0, "cooldown": 1.2, "muzzle_speed": 700.0,
 			"spread_deg": 0.2, "elec_per_dmg": 90.0, "heat_per_dmg": 30.0}, "help": "Slow rate of fire, very fast, precise shell."},
-		"beam": {"label": "Beam laser", "kind": "beam", "stats": {"dps_per_m3": 420.0, "penetration": 9.0, "range": 450.0,
+		"beam": {"label": "Beam laser", "kind": "beam", "damage_type": "energy", "stats": {"dps_per_m3": 420.0, "penetration": 9.0, "range": 450.0,
 			"spread_deg": 0.05, "elec_per_dmg": 80.0, "heat_per_dmg": 40.0},
 			"help": "A continuous ray: less damage than a cannon but it goes THROUGH several modules."},
 	},
@@ -148,6 +160,8 @@ static func make_cfg(type: String, id: String) -> Dictionary:
 	var cfg := {"preset": id, "stats": (p["stats"] as Dictionary).duplicate()}
 	if p.has("kind"):
 		cfg["kind"] = p["kind"]
+	if p.has("damage_type"):
+		cfg["damage_type"] = p["damage_type"]
 	return cfg
 
 
@@ -211,9 +225,9 @@ static func set_main(type: String, kind: String, stats: Dictionary, value: float
 
 # ---- the player's own presets -------------------------------------------------------------------------------------
 static func _custom() -> Dictionary:
-	if not FileAccess.file_exists(CUSTOM_FILE):
+	if not FileAccess.file_exists(custom_file):
 		return {}
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CUSTOM_FILE))
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(custom_file))
 	return parsed if typeof(parsed) == TYPE_DICTIONARY else {}
 
 
@@ -226,7 +240,108 @@ static func save_custom(type: String, id: String, label: String, cfg: Dictionary
 		"help": "Your own preset."}
 	if cfg.has("kind"):
 		entry["kind"] = cfg["kind"]
+	if cfg.has("damage_type"):
+		entry["damage_type"] = cfg["damage_type"]
 	all[type][id] = entry
-	var f := FileAccess.open(CUSTOM_FILE, FileAccess.WRITE)
+	_write_custom(all)
+
+
+static func _write_custom(all: Dictionary) -> void:
+	var f := FileAccess.open(custom_file, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(all, "\t"))
+
+
+## The id a label turns into ("Heavy Railgun" -> "heavy_railgun").
+static func id_of_label(label: String) -> String:
+	var out := ""
+	for ch in label.strip_edges().to_lower():
+		out += ch if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9") else "_"
+	return out
+
+
+static func is_custom(type: String, id: String) -> bool:
+	return (_custom().get(type, {}) as Dictionary).has(id)
+
+
+static func is_builtin(type: String, id: String) -> bool:
+	return (PRESETS.get(type, {}) as Dictionary).has(id)
+
+
+## The module kinds of a type ("projectile" / "beam" for barrels ...). Empty = the type has no kinds.
+static func kinds_of(type: String) -> Array[String]:
+	var out: Array[String] = []
+	for d in DEFS.get(type, []):
+		var k := str(d.get("kind", ""))
+		if k != "" and not out.has(k):
+			out.append(k)
+	for id in PRESETS.get(type, {}):
+		var k2 := str(PRESETS[type][id].get("kind", ""))
+		if k2 != "" and not out.has(k2):
+			out.append(k2)
+	return out
+
+
+## Types that can be given presets of their own in the preset creator.
+static func creatable_types() -> Array[String]:
+	var out: Array[String] = []
+	for t in ModuleCatalog.TYPES:
+		if PRESETS.has(t):
+			out.append(t)
+	return out
+
+
+## Create or replace a preset of the player (every number is typed by hand: no trade-off is applied).
+## Returns "" on success, else the reason it was refused.
+static func save_definition(type: String, label: String, kind: String, damage_type: String, stats: Dictionary, help: String = "") -> String:
+	var id := id_of_label(label)
+	if id == "" or id.replace("_", "") == "":
+		return "Give the preset a name."
+	if is_builtin(type, id):
+		return "'%s' is a built-in preset: pick another name." % label.strip_edges()
+	if not PRESETS.has(type):
+		return "This module type has no presets."
+	var want := {}
+	for d in defs_of(type, kind):
+		var key: String = d["key"]
+		if not stats.has(key):
+			return "Missing value: %s" % d["label"]
+		var v := float(stats[key])
+		if not is_finite(v) or v < 0.0:
+			return "%s must be a number, zero or more." % d["label"]
+		want[key] = v
+	var all := _custom()
+	if not all.has(type):
+		all[type] = {}
+	var entry := {"label": label.strip_edges(), "stats": want, "help": help if help != "" else "Your own preset."}
+	if kind != "":
+		entry["kind"] = kind
+	if damage_type != "":
+		entry["damage_type"] = damage_type
+	all[type][id] = entry
+	_write_custom(all)
+	return ""
+
+
+static func delete_custom(type: String, id: String) -> bool:
+	var all := _custom()
+	if not (all.get(type, {}) as Dictionary).has(id):
+		return false
+	(all[type] as Dictionary).erase(id)
+	_write_custom(all)
+	return true
+
+
+## Numbers of the preset that mean something to a player: damage/s for weapons (per m3), thrust per m3 ...
+static func summary(type: String, kind: String, stats: Dictionary) -> String:
+	match type:
+		ModuleCatalog.BARREL:
+			if kind == "beam":
+				return "%.0f damage/s per m3 of barrel" % float(stats.get("dps_per_m3", 0.0))
+			var cd := maxf(float(stats.get("cooldown", 1.0)), 0.01)
+			return "%.1f shots/s, %.0f damage/s per m3 of barrel" % [1.0 / cd, float(stats.get("damage_per_m3", 0.0)) / cd]
+		ModuleCatalog.THRUSTER:
+			return "%.0f N per m3 of thruster" % float(stats.get("thrust_per_m3", 0.0))
+		ModuleCatalog.ARMOR, ModuleCatalog.HULL:
+			return "%.1fx toughness, %.1fx weight" % [float(stats.get("hp_mult", 1.0)), float(stats.get("density_mult", 1.0))]
+	return ""

@@ -10,15 +10,47 @@ def main_menu():
     sub = N("SubtitleLabel", "Label", {"layout_mode": 2, "text": s("modular vertex-built spaceships"), "horizontal_alignment": 1, "modulate": "Color(1, 1, 1, 0.6)"})
     creation = button("Creation  (ship builder)", "CreationButton", custom_minimum_size="Vector2(320, 56)")
     play = button("Play  (lobbies)", "PlayButton", custom_minimum_size="Vector2(320, 56)")
+    presets = button("Module presets  (weapons, thrusters, armor)", "PresetsButton", custom_minimum_size="Vector2(320, 44)")
     quit_ = button("Quit", "QuitButton", unique=True, custom_minimum_size="Vector2(320, 40)")
     notice = N("NoticeLabel", "Label", {"layout_mode": 2, "horizontal_alignment": 1, "modulate": "Color(1, 0.7, 0.4, 1)"}, unique=True)
-    menu_column = N("MenuButtonsColumn", "VBoxContainer", {"layout_mode": 2, "theme_override_constants/separation": 14}, [title, sub, N("TitleToButtonsSpacer", "Control", {"layout_mode": 2, "custom_minimum_size": "Vector2(0, 30)"}), creation, play, quit_, notice])
+    menu_column = N("MenuButtonsColumn", "VBoxContainer", {"layout_mode": 2, "theme_override_constants/separation": 14}, [title, sub, N("TitleToButtonsSpacer", "Control", {"layout_mode": 2, "custom_minimum_size": "Vector2(0, 30)"}), creation, play, presets, quit_, notice])
     center = N("MenuCenter", "CenterContainer", {**full_rect()}, [menu_column])
     bg = N("BackgroundColor", "ColorRect", {**full_rect(), "color": "Color(0.03, 0.04, 0.07, 1)"})
     root = N("MainMenu", "Control", {**full_rect()}, [bg, center], script='ExtResource("1_s")')
     sc = Scene(root); sc.ext_res("1_s", "Script", "res://scripts/ui/main_menu.gd")
-    sc.connect("pressed", creation, "_on_creation_pressed"); sc.connect("pressed", play, "_on_play_pressed"); sc.connect("pressed", quit_, "_on_quit_pressed")
+    sc.connect("pressed", creation, "_on_creation_pressed"); sc.connect("pressed", play, "_on_play_pressed"); sc.connect("pressed", presets, "_on_presets_pressed"); sc.connect("pressed", quit_, "_on_quit_pressed")
     write("main_menu.tscn", sc)
+
+# =============================================================== preset creator
+def preset_creator():
+    type_pick = N("TypePicker", "OptionButton", {"layout_mode": 2}, unique=True)
+    plist = N("PresetList", "ItemList", {"layout_mode": 2, "size_flags_vertical": 3, "custom_minimum_size": "Vector2(240, 200)"}, unique=True)
+    new_b = button("New preset from this one", "NewPresetButton", unique=True)
+    del_b = button("Delete (your own only)", "DeletePresetButton", unique=True)
+    left = vbox("PresetListColumn", [label("MODULE TYPE", "TypeTitle"), type_pick, label("PRESETS", "ListTitle"), plist, new_b, del_b], custom_minimum_size="Vector2(260, 0)")
+    name = line("PresetNameEdit", "", placeholder_text=s("Preset name (e.g. Heavy plasma cannon)"))
+    kind = N("KindPicker", "OptionButton", {"layout_mode": 2, "size_flags_horizontal": 3}, unique=True)
+    dmg = N("DamageTypePicker", "OptionButton", {"layout_mode": 2, "size_flags_horizontal": 3}, unique=True)
+    stats = vbox("StatRows", [], unique=True)
+    summary = label("", "SummaryLabel", unique=True, wrap=True, modulate="Color(0.6, 0.9, 1, 1)")
+    help_ = N("HelpEdit", "TextEdit", {"layout_mode": 2, "custom_minimum_size": "Vector2(0, 70)", "placeholder_text": s("What is this preset good at?"), "wrap_mode": 1}, unique=True)
+    save = button("Save preset", "SavePresetButton", unique=True)
+    back = button("Back to menu", "BackButton", unique=True)
+    msg = label("", "MessageLabel", unique=True, wrap=True, modulate="Color(1, 0.8, 0.4, 1)")
+    right = vbox("PresetEditColumn", [label("PRESET", "EditTitle"), hbox("NameRow", [label("Name", "NameLabel"), name]),
+        hbox("KindRow", [label("Kind", "KindLabel"), kind]),
+        hbox("DamageRow", [label("Damage type", "DamageLabel"), dmg]), sep("StatSep"), stats, summary, help_, hbox("ButtonRow", [save, back]), msg],
+        size_flags_horizontal=3)
+    inner = hbox("CreatorRow", [left, N("RightMargin", "MarginContainer", {"layout_mode": 2, "size_flags_horizontal": 3, "theme_override_constants/margin_left": 12}, [right])])
+    panel = N("CreatorPanel", "PanelContainer", {**full_rect(), "offset_left": 60.0, "offset_top": 40.0, "offset_right": -60.0, "offset_bottom": -40.0}, [inner])
+    bg = N("Backdrop", "ColorRect", {**full_rect(), "color": "Color(0.03, 0.04, 0.07, 1)"})
+    root = N("PresetCreator", "Control", {**full_rect()}, [bg, panel], script='ExtResource("1_s")')
+    sc = Scene(root); sc.ext_res("1_s", "Script", "res://scripts/ui/preset_creator.gd")
+    sc.connect("item_selected", plist, "_on_preset_selected")
+    sc.connect("item_selected", type_pick, "_on_type_selected"); sc.connect("item_selected", kind, "_on_kind_selected")
+    sc.connect("pressed", new_b, "_on_new_pressed"); sc.connect("pressed", del_b, "_on_delete_pressed")
+    sc.connect("pressed", save, "_on_save_pressed"); sc.connect("pressed", back, "_on_back_pressed")
+    write("preset_creator.tscn", sc)
 
 # =============================================================== HUD
 def hud():
@@ -133,4 +165,4 @@ def world():
     sc.sub("Mesh_marker", "SphereMesh", material=mm, radius=0.8, height=1.6)
     write("game_world.tscn", sc)
 
-main_menu(); tactical_map(); hud(); world()
+main_menu(); preset_creator(); tactical_map(); hud(); world()

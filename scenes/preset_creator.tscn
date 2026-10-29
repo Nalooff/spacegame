@@ -1,0 +1,168 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/preset_creator.gd" id="1_s"]
+
+[node name="PresetCreator" type="Control"]
+script = ExtResource("1_s")
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.03, 0.04, 0.07, 1)
+
+[node name="CreatorPanel" type="PanelContainer" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+offset_left = 60.0
+offset_top = 40.0
+offset_right = -60.0
+offset_bottom = -40.0
+
+[node name="CreatorRow" type="HBoxContainer" parent="CreatorPanel"]
+layout_mode = 2
+
+[node name="PresetListColumn" type="VBoxContainer" parent="CreatorPanel/CreatorRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(260, 0)
+
+[node name="TypeTitle" type="Label" parent="CreatorPanel/CreatorRow/PresetListColumn"]
+layout_mode = 2
+text = "MODULE TYPE"
+
+[node name="TypePicker" type="OptionButton" parent="CreatorPanel/CreatorRow/PresetListColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ListTitle" type="Label" parent="CreatorPanel/CreatorRow/PresetListColumn"]
+layout_mode = 2
+text = "PRESETS"
+
+[node name="PresetList" type="ItemList" parent="CreatorPanel/CreatorRow/PresetListColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+custom_minimum_size = Vector2(240, 200)
+
+[node name="NewPresetButton" type="Button" parent="CreatorPanel/CreatorRow/PresetListColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "New preset from this one"
+
+[node name="DeletePresetButton" type="Button" parent="CreatorPanel/CreatorRow/PresetListColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Delete (your own only)"
+
+[node name="RightMargin" type="MarginContainer" parent="CreatorPanel/CreatorRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 12
+
+[node name="PresetEditColumn" type="VBoxContainer" parent="CreatorPanel/CreatorRow/RightMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="EditTitle" type="Label" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn"]
+layout_mode = 2
+text = "PRESET"
+
+[node name="NameRow" type="HBoxContainer" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/NameRow"]
+layout_mode = 2
+text = "Name"
+
+[node name="PresetNameEdit" type="LineEdit" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/NameRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+size_flags_horizontal = 3
+placeholder_text = "Preset name (e.g. Heavy plasma cannon)"
+
+[node name="KindRow" type="HBoxContainer" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn"]
+layout_mode = 2
+
+[node name="KindLabel" type="Label" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/KindRow"]
+layout_mode = 2
+text = "Kind"
+
+[node name="KindPicker" type="OptionButton" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/KindRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DamageRow" type="HBoxContainer" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn"]
+layout_mode = 2
+
+[node name="DamageLabel" type="Label" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/DamageRow"]
+layout_mode = 2
+text = "Damage type"
+
+[node name="DamageTypePicker" type="OptionButton" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/DamageRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatSep" type="HSeparator" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn"]
+layout_mode = 2
+
+[node name="StatRows" type="VBoxContainer" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SummaryLabel" type="Label" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+modulate = Color(0.6, 0.9, 1, 1)
+
+[node name="HelpEdit" type="TextEdit" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 70)
+placeholder_text = "What is this preset good at?"
+wrap_mode = 1
+
+[node name="ButtonRow" type="HBoxContainer" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn"]
+layout_mode = 2
+
+[node name="SavePresetButton" type="Button" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Save preset"
+
+[node name="BackButton" type="Button" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Back to menu"
+
+[node name="MessageLabel" type="Label" parent="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+modulate = Color(1, 0.8, 0.4, 1)
+
+[connection signal="item_selected" from="CreatorPanel/CreatorRow/PresetListColumn/PresetList" to="." method="_on_preset_selected"]
+[connection signal="item_selected" from="CreatorPanel/CreatorRow/PresetListColumn/TypePicker" to="." method="_on_type_selected"]
+[connection signal="item_selected" from="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/KindRow/KindPicker" to="." method="_on_kind_selected"]
+[connection signal="pressed" from="CreatorPanel/CreatorRow/PresetListColumn/NewPresetButton" to="." method="_on_new_pressed"]
+[connection signal="pressed" from="CreatorPanel/CreatorRow/PresetListColumn/DeletePresetButton" to="." method="_on_delete_pressed"]
+[connection signal="pressed" from="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/ButtonRow/SavePresetButton" to="." method="_on_save_pressed"]
+[connection signal="pressed" from="CreatorPanel/CreatorRow/RightMargin/PresetEditColumn/ButtonRow/BackButton" to="." method="_on_back_pressed"]

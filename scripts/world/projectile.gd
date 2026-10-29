@@ -8,6 +8,7 @@ const LIFETIME := 4.0
 var active: bool = false
 var velocity: Vector3 = Vector3.ZERO
 var damage: float = 0.0
+var damage_type: StringName = &"kinetic"
 var shooter: Ship
 var _age: float = 0.0
 
@@ -16,13 +17,14 @@ func _ready() -> void:
 	deactivate()
 
 
-func activate(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float) -> void:
+func activate(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: StringName = &"kinetic") -> void:
 	global_position = pos
 	if vel.length() > 0.1:
 		look_at(pos + vel, Vector3.UP if absf(vel.normalized().y) < 0.95 else Vector3.RIGHT)   # the tracer lies along -Z
 	velocity = vel
 	shooter = from_ship
 	damage = dmg
+	damage_type = dtype
 	_age = 0.0
 	active = true
 	visible = true
@@ -55,5 +57,5 @@ func _physics_process(dt: float) -> void:
 		var owner_id: int = body.shape_find_owner(hit["shape"])
 		var shape_node := body.shape_owner_get_owner(owner_id) as CollisionShape3D
 		if shape_node != null and shape_node.has_meta("module"):
-			body.apply_hit(DamageHit.kinetic(int(shape_node.get_meta("module")), damage, hit["position"], shooter, velocity.normalized()))
+			body.apply_hit(DamageHit.weapon(damage_type, int(shape_node.get_meta("module")), damage, hit["position"], shooter, velocity.normalized()))
 	deactivate()

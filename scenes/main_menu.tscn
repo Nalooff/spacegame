@@ -58,6 +58,11 @@ layout_mode = 2
 text = "Play  (lobbies)"
 custom_minimum_size = Vector2(320, 56)
 
+[node name="PresetsButton" type="Button" parent="MenuCenter/MenuButtonsColumn"]
+layout_mode = 2
+text = "Module presets  (weapons, thrusters, armor)"
+custom_minimum_size = Vector2(320, 44)
+
 [node name="QuitButton" type="Button" parent="MenuCenter/MenuButtonsColumn"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -72,4 +77,5 @@ modulate = Color(1, 0.7, 0.4, 1)
 
 [connection signal="pressed" from="MenuCenter/MenuButtonsColumn/CreationButton" to="." method="_on_creation_pressed"]
 [connection signal="pressed" from="MenuCenter/MenuButtonsColumn/PlayButton" to="." method="_on_play_pressed"]
+[connection signal="pressed" from="MenuCenter/MenuButtonsColumn/PresetsButton" to="." method="_on_presets_pressed"]
 [connection signal="pressed" from="MenuCenter/MenuButtonsColumn/QuitButton" to="." method="_on_quit_pressed"]

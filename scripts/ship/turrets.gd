@@ -52,6 +52,7 @@ class Rig:
 	var beam: bool = false
 	var damage: float = 0.0     # per shot (projectile barrels)
 	var dps: float = 0.0        # beam damage per second
+	var damage_type: int = 0    # index in DamageRegistry.WEAPON_TYPES
 	var cooldown: float = 0.25
 	var muzzle_speed: float = 260.0
 	var spread_deg: float = 1.0
@@ -129,6 +130,7 @@ func _make_rig(d: ShipDesign, bi: int, bar: int) -> Rig:
 	r.precision = clampf(d.stat(bi, "precision"), 0.0, 1.0)
 	var vol := d.module_volume(bar)
 	r.beam = d.kind_of(bar) == "beam"
+	r.damage_type = d.damage_type_index(bar)
 	r.damage = d.stat(bar, "damage_per_m3") * vol
 	r.dps = d.stat(bar, "dps_per_m3") * vol
 	r.cooldown = maxf(d.stat(bar, "cooldown"), 0.05)

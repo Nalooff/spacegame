@@ -120,11 +120,29 @@ func stat(mi: int, key: String) -> float:
 	return float((modules[mi]["cfg"].get("stats", {}) as Dictionary).get(key, 0.0))
 
 
+## A stat of the module, or `fallback` when its preset does not have it (old ships, other types).
+func _stat_or(mi: int, key: String, fallback: float) -> float:
+	var st: Dictionary = modules[mi].get("cfg", {}).get("stats", {})
+	return float(st[key]) if st.has(key) else fallback
+
+
 func kind_of(mi: int) -> String:
 	var k := str(modules[mi]["cfg"].get("kind", ""))
 	if k == "" and modules[mi]["type"] == ModuleCatalog.ANTENNA:
 		return "external"          # ships saved before the antenna presets had kinds
 	return k
+
+
+## Damage type of a weapon module: its cfg says so, else projectiles are kinetic and beams are energy.
+func damage_type_id(mi: int) -> StringName:
+	var t := str(modules[mi]["cfg"].get("damage_type", ""))
+	if t != "" and DamageRegistry.WEAPON_TYPES.has(StringName(t)):
+		return StringName(t)
+	return &"energy" if kind_of(mi) == "beam" else &"kinetic"
+
+
+func damage_type_index(mi: int) -> int:
+	return DamageRegistry.weapon_index(damage_type_id(mi))
 
 
 ## Module ids of the barrels linked to turret base `mi`.
@@ -785,7 +803,7 @@ func compute_props(alive: PackedByteArray = PackedByteArray(), working: PackedBy
 			mod_info.append({"centroid": Vector3(gone_sums[8], gone_sums[9], gone_sums[10]), "volume": 0.0, "mass": 0.0,
 				"type": type, "material": material_of(i), "hp": maxf(ModuleCatalog.MIN_HP, module_volume(i) * info["hp_per_m3"]) if type != ModuleCatalog.LOOSE else 0.0})
 			continue
-		var density: float = float(info["density"]) * float(MaterialCatalog.info(material_of(i))["density_mult"])
+		var density: float = float(info["density"]) * float(MaterialCatalog.info(material_of(i))["density_mult"]) * _stat_or(i, "density_mult", 1.0)
 		var sums := module_sums(i)
 		var c := Vector3(sums[8], sums[9], sums[10])
 		var vol: float = sums[0]
@@ -795,7 +813,7 @@ func compute_props(alive: PackedByteArray = PackedByteArray(), working: PackedBy
 		self_sum += sums[7] * density
 		mod_info.append({
 			"centroid": c, "volume": vol, "mass": vol * density, "type": type, "material": material_of(i),
-			"hp": maxf(ModuleCatalog.MIN_HP, vol * info["hp_per_m3"]),
+			"hp": maxf(ModuleCatalog.MIN_HP, vol * info["hp_per_m3"] * _stat_or(i, "hp_mult", 1.0)),
 		})
 		if not working.is_empty() and working[i] == 0:
 			continue   # dead wreck: heavy, but it does nothing
@@ -1151,6 +1169,8 @@ func _migrate() -> void:
 						cfg_["stats"][key] = base["stats"][key]
 				if not cfg_.has("kind") and base.has("kind"):
 					cfg_["kind"] = base["kind"]
+				if not cfg_.has("damage_type") and base.has("damage_type"):
+					cfg_["damage_type"] = base["damage_type"]
 		if cfg_.is_empty() or not cfg_.has("stats"):
 			var fresh := ModulePresets.make_cfg(type, ModulePresets.default_preset(type))
 			for key in cfg_:
