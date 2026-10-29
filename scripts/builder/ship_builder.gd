@@ -1829,12 +1829,7 @@ func _op_array(p: Dictionary) -> String:
 ## `template`: "starter" = hull + bridge + engine (can be saved at once), "blank" = nothing (add the modules yourself).
 func new_ship(template: String = "starter") -> void:
 	checkpoint()
-	design = ShipDesign.new()
-	design.ship_name = "My Ship"
-	if template == "starter":
-		design.add_module(ModuleCatalog.HULL, "box", Vector3.ZERO, Vector3(1.5, 1.0, 2.5))
-		design.add_module(ModuleCatalog.COMMANDER, "box", Vector3(0, 1.9, -0.5), Vector3(1.2, 0.95, 1.5))
-		design.add_module(ModuleCatalog.THRUSTER, "cylinder", Vector3(0, 0, 3.4), Vector3(0.7, 0.9, 0.7), 12, "", axis_basis(1))   # round face looks along the exhaust (Z)
+	design = ShipDesign.starter() if template == "starter" else ShipDesign.new()
 	hidden_modules.clear()
 	clear_selection()
 	on_design_changed()

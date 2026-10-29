@@ -85,6 +85,7 @@ const ICONS := {
 	"type_commander": '<path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z" fill="$A" fill-opacity=".35" stroke="$A" stroke-width="1.5" stroke-linejoin="round"/>',
 	"type_radar": '<path d="M4 17a9 9 0 0 1 16 0z" fill="$I" fill-opacity=".25" stroke="$I" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 17V8l5-4" stroke="$A" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="4" r="1.5" fill="$A"/><path d="M6 21h12" stroke="$I" stroke-width="1.6" stroke-linecap="round"/>',
 	"type_antenna": '<path d="M12 21V8" stroke="$I" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7" r="2" fill="$A"/><path d="M7 5a7 7 0 0 0 0 4M17 5a7 7 0 0 1 0 4M4 3a11 11 0 0 0 0 8M20 3a11 11 0 0 1 0 8" fill="none" stroke="$A" stroke-width="1.4" stroke-linecap="round"/>',
+	"type_engine_room": '<circle cx="12" cy="12" r="4" fill="$A" fill-opacity=".35" stroke="$A" stroke-width="1.6"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="$I" stroke-width="2" stroke-linecap="round"/>',
 	# ---- primitive shapes
 	"shape_box": '<path d="M12 3l8 4v10l-8 4-8-4V7z" fill="$I" fill-opacity=".2" stroke="$I" stroke-width="1.5" stroke-linejoin="round"/><path d="M4 7l8 4 8-4M12 11v10" fill="none" stroke="$I" stroke-width="1.3"/>',
 	"shape_wedge": '<path d="M3 19h18L7 7z" fill="$I" fill-opacity=".2" stroke="$I" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 7v12" stroke="$I" stroke-width="1.3"/>',

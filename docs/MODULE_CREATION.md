@@ -15,3 +15,13 @@ Screenshots are in `docs/img/` and are produced by `tests/shot_module_demo.gd` (
 3. Select the turret base and the barrel and press **L** (Link). A barrel only swivels if it touches its turret base.
 
 Where to change the rules: numbers per preset in `scripts/data/module_presets.gd` (`PRESETS`), trade-offs in `set_main`, new module types in `scripts/data/module_catalog.gd` plus an icon in `scripts/builder/builder_icons.gd` (`type_<name>`).
+
+
+## Your own preset from scratch (any module type)
+Main menu -> **Module presets** (`docs/img/8_preset_creator.png`). Pick the type, press **New preset from this one**, type a name and every number, choose the kind (projectile or beam
+for a weapon) and its **damage type** (kinetic / energy / piercing / explosive), then **Save preset**. The summary line shows shots per second and damage per second per m3 of barrel.
+It appears in the builder's preset list for that module type. Armor and hull presets set toughness and weight; thruster presets set thrust per m3, electricity and heat.
+Code: `ModulePresets.save_definition`, damage types in `scripts/damage/` (`DamageRegistry.WEAPON_TYPES`).
+
+## The engine room
+Add the *Engine room* type (a room: min. 1.9 m thick, needs a corridor). With one on the ship, thrusters obey only while an engine room works.

@@ -1231,6 +1231,16 @@ func to_pretty_json() -> String:
 	return out
 
 
+## The small ship a NEW design starts as (hull, bridge, one engine). Used by the builder and by the editor plugin.
+static func starter(p_name: String = "My Ship") -> ShipDesign:
+	var d := ShipDesign.new()
+	d.ship_name = p_name
+	d.add_module(ModuleCatalog.HULL, "box", Vector3.ZERO, Vector3(1.5, 1.0, 2.5))
+	d.add_module(ModuleCatalog.COMMANDER, "box", Vector3(0, 1.9, -0.5), Vector3(1.2, 0.95, 1.5))
+	d.add_module(ModuleCatalog.THRUSTER, "cylinder", Vector3(0, 0, 3.4), Vector3(0.7, 0.9, 0.7), 12, "", Basis(Vector3.RIGHT, PI * 0.5))
+	return d
+
+
 static func from_json(text: String) -> ShipDesign:
 	var parsed: Variant = JSON.parse_string(text)
 	if typeof(parsed) != TYPE_DICTIONARY:

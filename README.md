@@ -38,10 +38,11 @@ Each player flies one ship; other players can be **crew** on it. Two ways to run
 * **Crew** (take a station with **F**): you control that turret yourself; **as long as you hold fire it fires**, pointing at the target or not.
 
 Flight orders (the commander's autopilot, `scripts/ship/autopilot.gd`):
-* **GOTO**: fly to a point and stop there (no speed cap: the fastest speed the ship can still brake from, flip with the gyroscope, retro-burn, RCS finishes).
-* **DRIVE**: fly towards a point or a tracked ship with a chosen **thrust** and **never stop** (made for ramming). Only **brake (X)** or cancel ends it.
+* **GOTO**: fly to a point and stop there (no speed cap: the fastest speed the ship can still brake from, flip with the gyroscope, retro-burn, RCS finishes). Click a **ship** instead and the ship follows it, holding station 40 m away and matching its velocity.
+* **DRIVE**: an **arrow**, not a point: the ship pushes along that direction with a chosen **thrust** and never stops (made for ramming). Click an enemy and the arrow follows it, aimed at the **intercept point** (where it will be when you arrive). Only **brake (X)** or cancel ends it.
 * **Turret facing lock**: while moving, the ship turns so the most turrets bear on the locked enemy (or the destination) instead of pointing its best thrust axis along the push.
-* **Tactical map (M)**: click in space to place waypoints (no typing coordinates), see contacts and your orders.
+* **Tactical map (M)**: click in space to give orders (no typing coordinates). **2D** is a top-down view with a height ruler; **3D** tilts the camera so you SEE the height (every object stands on a line down to your own height; right-drag turns the view, middle-drag pans, Ctrl+wheel sets the height of the next order). It shows everything known: radar contacts, shots in flight (by eye up to `Data.PROJECTILE_EYE_RANGE`, with a working radar up to `PROJECTILE_RADAR_RANGE`) and the landmarks, each with an arrow in the direction it moves (`scripts/ui/map_objects.gd`).
+* **Engine room**: a ship that has one only fires its thrusters while one works (alive, and reachable by corridor unless communications are up). Without comms the pilot's orders are walked to the engine room first. Ships with no engine room behave as before.
 
 Damage and information: the damage is simulated at once, but what the **commander knows** depends on communications. With comms online, reports are instant.
 Without, someone has to walk the report along the corridors (seconds shown on the plan); damage the commander has not heard about is shown as a dashed
@@ -122,6 +123,13 @@ Mass/centre of mass/inertia ARE recomputed after a dent (cached per-module sums,
 `scripts/ship/autopilot.gd` + `thrust_allocator.gd`: speed profile -> velocity loop -> wanted force -> gyroscope aims the BEST thrust axis (or the turret-facing
 axis) -> allocator -> throttles -> RCS tops up -> gyro cancels thruster torque. Prototype: `tools/ship_sim.py`.
 
+## Module presets (weapons, thrusters, armor ...)
+Main menu -> **Module presets** (`scenes/preset_creator.tscn`, `scripts/ui/preset_creator.gd`): pick a module type, copy a built-in preset with **New preset from this one**,
+type every number (a weapon: damage per shot, time between shots = **shots per second**, muzzle speed, spread, electricity, heat; a thruster: thrust per m3 ...) and, for weapons,
+the **damage type** (`kinetic`, `energy`, `piercing`, `explosive`, see `scripts/damage/`: armor protects fully against kinetic, half against energy, a little against piercing, and explosive shells also dent the hull).
+Presets are saved in `user://presets.json` and show in the builder's preset list. Armor and hull presets set toughness (HP per m3 x) and weight (density x). New types of damage: see `scripts/damage/damage_type.gd`.
+Missiles will use the same screen when they exist.
+
 ## Ship editor ("Creation")
 Blender-style: mode dropdown (Object / Vertex / Edge / Face) with contextual tools, **adjustable operators** (change the last operation's numbers afterwards, F9),
 shading modes, top bar (name, New / Save / Load, Undo / Redo), right tabs **Create** (Ship | Module) / **Properties** / **Ship**, bottom messages.
@@ -133,9 +141,17 @@ shading modes, top bar (name, New / Save / Load, Undo / Redo), right tabs **Crea
 | E | extrude face · W add vertex on edge · J connect two vertices · bevel, inset, subdivide, triangulate in the tool panel |
 | L / U | link / unlink vertices · M mirror · Shift+D duplicate · X / Del delete |
 | F | frame selection · Ctrl+Z / Ctrl+Y undo / redo · Ctrl+S save |
+**Create -> Module**: pick the type and preset, then the shape: round shapes take a **base radius**, a **height** and the **axis** they point along (up, forward = the way the ship points, side); boxes take width X, height Y, length Z.
+**Add at the view centre**, or **Add on the selected part (linked)** which places the new shape on the selected face, pointing away from it, and welds it to that face (selecting several parts shows a warning: it will try to link them all as well as it can).
+**Decks** of the ship plan: every height level gets its own deck (up to 48); modules that overlap in footprint also stack.
 Camera: right mouse orbit, middle mouse or Shift+right pan, wheel zoom. Forward is **-Z**. Ships save to `user://ships/*.json` (readable) or `.ship` (compressed, for huge ships).
 Where things are: `ship_builder.gd` state + actions · `builder_ui.gd` buttons · `builder_view.gd` drawing · `transform_tool.gd` G/R/S · `data/mesh_ops.gd` topology · `data/primitives.gd` shapes.
 New button = add it in `tools/gen_builder.py`, connect it to a `_on_xxx` in builder_ui.gd, call a ShipBuilder function.
+
+## Editor plugin (`addons/vertex_ships`)
+A **Ships** tab in the Godot editor. New ship, Duplicate, Delete, Info and Validate all run in a background headless Godot (`tools/ship_cli.tscn`), so **no scene is launched**;
+they use the real game code. Shaping vertices needs the real game, so **Open in builder** runs the builder scene and switches the editor to its embedded game view (Godot 4.4+, setting
+`run/window_placement/game_embed_mode`) so it opens inside the editor window. Note: the vertex builder itself is not a `@tool` script, so it cannot be drawn in the editor viewport itself.
 
 ## Autoloads
 `Data` (every tunable constant + the local player's choices) · `BusEvent` (signal hub) · `Game` (scene paths, `go_to()`) · `Net` (lobby rules - the host is the referee,
@@ -157,14 +173,14 @@ the bullets and only the owner of the hit ship applies damage. The host spawns s
 
 ## Layout
 `scripts/data` (ModuleCatalog, ModulePresets, ShipDesign, ShipPlan, Primitives, MeshOps) · `scripts/ship` (ship, allocator, autopilot, turrets, weapons, detection, reports, systems) ·
-`scripts/builder` · `scripts/damage` · `scripts/net` · `scripts/ui` · `scripts/world` · `scripts/autoload` · `addons/vertex_ships` (editor plugin) · `ships/*.json` premade ·
+`scripts/builder` · `scripts/damage` · `scripts/net` · `scripts/ui` · `scripts/world` · `scripts/autoload` · `addons/vertex_ships` (editor plugin: manage ships in the editor, see below) · `ships/*.json` premade ·
 `tests/` · `tools/`. New `class_name` scripts need a class-cache refresh: `godot --headless --path . --editor --quit-after 20`.
 
 ## Tests
 Headless, from the project folder (`GODOT` = your binary):
 `$GODOT --headless --path . res://tests/test_<name>.tscn` for **structure, combat, builder, damage, graph, scale, plan, scenes, steam, fuzz, fuzz_live**;
 `$GODOT --headless --fixed-fps 60 --path . -s res://tests/test_drive.gd -- "Twin Hull"` (DRIVE and facing lock);
-`tests/run_net_test.sh`, `run_lobby_test.sh`, `run_board_test.sh`. **fuzz** = random modelling operators, save/load, random damage and comms, every plan view;
+`tests/run_net_test.sh`, `run_lobby_test.sh`, `run_board_test.sh`, `run_cli_test.sh` (the ship command line of the editor plugin); also **presets, map**; `-s res://tests/test_heading.gd` (arrow DRIVE, intercept, follow). **fuzz** = random modelling operators, save/load, random damage and comms, every plan view;
 **fuzz_live** = real ships flying random orders while damaged. `bash tools/check_warnings.sh` prints nothing when there is no GDScript warning (the project treats them as errors).
 Screenshots (needs a virtual display): `tools/shots.sh` with `tests/shot_*.tscn`.
 
