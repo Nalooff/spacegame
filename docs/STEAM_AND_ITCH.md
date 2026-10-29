@@ -22,8 +22,11 @@ back to LAN discovery + the internet board (see README, "Multiplayer").
 
 ## Steam setup, step by step
 1. **Steamworks**: create the app (you get an App ID). While developing you can use App ID **480** (Spacewar, Valve's test app).
-2. **Add-ons**: from the Godot Asset Library (or the GodotSteam GitHub / docs site) install the *GodotSteam GDExtension* for Godot 4.4 and the
-   *GodotSteam MultiplayerPeer* into `res://addons/`. Restart the editor. In the editor, `Engine.has_singleton("Steam")` and
+2. **Add-ons**: install the *GodotSteam GDExtension* for Godot 4.4 and the *GodotSteam MultiplayerPeer* into `res://addons/`.
+   **Where to get them: the GitHub repository `GodotSteam/GodotSteam` is only a signpost now** (its readme says the project moved to
+   **Codeberg**: https://codeberg.org/godotsteam/godotsteam, releases there; docs and downloads also at https://godotsteam.com).
+   The Godot Asset Library has both add-ons too (search "GodotSteam"). The MultiplayerPeer source is still on GitHub
+   (`GodotSteam/multiplayerpeer`); its prebuilt files are in the releases next to the GDExtension. Take the build that matches Godot 4.4. Restart the editor. In the editor, `Engine.has_singleton("Steam")` and
    `ClassDB.class_exists("SteamMultiplayerPeer")` must both be true (that is exactly what `SteamBackend.is_available()` checks).
 3. **steam_appid.txt**: a text file containing only your App ID, next to the editor / the exported .exe, for testing outside Steam. Do not ship it
    in the final Steam build (Steam supplies the ID). It is not committed to the repo.
