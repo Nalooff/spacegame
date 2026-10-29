@@ -23,6 +23,8 @@ var edge_hp: PackedFloat32Array = PackedFloat32Array()   ## 0..1 per corridor pi
 var work: PackedByteArray = PackedByteArray()            ## per module: 1 = working
 var reach: PackedFloat32Array = PackedFloat32Array()     ## per module: metres from a working commander over open corridors (INF = cut off)
 var comms_ok: bool = false
+var engine_rooms: PackedInt32Array = PackedInt32Array()   ## modules of type ENGINE_ROOM (alive or not)
+var engine_ok: bool = true                                 ## false when the ship HAS engine rooms and none works
 var is_room: PackedByteArray = PackedByteArray()          ## per module: 1 = a room (needs a corridor)
 var node_dist: PackedFloat32Array = PackedFloat32Array()   ## per plan node: walking metres from the nearest working commander (INF = none)
 
@@ -57,6 +59,10 @@ func update(types: PackedStringArray, hp: PackedFloat32Array, comms: bool) -> vo
 		var di := plan.door_of(r)
 		if di >= 0:
 			reach[r] = dist[di]
+	engine_rooms = PackedInt32Array()
+	for mi in n:
+		if types[mi] == ModuleCatalog.ENGINE_ROOM:
+			engine_rooms.append(mi)
 	for mi in n:
 		var alive_hp := mi < hp.size() and hp[mi] > 0.0
 		var t := types[mi]
@@ -67,6 +73,15 @@ func update(types: PackedStringArray, hp: PackedFloat32Array, comms: bool) -> vo
 			work[mi] = 1
 		else:
 			work[mi] = 1 if (comms or reach[mi] < INF) else 0
+	engine_ok = engine_rooms.is_empty()
+	for er in engine_rooms:
+		if work[er] != 0:
+			engine_ok = true
+
+
+## True when the ship has engine rooms and none of them works any more: the thrusters get no orders.
+func engines_cut() -> bool:
+	return not engine_ok
 
 
 func is_working(mi: int) -> bool:
@@ -78,10 +93,25 @@ func order_delay(mi: int) -> float:
 	if comms_ok:
 		return 0.0
 	if mi < is_room.size() and is_room[mi] == 0:
-		return 0.0                # thrusters and antennas are not rooms: nobody walks there, they are controlled directly
+		if engine_rooms.is_empty() or mi >= types_size():
+			return 0.0            # thrusters and antennas are not rooms: nobody walks there, they are controlled directly
+		return _engine_delay()    # ... but with engine rooms the order goes to the nearest working one first
 	if mi >= reach.size() or reach[mi] == INF:
 		return INF
 	return reach[mi] / WALK_SPEED
+
+
+func types_size() -> int:
+	return work.size()
+
+
+## Seconds an order needs to reach the nearest WORKING engine room (INF when none can be reached).
+func _engine_delay() -> float:
+	var best := INF
+	for er in engine_rooms:
+		if er < work.size() and work[er] != 0 and er < reach.size():
+			best = minf(best, reach[er] / WALK_SPEED)
+	return best
 
 
 ## DAMAGE LINE: something travelled from `a` to `b` (ship space) through the ship, e.g. a shell that pierced the hull.

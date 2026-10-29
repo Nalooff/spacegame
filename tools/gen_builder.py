@@ -33,7 +33,7 @@ def panel(name, preset_props, kids):
         "layout_mode": 2, "theme_override_constants/margin_left": 10, "theme_override_constants/margin_right": 10,
         "theme_override_constants/margin_top": 8, "theme_override_constants/margin_bottom": 8}, kids)])
 
-TYPES = ["hull", "armor", "thruster", "turret", "turret_barrel", "commander", "radar", "antenna"]   # = ModuleCatalog.TYPES
+TYPES = ["hull", "armor", "thruster", "turret", "turret_barrel", "commander", "radar", "antenna", "engine_room"]   # = ModuleCatalog.TYPES
 SHAPES = ["box", "wedge", "pyramid", "tetra", "cylinder", "cone", "sphere", "dome"]                # = Primitives.NAMES
 
 def build():
@@ -130,7 +130,7 @@ def build():
                             size_flags_horizontal=3, tooltip_text=s(n.capitalize()), expand_icon="true") for n in SHAPES]
     shape_buttons[0].props["button_pressed"] = "true"
     def size_cell(title, name, val):
-        return vbox(name + "Cell", [label(title, name + "Label", modulate="Color(1, 1, 1, 0.6)"), spin(name + "Spin", 0.05, 10, 0.05, val)], size_flags_horizontal=3)
+        return vbox(name + "Cell", [label(title, name + "Label", modulate="Color(1, 1, 1, 0.6)"), spin(name + "Spin", 0.05, 200, 0.05, val)], size_flags_horizontal=3)
     ship_section = vbox("ShipCreationSection", [
         heading("START A NEW SHIP", "StartShipHeading"),
         label("A starter ship has a hull, a bridge and an engine, so it can be saved at once. A blank ship is empty: add every module yourself.", "StartShipHelp", wrap=True, modulate="Color(0.8, 0.85, 0.95, 0.85)"),
@@ -151,10 +151,15 @@ def build():
         heading("SHAPE", "NewShapeHeading"),
         N("ShapeGrid", "GridContainer", {"layout_mode": 2, "columns": 4}, shape_buttons, unique=True),
         row("Round detail", "NewSegments", spin("NewSegmentsSpin", 6, 32, 2, 12, tooltip_text=s("Number of sides of cylinders, cones, spheres and domes"))),
-        heading("SIZE  (half-size in metres, from the centre)", "NewSizeHeading"),
-        hbox("NewSizeRow", [size_cell("X", "NewSizeX", 0.5), size_cell("Y", "NewSizeY", 0.5), size_cell("Z", "NewSizeZ", 0.5)]),
-        button("Add module at the view centre", "AddModuleButton", unique=True, custom_minimum_size="Vector2(0, 44)",
+        N("NewAxisRow", "HBoxContainer", {"layout_mode": 2}, [label("Points along", "NewAxisLabel"), opt("NewAxisPicker", tooltip_text=s("Which way a cylinder, cone or dome points: up, forward (the way the ship points) or sideways. A thruster's round face looks along its exhaust"))], unique=True),
+        heading("SIZE  (metres)", "NewSizeHeading"),
+        N("NewRoundRow", "HBoxContainer", {"layout_mode": 2}, [size_cell("Base radius", "NewRadius", 0.5), size_cell("Height", "NewHeight", 1.0)], unique=True),
+        N("NewSizeRow", "HBoxContainer", {"layout_mode": 2}, [size_cell("Width X", "NewSizeX", 1.0), size_cell("Height Y", "NewSizeY", 1.0), size_cell("Length Z", "NewSizeZ", 1.0)], unique=True),
+        button("Add at the view centre", "AddModuleButton", unique=True, custom_minimum_size="Vector2(0, 40)",
                tooltip_text=s("The new module appears where the camera looks. Then press G to move it.")),
+        button("Add on the selected part (linked)", "AddModuleOnSelectionButton", unique=True, custom_minimum_size="Vector2(0, 40)",
+               tooltip_text=s("Select faces (or edges / vertices) first: the shape is placed on them, pointing away, and its base is welded to the selected vertices")),
+        label("", "NewSelectionWarning", unique=True, wrap=True, modulate="Color(1, 0.75, 0.3, 1)"),
         label("Modules start unattached: move them next to each other, then link vertices (L) so they stay together.", "AddTip", wrap=True, modulate="Color(1, 1, 1, 0.55)"),
     ], unique=True)
     add_tab = vbox("Add", [hbox("CreateModeRow", [ship_btn, mod_btn]), ship_section, module_section])
@@ -299,6 +304,7 @@ def build():
     for t, b in zip(TYPES, type_buttons): C("pressed", b, "_on_type_button_pressed", '"%s"' % t)
     for n, b in zip(SHAPES, shape_buttons): C("pressed", b, "_on_shape_button_pressed", '"%s"' % n)
     C("pressed", find_named(add_tab, "AddModuleButton"), "_on_add_module_pressed")
+    C("pressed", find_named(add_tab, "AddModuleOnSelectionButton"), "_on_add_module_on_selection_pressed")
     for n in ("CenterXSpin", "CenterYSpin", "CenterZSpin"): C("value_changed", find_named(sel_tab, n), "_on_center_changed")
     for n in ("SizeXSpin", "SizeYSpin", "SizeZSpin"): C("value_changed", find_named(sel_tab, n), "_on_size_changed")
     C("item_selected", find_named(sel_tab, "ActiveTypePicker"), "_on_active_type_selected")

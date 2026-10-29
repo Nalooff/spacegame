@@ -198,8 +198,47 @@ func _ready() -> void:
 	# every premade ship loads and validates
 	for s in ShipDesign.list_ships():
 		var sd := ShipDesign.load_file(s["path"])
-		check(sd != null and sd.validate().is_empty(), "ship file %s" % s["name"])
+		check(sd != null and sd.validate().is_empty(), "ship file %s %s" % [s["name"], str(sd.validate()) if sd != null else "null"])
 
+	# shapes: a cylinder is radius x height along the chosen axis (not a stretched ellipse), and can be welded to a selected face
+	b.new_ship("starter")
+	b.new_module_type = ModuleCatalog.THRUSTER
+	b.new_module_preset = ""
+	b.add_shape(ModuleCatalog.THRUSTER, "cylinder", Vector3(0.5, 1.0, 0.5), 12, 1, false)
+	var cyl := b.design.modules.size() - 1
+	var cp := b.design.module_points(cyl)
+	var clo := Vector3(INF, INF, INF)
+	var chi := -clo
+	for pt in cp:
+		clo = clo.min(pt)
+		chi = chi.max(pt)
+	var ext := chi - clo
+	check(absf(ext.x - 1.0) < 0.01 and absf(ext.y - 1.0) < 0.01 and absf(ext.z - 2.0) < 0.01, "cylinder radius 0.5, height 2.0, pointing forward: 1 x 1 x 2 m (%s)" % str(ext))
+	b.set_mode(ShipBuilder.Mode.FACE)
+	var top_f := -1
+	var top_y := -INF
+	var hull_fs := b.design.modules[0]["fs"] as FaceSet
+	for fi in hull_fs.alive_count():
+		var fy := b.design.face_center(0, fi).y
+		if fy > top_y:
+			top_y = fy
+			top_f = fi
+	b.sel_faces = [Vector2i(0, top_f)]
+	var count_before := b.design.modules.size()
+	var verts_before := b.design.vertices.size()
+	b.add_shape(ModuleCatalog.ARMOR, "box", Vector3(0.5, 0.2, 0.5), 12, 0, true)
+	var nm := b.design.modules.size() - 1
+	var shared := 0
+	for id in b.design.module_vertex_ids(nm):
+		if b.design.vertex_users(id).has(0):
+			shared += 1
+	check(b.design.modules.size() == count_before + 1 and shared == 4, "a box added on the selected top face is welded to its 4 corners (%d shared vertices)" % shared)
+	check(b.design.module_centroid(nm).y > top_y, "...and sits on top of the face, pointing away")
+	b.sel_faces = [Vector2i(0, top_f), Vector2i(0, (top_f + 1) % hull_fs.alive_count())]
+	var bui: BuilderUI = b.get_node("UI/BuilderUI")
+	bui.refresh_all()
+	check(bui.new_selection_warning.text != "", "selecting two faces shows the 'strange form' warning")
+	verts_before = verts_before
 	# occlusion (TriangleMesh has no ray cast in GDScript, so RayIndex does it)
 	var bm := BoxMesh.new()
 	var ri := RayIndex.new()

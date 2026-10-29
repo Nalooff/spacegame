@@ -18,6 +18,7 @@ func _ready() -> void:
 	_test_transmitter()
 	_test_stairs_and_walls()
 	_test_room_linking()
+	_test_many_decks()
 	_test_free_corridors()
 	print("RESULT: ", "PASS" if fails == 0 else "FAIL (%d)" % fails)
 	get_tree().quit(1 if fails else 0)
@@ -82,6 +83,33 @@ func _test_stairs_and_walls() -> void:
 		check(pl.unlinked_rooms(d.commander_modules()).is_empty(), "%s: every room is still reachable from the commander" % file)
 		canvas.queue_free()
 	check(found_stairs > 0, "at least one stair exists in the premade ships (%d)" % found_stairs)
+
+
+## As many decks as there are floors: a tall ship with six rooms one above the other (not even over each other's footprint).
+func _test_many_decks() -> void:
+	print("many decks")
+	var d := _design("Brick")
+	var base := PlanCanvas.new()
+	base.size = Vector2(900, 480)
+	add_child(base)
+	base.show_design(d, true)
+	var before := base.deck_count
+	base.queue_free()
+	var tall := _design("Brick")
+	var hull := tall.add_module(ModuleCatalog.HULL, "box", Vector3(0, 8, 0), Vector3(2.0, 8.0, 2.0), 12)
+	check(hull >= 0, "tall hull added")
+	for k in 6:
+		tall.add_module(ModuleCatalog.RADAR, "box", Vector3(0.0 + (k % 2) * 0.4, 1.2 + k * 2.4, 0.0), Vector3(0.6, 0.9, 0.6), 12)
+	var canvas := PlanCanvas.new()
+	canvas.size = Vector2(900, 480)
+	add_child(canvas)
+	canvas.show_design(tall, true)
+	check(canvas.deck_count >= 6, "six floors give at least six decks (%d, the ship had %d before)" % [canvas.deck_count, before])
+	var seen := {}
+	for mi in tall.modules.size():
+		seen[canvas._mod_layer(mi)] = true
+	check(seen.size() >= 6, "...and the decks are all used (%d)" % seen.size())
+	canvas.queue_free()
 
 
 ## Linking a corridor to a room: a click ANYWHERE inside the room (or on its wall) means "that room", not only on its centre dot.
@@ -254,7 +282,10 @@ func _test_state() -> void:
 	st.update(types, hp, true)
 	check(st.is_working(thr) and st.order_delay(thr) == 0.0, "communications: turret room works, order is instant")
 	st.update(types, hp, false)
-	check(st.is_working(engine) and st.order_delay(engine) == 0.0, "no communications: a thruster is not a room, it still obeys at once")
+	var er := _first(d, ModuleCatalog.ENGINE_ROOM)
+	check(er >= 0 and st.engine_ok and not st.engines_cut(), "the Dart has an engine room and it works")
+	check(st.is_working(engine) and absf(st.order_delay(engine) - st.reach[er] / PlanState.WALK_SPEED) < 0.001,
+		"no communications: the order walks to the ENGINE ROOM first, then the thruster obeys")
 	check(st.is_working(thr), "no communications, but the corridors lead there: it still works")
 	var delay := st.order_delay(thr)
 	check(delay > 0.0 and delay < 60.0, "...after the order was walked there (%.1f s)" % delay)
@@ -264,7 +295,21 @@ func _test_state() -> void:
 	hp2[_first(d, ModuleCatalog.HULL)] = 0.0
 	st.update(types, hp2, false)
 	check(not st.is_working(thr) and st.order_delay(thr) == INF, "dead hull: nobody can walk there, the room is cut off")
-	check(st.is_working(engine) and st.order_delay(engine) == 0.0, "...but the thruster needs no corridor and still works")
+	check(st.is_working(engine) and not st.engine_ok and st.engines_cut(), "...the thruster itself is intact, but nobody can reach the engine room: engines cut")
+	st.update(types, hp2, true)
+	check(st.engine_ok and st.order_delay(engine) == 0.0, "communications: the engine room works from anywhere, orders are instant")
+	var hp3 := hp.duplicate()
+	hp3[er] = 0.0
+	st.update(types, hp3, true)
+	check(st.engines_cut(), "engine room destroyed: the thrusters get no orders even with communications")
+	var d2 := _design("Dart")
+	var kept := _types(d2)
+	for mi in kept.size():
+		if kept[mi] == ModuleCatalog.ENGINE_ROOM:
+			kept[mi] = ModuleCatalog.HULL
+	var st_noeng := PlanState.new(ShipPlan.generate(d2))
+	st_noeng.update(kept, _hp(d2), false)
+	check(not st_noeng.engines_cut() and st_noeng.order_delay(engine) == 0.0, "a ship WITHOUT any engine room keeps the old behaviour (thrusters obey at once)")
 	st.update(types, hp2, true)
 	check(st.is_working(thr), "...but with communications the order arrives anyway")
 	# damage line through the middle
@@ -291,7 +336,12 @@ func _test_ship() -> void:
 	check(s.module_hp[ant] == 0.0 and not s.comms.online, "antenna dead: communications offline")
 	check(s.alloc.n == n0, "thrusters still work: the corridors are intact")
 	check(s.order_delay(_first(s.design, ModuleCatalog.TURRET)) > 0.0, "orders to a room now take time to walk")
-	check(s.order_delay(_first(s.design, ModuleCatalog.THRUSTER)) == 0.0, "...but thrusters obey at once")
+	check(s.order_delay(_first(s.design, ModuleCatalog.THRUSTER)) > 0.0, "...and so do thrusters: the order goes to the engine room first")
+	s.apply_damage(_first(s.design, ModuleCatalog.ENGINE_ROOM), 1e9)
+	await _frames(3)
+	check(s.plan_state.engines_cut(), "engine room destroyed: thrusters get no orders")
+	var cut := s._delayed_throttles(PackedFloat32Array([1.0, 1.0]), 0.02)
+	check(cut[0] == 0.0 and cut[1] == 0.0, "...their throttles are zero")
 	# a hit that goes through the middle of the ship closes corridors
 	var hits_before := 0.0
 	for e in s.corridor_hp:

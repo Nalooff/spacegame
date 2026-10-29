@@ -736,6 +736,115 @@ func add_module(type: String, primitive: String, half_size: Vector3, segments: i
 	say("Added %s %s at the view centre. Press G to move it, S to scale." % [type, primitive])
 
 
+## How a new shape is turned: the axis a cylinder / cone / dome points along. 0 = up (Y), 1 = forward (Z, the way the ship points), 2 = side (X).
+static func axis_basis(axis: int) -> Basis:
+	match axis:
+		1: return Basis(Vector3.RIGHT, deg_to_rad(90.0))      # Y -> Z
+		2: return Basis(Vector3.BACK, deg_to_rad(-90.0))      # Y -> X
+	return Basis.IDENTITY
+
+
+## Vertex ids of everything selected as a PART (faces, edges, vertices) with the point in the middle and the direction it faces.
+## {ids: Array[int], centre: Vector3, normal: Vector3, count: int}  (empty ids = nothing usable is selected)
+func selected_part() -> Dictionary:
+	var ids: Array[int] = []
+	var normal := Vector3.ZERO
+	var count := 0
+	var owners: Array[int] = []
+	for f in sel_faces:
+		var loop := (design.modules[f.x]["fs"] as FaceSet).face(f.y)
+		var n := ShipDesign.newell_normal(design.vertices, loop)
+		normal += n.normalized() if n.length() > 0.000001 else Vector3.ZERO
+		for id in loop:
+			if not ids.has(id):
+				ids.append(id)
+		owners.append(f.x)
+		count += 1
+	for e in sel_edges:
+		for id in [e.y, e.z]:
+			if not ids.has(id):
+				ids.append(id)
+		owners.append(e.x)
+		count += 1
+	for id in sel_verts:
+		if not ids.has(id):
+			ids.append(id)
+		count += 1
+	var centre := Vector3.ZERO
+	for id in ids:
+		centre += design.vertices[id]
+	centre /= maxf(ids.size(), 1)
+	if normal.length() < 0.001 and not ids.is_empty():          # edges / vertices: away from the middle of their module
+		var mc := Vector3.ZERO
+		if not owners.is_empty():
+			mc = design.module_centroid(owners[0])
+		elif not design.modules.is_empty():
+			mc = design.module_centroid(design.vertex_users(ids[0])[0]) if not design.vertex_users(ids[0]).is_empty() else Vector3.ZERO
+		normal = centre - mc
+	if normal.length() < 0.001:
+		normal = Vector3.UP
+	return {"ids": ids, "centre": centre, "normal": normal.normalized(), "count": count}
+
+
+## Add a shape. `axis` (0 up / 1 forward / 2 side) for round shapes. at_selection = false: at the middle of the view.
+## at_selection = true: the shape is placed on the selected part, pointing away from it, and its base vertices are WELDED to the
+## selected vertices (each selected vertex takes the nearest base vertex of the new shape, best match first).
+func add_shape(type: String, primitive: String, half_size: Vector3, segments: int, axis: int, at_selection: bool) -> void:
+	checkpoint()
+	var centre := camera_rig.pivot.snapped(Vector3.ONE * maxf(snap_step, 0.05))
+	var shape_basis := axis_basis(axis)
+	var part := {}
+	if at_selection:
+		part = selected_part()
+		if (part["ids"] as Array).is_empty():
+			at_selection = false
+			say("Nothing selected to attach to: added at the view centre.")
+		else:
+			var nrm: Vector3 = part["normal"]
+			shape_basis = Basis(Vector3.RIGHT, PI) if nrm.dot(Vector3.UP) < -0.9999 else Basis(Quaternion(Vector3.UP, nrm))   # the shape's up (Y) points away from the part
+			centre = (part["centre"] as Vector3) + nrm * half_size.y
+	var mi := design.add_module(type, primitive, centre, half_size, segments, new_module_preset, shape_basis)
+	var welded := 0
+	if at_selection:
+		var nrm2: Vector3 = part["normal"]
+		var base_plane: float = (part["centre"] as Vector3).dot(nrm2)
+		var new_ids := design.module_vertex_ids(mi)
+		var cand: Array[int] = []
+		for id in new_ids:                                         # the new shape's vertices that lie on its base side
+			if design.vertices[id].dot(nrm2) <= base_plane + half_size.y * 0.35:
+				cand.append(id)
+		var pairs: Array = []
+		var used := {}
+		var sel_ids: Array = part["ids"]
+		var options: Array = []
+		for sid in sel_ids:
+			for cid in cand:
+				options.append([design.vertices[sid].distance_squared_to(design.vertices[cid]), sid, cid])
+		options.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+		var taken_sel := {}
+		for o in options:
+			if taken_sel.has(o[1]) or used.has(o[2]):
+				continue
+			taken_sel[o[1]] = true
+			used[o[2]] = true
+			pairs.append([o[1], o[2]])
+		design.weld_pairs(pairs)
+		welded = pairs.size()
+		mi = design.modules.size() - 1
+	mode = Mode.OBJECT
+	sel_modules = [mi]
+	sel_verts.clear()
+	sel_edges.clear()
+	sel_faces.clear()
+	active_module = mi
+	on_design_changed()
+	BusEvent.builder_selection_changed.emit()
+	if at_selection:
+		say("Added %s %s on the selected part and linked %d vertices. G moves it, S scales it." % [type, primitive, welded])
+	else:
+		say("Added %s %s at the view centre. Press G to move it, S to scale." % [type, primitive])
+
+
 func delete_selection() -> void:
 	if not has_selection():
 		return
@@ -1725,7 +1834,7 @@ func new_ship(template: String = "starter") -> void:
 	if template == "starter":
 		design.add_module(ModuleCatalog.HULL, "box", Vector3.ZERO, Vector3(1.5, 1.0, 2.5))
 		design.add_module(ModuleCatalog.COMMANDER, "box", Vector3(0, 1.9, -0.5), Vector3(1.2, 0.95, 1.5))
-		design.add_module(ModuleCatalog.THRUSTER, "cylinder", Vector3(0, 0, 3.4), Vector3(0.7, 0.7, 0.9))
+		design.add_module(ModuleCatalog.THRUSTER, "cylinder", Vector3(0, 0, 3.4), Vector3(0.7, 0.9, 0.7), 12, "", axis_basis(1))   # round face looks along the exhaust (Z)
 	hidden_modules.clear()
 	clear_selection()
 	on_design_changed()

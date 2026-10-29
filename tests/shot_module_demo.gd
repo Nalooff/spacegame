@@ -27,9 +27,9 @@ func _ready() -> void:
 	ui._on_new_preset_selected(1)
 	await _snap("1_thruster_choose_type_and_preset")
 	ui._on_shape_button_pressed("cone")              # the SHAPE is the engine: a long nozzle
-	ui.new_size_x_spin.value = 0.45
-	ui.new_size_y_spin.value = 1.4
-	ui.new_size_z_spin.value = 0.45
+	ui.new_radius_spin.value = 0.45                  # base radius and height; it points forward, so the round base is the exhaust end
+	ui.new_height_spin.value = 2.8
+	ui.new_axis_picker.select(1)
 	await _snap("2_thruster_shape_and_size")
 	b.camera_rig.pivot = Vector3(0, 0, 3)
 	ui._on_add_module_pressed()
@@ -48,9 +48,9 @@ func _ready() -> void:
 	ui.new_preset_picker.select(1)                   # railgun
 	ui._on_new_preset_selected(1)
 	ui._on_shape_button_pressed("cylinder")
-	ui.new_size_x_spin.value = 0.12
-	ui.new_size_y_spin.value = 0.12
-	ui.new_size_z_spin.value = 1.6
+	ui.new_radius_spin.value = 0.12
+	ui.new_height_spin.value = 3.2
+	ui.new_axis_picker.select(1)
 	b.camera_rig.pivot = Vector3(2, 1.5, 0)
 	await _snap("6_weapon_choose")
 	ui._on_add_module_pressed()

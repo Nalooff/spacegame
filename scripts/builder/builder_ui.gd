@@ -46,6 +46,13 @@ extends Control
 @onready var new_type_label: Label = %NewTypeLabel
 @onready var new_type_help: Label = %NewTypeHelp
 @onready var new_segments_spin: SpinBox = %NewSegmentsSpin
+@onready var new_axis_picker: OptionButton = %NewAxisPicker
+@onready var new_axis_row: HBoxContainer = %NewAxisRow
+@onready var new_round_row: HBoxContainer = %NewRoundRow
+@onready var new_size_row: HBoxContainer = %NewSizeRow
+@onready var new_radius_spin: SpinBox = %NewRadiusSpin
+@onready var new_height_spin: SpinBox = %NewHeightSpin
+@onready var new_selection_warning: Label = %NewSelectionWarning
 @onready var new_size_x_spin: SpinBox = %NewSizeXSpin
 @onready var new_size_y_spin: SpinBox = %NewSizeYSpin
 @onready var new_size_z_spin: SpinBox = %NewSizeZSpin
@@ -112,6 +119,8 @@ var _preset_ids_for_new: Array = []
 
 
 func _ready() -> void:
+	for label_text in ["Up (Y)", "Forward (Z, the way the ship points)", "Side (X)"]:
+		new_axis_picker.add_item(label_text)
 	theme = BuilderTheme.make()
 	for t in ModuleCatalog.TYPES:
 		active_type_picker.add_item(t.capitalize())
@@ -293,6 +302,7 @@ func _refresh_tool_states() -> void:
 #  Reading the builder state into the widgets
 # =====================================================================
 func refresh_all() -> void:
+	_refresh_selection_warning()
 	_refreshing = true
 	var d := builder.design
 	if plan_view != null and plan_view.visible:
@@ -626,20 +636,49 @@ func _on_type_button_pressed(type: String) -> void:
 	# Pick that type's usual shape and size, the player can still change them.
 	_on_shape_button_pressed(ModuleCatalog.DEFAULT_PRIMITIVE[type])
 	var half: Vector3 = ModuleCatalog.DEFAULT_HALF_SIZE[type]
-	new_size_x_spin.value = half.x
-	new_size_y_spin.value = half.y
-	new_size_z_spin.value = half.z
+	new_size_x_spin.value = half.x * 2.0
+	new_size_y_spin.value = half.y * 2.0
+	new_size_z_spin.value = half.z * 2.0
+	var rd: Dictionary = ModuleCatalog.DEFAULT_ROUND.get(type, {"radius": 0.5, "height": 1.0, "axis": 0})
+	new_radius_spin.value = rd["radius"]
+	new_height_spin.value = rd["height"]
+	new_axis_picker.select(int(rd["axis"]))
 
 
 func _on_shape_button_pressed(prim: String) -> void:
 	_selected_shape = prim
 	(shape_grid.get_node("ShapeButton_" + prim) as Button).set_pressed_no_signal(true)
 	new_segments_spin.editable = Primitives.is_round(prim)       # "round detail" only matters for round shapes
+	# round shapes are described by a base radius and a height, the others by width / height / length
+	new_round_row.visible = Primitives.is_round(prim)
+	new_axis_row.visible = Primitives.is_round(prim) and prim != "sphere"
+	new_height_spin.get_parent().visible = prim != "sphere"
+	new_size_row.visible = not Primitives.is_round(prim)
+
+
+## The half-size the shape needs, from the fields that are shown.
+func _new_half_size() -> Vector3:
+	var r := new_radius_spin.value
+	var h := new_height_spin.value
+	match _selected_shape:
+		"cylinder", "cone": return Vector3(r, h * 0.5, r)
+		"dome": return Vector3(r, h, r)                         # a dome only reaches up from its base: its height is the full half-size
+		"sphere": return Vector3(r, r, r)
+	return Vector3(new_size_x_spin.value, new_size_y_spin.value, new_size_z_spin.value) * 0.5
 
 
 func _on_add_module_pressed() -> void:
-	var half := Vector3(new_size_x_spin.value, new_size_y_spin.value, new_size_z_spin.value)
-	builder.add_module(builder.new_module_type, _selected_shape, half, int(new_segments_spin.value))
+	builder.add_shape(builder.new_module_type, _selected_shape, _new_half_size(), int(new_segments_spin.value), new_axis_picker.selected, false)
+
+
+func _on_add_module_on_selection_pressed() -> void:
+	builder.add_shape(builder.new_module_type, _selected_shape, _new_half_size(), int(new_segments_spin.value), new_axis_picker.selected, true)
+
+
+## Warns when the shape would be welded to several selected parts at once.
+func _refresh_selection_warning() -> void:
+	var n: int = builder.sel_faces.size() + builder.sel_edges.size() + builder.sel_verts.size()
+	new_selection_warning.text = "%d parts are selected: \"Add on the selected part\" will place the shape on all of them and try to link them in the best way it can. The result may be a strange form." % n if n > 1 else ""
 
 
 # =====================================================================

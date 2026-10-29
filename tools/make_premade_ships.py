@@ -31,7 +31,7 @@ def dome(n):
     return v, f
 
 S = 2.6          # metres per old unit: modules must be big enough to walk in (see ModuleCatalog.MIN_EXTENT)
-DEFAULT_PRESET = {"thruster": "chemical", "turret": "light", "turret_barrel": "cannon", "commander": "bridge", "radar": "electronic", "antenna": "whip"}
+DEFAULT_PRESET = {"thruster": "chemical", "turret": "light", "turret_barrel": "cannon", "commander": "bridge", "radar": "electronic", "antenna": "whip", "engine_room": "control"}
 KIND = {"cannon": "projectile", "railgun": "projectile", "beam": "beam", "electronic": "electronic", "thermal": "thermal"}
 
 class B:
@@ -67,6 +67,24 @@ class B:
     def pyr(s, typ, c, h, **k): s.prim(typ, PYR, PYR_FACES, c, h, **k)
     def cyl(s, typ, c, h, **k): v, f = cylinder(12); s.prim(typ, v, f, c, h, **k)
     def dome(s, typ, c, h, **k): v, f = dome(12); s.prim(typ, v, f, c, h, **k)
+    def nozzle(s, c, r, d, half_len=None, **k):
+        """A thruster cylinder whose AXIS lies along the thrust direction `d` (the round face looks along the exhaust, not up).
+        c in OLD units, r = radius and half_len = half length in OLD units."""
+        half_len = r if half_len is None else half_len
+        v, f = cylinder(12)
+        dx, dy, dz = d
+        n = (dx*dx + dy*dy + dz*dz) ** 0.5
+        dx, dy, dz = dx/n, dy/n, dz/n
+        # an orthonormal basis (u, w) perpendicular to d
+        ref = (0.0, 1.0, 0.0) if abs(dy) < 0.9 else (1.0, 0.0, 0.0)
+        ux, uy, uz = ref[1]*dz - ref[2]*dy, ref[2]*dx - ref[0]*dz, ref[0]*dy - ref[1]*dx
+        un = (ux*ux + uy*uy + uz*uz) ** 0.5
+        ux, uy, uz = ux/un, uy/un, uz/un
+        wx, wy, wz = dy*uz - dz*uy, dz*ux - dx*uz, dx*uy - dy*ux
+        pts = []
+        for a, b, g in v:          # a, g = ring position (x, z), b = along the axis (-1..1)
+            pts.append((a*r*ux + g*r*wx + b*half_len*dx, a*r*uy + g*r*wy + b*half_len*dy, a*r*uz + g*r*wz + b*half_len*dz))
+        s._add("thruster", [(c[0]*S + p[0]*S, c[1]*S + p[1]*S, c[2]*S + p[2]*S) for p in pts], f, d=tuple(d), **k)
     def cyl_z(s, typ, c, h, **k):
         v, f = cylinder(12); s.prim(typ, [(a, d, b) for a, b, d in v], f, c, h, **k)   # cylinder along Z (barrels)
     def turret(s, c, h=(0.8, 1.25, 0.8), flip=False, yaw=(-180.0, 180.0), pitch=(-10.0, 85.0), speed=None, preset="light", blen=1.8, brad=0.25, barrel="cannon", n_barrels=1):
@@ -109,6 +127,10 @@ def cmd(b, c, h, crew=2, preset="bridge"):
     vol = 8 * h[0] * h[1] * h[2]
     b.boxm("commander", c, h, preset=preset, stats={"seat_volume": round(vol / crew * 0.98, 3)})
 
+def eng(b, c, h, preset="control"):
+    """Engine room box in metres (>= 1.9 m each way). It controls every thruster of the ship."""
+    b.boxm("engine_room", c, h, preset=preset)
+
 def dart():
     b = B("Dart")
     b.box("hull", (0,0,0.2), (0.6,0.4,1.3))
@@ -116,8 +138,8 @@ def dart():
     z = -1.1
     b.pyr_pts("armor", [(x*S, y*S, zz*S) for x, y, zz in [(-0.6,-0.4,z),(0.6,-0.4,z),(0.6,0.4,z),(-0.6,0.4,z),(0,0,-2.6)]])
     b.box("armor", (-1.2,0,-0.9), (0.6,0.08,0.7)); b.box("armor", (1.2,0,-0.9), (0.6,0.08,0.7))   # wings sit ahead of the side thrusters (their exhaust cone must stay clear)
-    b.cyl("thruster", (-0.4,0,1.65), (0.22,0.22,0.22), d=(0,0,-1))
-    b.cyl("thruster", (0.4,0,1.65), (0.22,0.22,0.22), d=(0,0,-1))
+    b.nozzle((-0.4,0,1.65), 0.22, (0,0,-1))
+    b.nozzle((0.4,0,1.65), 0.22, (0,0,-1))
     b.box("thruster", (-1.75,0,-1.72), (0.12,0.12,0.12), d=(0,0,1))   # braking thrusters sit on the wing tips: exhaust goes forward into free space
     b.box("thruster", (1.75,0,-1.72), (0.12,0.12,0.12), d=(0,0,1))
     for sx in (-1,1):
@@ -126,6 +148,7 @@ def dart():
     b.box("thruster", (0,-0.5,0.9), (0.12,0.1,0.12), d=(0,1,0))
     b.turret((-0.95,0.08,-0.9)); b.turret((0.95,0.08,-0.9))
     b.cyl("antenna", (0.0,0.4+0.35,0.45), (0.1,0.35,0.1))     # communications antenna on the hull
+    eng(b, (0, -0.4*S - 1.0, -0.3*S), (1.0, 1.0, 1.2))          # engine room under the hull
     b.save()
 
 def brick():
@@ -136,7 +159,7 @@ def brick():
     cmd(b, (0, (0.8+0.24)*S + 1.0, -0.6*S), (1.3, 1.0, 1.6), crew=3)
     for sx in (-1,1):
         for sy in (-1,1):
-            b.cyl("thruster", (sx*0.7,sy*0.5,2.3), (0.3,0.3,0.3), d=(0,0,-1))
+            b.nozzle((sx*0.7,sy*0.5,2.3), 0.3, (0,0,-1))
     for sx in (-1,1):
         b.box("thruster", (sx*1.25,0,-1.6), (0.15,0.15,0.15), d=(0,0,1))
         b.box("thruster", (sx*1.25,0,1.6), (0.15,0.15,0.15), d=(-sx,0,0))
@@ -148,6 +171,7 @@ def brick():
     b.turret((0.6,1.04,1.2), (1.0,1.4,1.0), preset="heavy", n_barrels=2, brad=0.2)
     b.turret((0,-0.8,-0.5), (1.0,1.4,1.0), flip=True, preset="heavy", barrel="railgun", brad=0.22)
     b.cyl("antenna", (0.0,1.04+0.35,0.3), (0.1,0.35,0.1), preset="dish")
+    eng(b, (1.1*S + 1.0, 0, 0), (1.0, 1.0, 1.3))                # engine room on the side of the hull
     b.save()
 
 def scrap():
@@ -159,8 +183,8 @@ def scrap():
     b.box("armor", (1.15,-0.1,0.3), (0.35,0.3,0.8))
     def unit(v):
         l = math.sqrt(sum(c*c for c in v)); return tuple(c/l for c in v)
-    b.cyl("thruster", (-0.5,0.3,1.6), (0.2,0.2,0.2), d=unit((0.2,0.1,-1)))
-    b.cyl("thruster", (0.7,-0.4,1.6), (0.2,0.2,0.2), d=unit((-0.1,0.2,-1)))
+    b.nozzle((-0.5,0.3,1.6), 0.2, unit((0.2,0.1,-1)))
+    b.nozzle((0.7,-0.4,1.6), 0.2, unit((-0.1,0.2,-1)))
     b.box("thruster", (1.6,0.3,0.9), (0.15,0.15,0.15), d=unit((-1,-0.3,0.2)))
     b.box("thruster", (-0.9,0.0,-0.9), (0.15,0.15,0.15), d=unit((0.5,0.5,0.8)))
     b.box("thruster", (0.3,-0.6,-0.6), (0.15,0.1,0.15), d=unit((0,1,0.4)))
@@ -168,6 +192,7 @@ def scrap():
     b.box("radar", (0.3, 0.5+0.15, 0.2), (0.25, 0.15, 0.25), preset="thermal")       # thermal radar: sees the heat of thrusters
     b.turret((0.5,0.5,-0.8))
     b.cyl("antenna", (0.55,0.5+0.35,0.9), (0.1,0.35,0.1))
+    eng(b, (-0.8*S - 1.0, 0, 1.5), (1.0, 1.0, 1.0), preset="automated")
     b.save()
 
 def twin():
@@ -178,13 +203,14 @@ def twin():
     b.box("armor", (0, 0, 0), (0.9, 0.15, 0.5))                                   # the bridge (the weak link)
     for sx in (-1, 1):
         cmd(b, (sx*3.7, 0.4*S + 0.95, -0.3*S), (0.95, 0.95, 1.2), crew=2)
-        b.cyl("thruster", (sx*1.6, 0, 1.42), (0.22, 0.22, 0.22), d=(0, 0, -1))
+        b.nozzle((sx*1.6, 0, 1.42), 0.22, (0, 0, -1))
         b.box("thruster", (sx*1.6, 0, -1.32), (0.12, 0.12, 0.12), d=(0, 0, 1))
         b.box("thruster", (sx*2.42, 0, 0.5), (0.12, 0.12, 0.12), d=(-sx, 0, 0))
         b.box("thruster", (sx*1.6, -0.5, 0.2), (0.12, 0.12, 0.12), d=(0, 1, 0))
         b.box("thruster", (sx*2.3, 0.5, 0.2), (0.12, 0.1, 0.12), d=(0, -1, 0))
         b.turret((sx*1.6, 0.4, 0.7))
         b.cyl("antenna", (sx*1.6, 0.4+0.35, -0.6), (0.1, 0.35, 0.1))
+        eng(b, (sx*1.6*S, -0.4*S - 1.0, -1.5), (1.0, 1.0, 1.0))
     # each bridge controls the turret on ITS hull (a player only controls what their commander is linked to)
     cmds = [i for i, m in enumerate(b.m) if m["type"] == "commander"]
     guns = [i for i, m in enumerate(b.m) if m["type"] == "turret"]

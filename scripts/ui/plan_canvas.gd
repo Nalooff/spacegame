@@ -31,14 +31,15 @@ const PICK_PX := 12.0
 const MIN_LAYER_HEIGHT := 1.0     ## metres: a module thinner than this does not make a deck of its own
 const MIN_OVERLAP_AREA := 0.08    ## m2 of shared footprint that forces two modules onto different decks ...
 const MIN_OVERLAP_SHARE := 0.2    ## ... and at least this share of the smaller one (modules that only touch stay on one deck)
-const MAX_DECKS := 12
+const MAX_DECKS := 48
+const DECK_GAP := 1.0                  ## metres: modules whose middle heights differ by more than this are on different floors (walkable rooms are >= 1.9 m)
 ## Two "papers": white lines on dark blue (blueprint) or dark lines on white. Line art only: the inside of the ship has the
 ## colour of the paper, nothing is filled black (except a DEAD room, which is blacked out on purpose).
 const DARK_PAPER := Color(0.07, 0.10, 0.15)
 const DARK_INK := Color(0.93, 0.96, 1.0)
 const LIGHT_PAPER := Color(0.97, 0.97, 0.95)
 const LIGHT_INK := Color(0.07, 0.10, 0.18)
-const ROOM_CODES := {"commander": "CMD", "turret": "GUN", "thruster": "ENG", "radar": "RDR", "antenna": "ANT"}
+const ROOM_CODES := {"commander": "CMD", "turret": "GUN", "thruster": "ENG", "radar": "RDR", "antenna": "ANT", "engine_room": "ENR"}
 
 var design: ShipDesign
 var plan: ShipPlan
@@ -179,16 +180,38 @@ func _compute_layers() -> void:
 		if hi - lo >= MIN_LAYER_HEIGHT and (design.is_room(mi) or ModuleCatalog.CORRIDOR_TYPES.has(t)):
 			solid.append(mi)
 	solid.sort_custom(func(a: int, b: int) -> bool: return design.module_centroid(a).y < design.module_centroid(b).y)
-	var done: Array[int] = []
-	var top := 0
+	# Floors from heights: sorted by height, a gap of more than DECK_GAP between neighbours starts a new floor. Stacked modules
+	# (footprints overlapping) are also always on different decks. The deck of a module is the higher of the two rules.
+	var floor_of := {}
+	var fl := 0
+	var prev_y := -INF
 	for mi in solid:
-		var l := 0
+		var cy := design.module_centroid(mi).y
+		if prev_y != -INF and cy - prev_y > DECK_GAP:
+			fl += 1
+		floor_of[mi] = fl
+		prev_y = cy
+	var done: Array[int] = []
+	for mi in solid:
+		var l: int = floor_of[mi]
 		for other in done:
 			if _overlaps(mi, other):
 				l = maxi(l, _layer[other] + 1)
 		_layer[mi] = mini(l, MAX_DECKS - 1)
-		top = maxi(top, _layer[mi])
 		done.append(mi)
+	# no empty decks: renumber the used ones 0..k-1
+	var used := {}
+	for mi in solid:
+		used[_layer[mi]] = true
+	var keys := used.keys()
+	keys.sort()
+	var deck_map := {}
+	for i in keys.size():
+		deck_map[keys[i]] = i
+	var top := 0
+	for mi in solid:
+		_layer[mi] = deck_map[_layer[mi]]
+		top = maxi(top, _layer[mi])
 	for mi in n:       # thin plates, barrels...: the deck of the solid module they overlap most (else the nearest)
 		if solid.has(mi) or (_foot[mi] as PackedVector2Array).size() < 3:
 			continue
@@ -845,6 +868,11 @@ func _room_icon(type: String, c: Vector2, col: Color) -> void:
 		ModuleCatalog.RADAR:                          # dish and echo
 			draw_arc(c + Vector2(0, 3), 6.0, PI, TAU, 10, col, 1.4)
 			draw_line(c + Vector2(0, 3), c + Vector2(5, -5), col, 1.2)
+		ModuleCatalog.ENGINE_ROOM:                    # a gear
+			draw_arc(c, 4.0, 0.0, TAU, 12, col, 1.4)
+			for k in 6:
+				var a := TAU * k / 6.0
+				draw_line(c + Vector2(cos(a), sin(a)) * 4.0, c + Vector2(cos(a), sin(a)) * 7.0, col, 2.0)
 		ModuleCatalog.ANTENNA:                        # waves
 			draw_circle(c, 1.8, col)
 			draw_arc(c, 5.0, -0.9, 0.9, 6, col, 1.2)

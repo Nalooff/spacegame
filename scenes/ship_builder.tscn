@@ -578,6 +578,16 @@ size_flags_horizontal = 3
 tooltip_text = "Antenna"
 expand_icon = true
 
+[node name="TypeButton_engine_room" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid"]
+layout_mode = 2
+text = ""
+toggle_mode = true
+button_group = SubResource("ButtonGroup_types")
+custom_minimum_size = Vector2(0, 44)
+size_flags_horizontal = 3
+tooltip_text = "Engine_room"
+expand_icon = true
+
 [node name="NewTypeLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -715,12 +725,67 @@ value = 12
 size_flags_horizontal = 3
 tooltip_text = "Number of sides of cylinders, cones, spheres and domes"
 
+[node name="NewAxisRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="NewAxisLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewAxisRow"]
+layout_mode = 2
+text = "Points along"
+
+[node name="NewAxisPicker" type="OptionButton" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewAxisRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Which way a cylinder, cone or dome points: up, forward (the way the ship points) or sideways. A thruster's round face looks along its exhaust"
+
 [node name="NewSizeHeading" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection"]
 layout_mode = 2
-text = "SIZE  (half-size in metres, from the centre)"
+text = "SIZE  (metres)"
 modulate = Color(0.62, 0.8, 1, 1)
 
+[node name="NewRoundRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="NewRadiusCell" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewRoundRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewRadiusLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewRoundRow/NewRadiusCell"]
+layout_mode = 2
+text = "Base radius"
+modulate = Color(1, 1, 1, 0.6)
+
+[node name="NewRadiusSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewRoundRow/NewRadiusCell"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.05
+max_value = 200
+step = 0.05
+value = 0.5
+size_flags_horizontal = 3
+
+[node name="NewHeightCell" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewRoundRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewHeightLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewRoundRow/NewHeightCell"]
+layout_mode = 2
+text = "Height"
+modulate = Color(1, 1, 1, 0.6)
+
+[node name="NewHeightSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewRoundRow/NewHeightCell"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.05
+max_value = 200
+step = 0.05
+value = 1.0
+size_flags_horizontal = 3
+
 [node name="NewSizeRow" type="HBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection"]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="NewSizeXCell" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewSizeRow"]
@@ -729,16 +794,16 @@ size_flags_horizontal = 3
 
 [node name="NewSizeXLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewSizeRow/NewSizeXCell"]
 layout_mode = 2
-text = "X"
+text = "Width X"
 modulate = Color(1, 1, 1, 0.6)
 
 [node name="NewSizeXSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewSizeRow/NewSizeXCell"]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.05
-max_value = 10
+max_value = 200
 step = 0.05
-value = 0.5
+value = 1.0
 size_flags_horizontal = 3
 
 [node name="NewSizeYCell" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewSizeRow"]
@@ -747,16 +812,16 @@ size_flags_horizontal = 3
 
 [node name="NewSizeYLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewSizeRow/NewSizeYCell"]
 layout_mode = 2
-text = "Y"
+text = "Height Y"
 modulate = Color(1, 1, 1, 0.6)
 
 [node name="NewSizeYSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewSizeRow/NewSizeYCell"]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.05
-max_value = 10
+max_value = 200
 step = 0.05
-value = 0.5
+value = 1.0
 size_flags_horizontal = 3
 
 [node name="NewSizeZCell" type="VBoxContainer" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewSizeRow"]
@@ -765,24 +830,38 @@ size_flags_horizontal = 3
 
 [node name="NewSizeZLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewSizeRow/NewSizeZCell"]
 layout_mode = 2
-text = "Z"
+text = "Length Z"
 modulate = Color(1, 1, 1, 0.6)
 
 [node name="NewSizeZSpin" type="SpinBox" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/NewSizeRow/NewSizeZCell"]
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 0.05
-max_value = 10
+max_value = 200
 step = 0.05
-value = 0.5
+value = 1.0
 size_flags_horizontal = 3
 
 [node name="AddModuleButton" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Add module at the view centre"
-custom_minimum_size = Vector2(0, 44)
+text = "Add at the view centre"
+custom_minimum_size = Vector2(0, 40)
 tooltip_text = "The new module appears where the camera looks. Then press G to move it."
+
+[node name="AddModuleOnSelectionButton" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add on the selected part (linked)"
+custom_minimum_size = Vector2(0, 40)
+tooltip_text = "Select faces (or edges / vertices) first: the shape is placed on them, pointing away, and its base is welded to the selected vertices"
+
+[node name="NewSelectionWarning" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+modulate = Color(1, 0.75, 0.3, 1)
 
 [node name="AddTip" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection"]
 layout_mode = 2
@@ -1380,6 +1459,7 @@ unique_name_in_owner = true
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid/TypeButton_commander" to="UI/BuilderUI" method="_on_type_button_pressed" binds= ["commander"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid/TypeButton_radar" to="UI/BuilderUI" method="_on_type_button_pressed" binds= ["radar"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid/TypeButton_antenna" to="UI/BuilderUI" method="_on_type_button_pressed" binds= ["antenna"]]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid/TypeButton_engine_room" to="UI/BuilderUI" method="_on_type_button_pressed" binds= ["engine_room"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/ShapeGrid/ShapeButton_box" to="UI/BuilderUI" method="_on_shape_button_pressed" binds= ["box"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/ShapeGrid/ShapeButton_wedge" to="UI/BuilderUI" method="_on_shape_button_pressed" binds= ["wedge"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/ShapeGrid/ShapeButton_pyramid" to="UI/BuilderUI" method="_on_shape_button_pressed" binds= ["pyramid"]]
@@ -1389,6 +1469,7 @@ unique_name_in_owner = true
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/ShapeGrid/ShapeButton_sphere" to="UI/BuilderUI" method="_on_shape_button_pressed" binds= ["sphere"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/ShapeGrid/ShapeButton_dome" to="UI/BuilderUI" method="_on_shape_button_pressed" binds= ["dome"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/AddModuleButton" to="UI/BuilderUI" method="_on_add_module_pressed"]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/AddModuleOnSelectionButton" to="UI/BuilderUI" method="_on_add_module_on_selection_pressed"]
 [connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Properties/PropertiesList/CenterSection/CenterRow/CenterXSpin" to="UI/BuilderUI" method="_on_center_changed"]
 [connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Properties/PropertiesList/CenterSection/CenterRow/CenterYSpin" to="UI/BuilderUI" method="_on_center_changed"]
 [connection signal="value_changed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Properties/PropertiesList/CenterSection/CenterRow/CenterZSpin" to="UI/BuilderUI" method="_on_center_changed"]

@@ -41,11 +41,12 @@ var gyro_scale: float = 1.0    # gyroscope torque vs. recommended
 #  Adding / removing modules
 # =====================================================================
 ## Adds a primitive ("box", "cylinder", ...) scaled by `half_size`, centred on `center`.
-func add_module(type: String, primitive: String, center: Vector3, half_size: Vector3, segments: int = 12, preset: String = "") -> int:
+## `basis` turns the shape first (a cylinder is made along Y: Basis(RIGHT, 90 deg) lays it along Z).
+func add_module(type: String, primitive: String, center: Vector3, half_size: Vector3, segments: int = 12, preset: String = "", basis: Basis = Basis.IDENTITY) -> int:
 	var p: Dictionary = Primitives.make(primitive, segments)
 	var local_verts: Array[Vector3] = []
 	for v in p["verts"]:
-		local_verts.append(center + (v as Vector3) * half_size)
+		local_verts.append(center + basis * ((v as Vector3) * half_size))
 	return add_module_from_mesh(type, local_verts, p["faces"], preset)
 
 
@@ -482,6 +483,16 @@ func merge_vertices(ids: Array[int]) -> int:
 			_replace_vertex_id(id, target)
 	prune_vertices()
 	return target
+
+
+## Weld pairs [keep_id, move_id]: every `move_id` is placed on its `keep_id`'s point and replaced by it (one prune at the end,
+## so the ids stay valid while the pairs are processed).
+func weld_pairs(pairs: Array) -> void:
+	for pr in pairs:
+		vertices[int(pr[1])] = vertices[int(pr[0])]
+		_replace_vertex_id(int(pr[1]), int(pr[0]))
+	prune_vertices()
+	invalidate()
 
 
 ## Merge vertex `b` into `a` (both modules now share one point).

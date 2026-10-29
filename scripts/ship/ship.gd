@@ -210,7 +210,7 @@ func _passive_watts() -> float:
 	var w := 0.0
 	for mi in design.modules.size():
 		var t: String = design.modules[mi]["type"]
-		if (t == ModuleCatalog.COMMANDER or t == ModuleCatalog.RADAR or t == ModuleCatalog.ANTENNA) and is_working(mi):
+		if (t == ModuleCatalog.COMMANDER or t == ModuleCatalog.RADAR or t == ModuleCatalog.ANTENNA or t == ModuleCatalog.ENGINE_ROOM) and is_working(mi):
 			w += design.stat(mi, "elec_w_per_m3") * design.module_volume(mi)
 	return w
 
@@ -1081,6 +1081,11 @@ func _authority_step(dt: float) -> void:
 ## ORDER DELAY. Without communications the pilot's thruster orders must be WALKED to each engine room: thruster i obeys
 ## the command the pilot gave order_delay(i) seconds ago (PlanState.order_delay). With communications: no delay.
 func _delayed_throttles(thr: PackedFloat32Array, dt: float) -> PackedFloat32Array:
+	if plan_state != null and plan_state.engines_cut():
+		_cmd_hist.clear()
+		var none := thr.duplicate()
+		none.fill(0.0)
+		return none               # the engine rooms are gone: no thruster gets its orders
 	if plan_state == null or plan_state.comms_ok or _thr_module.size() != thr.size():
 		_cmd_hist.clear()
 		return thr

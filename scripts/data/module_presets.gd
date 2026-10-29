@@ -50,6 +50,9 @@ const DEFS := {
 		{"key": "strength", "label": "Signal strength per metre of size (fixed)", "unit": "", "derived": true, "kind": "external"},
 		{"key": "elec_w_per_m3", "label": "Electricity", "unit": "W per m3", "derived": true},
 	],
+	ModuleCatalog.ENGINE_ROOM: [
+		{"key": "elec_w_per_m3", "label": "Controls / crew life support", "unit": "W per m3", "min": 50.0, "max": 3000.0, "main": true},
+	],
 	ModuleCatalog.RADAR: [
 		{"key": "range_per_m", "label": "Range per metre of size", "unit": "m", "min": 300.0, "max": 6000.0, "main": true},
 		{"key": "precision", "label": "Precision", "unit": "0..1", "derived": true},
@@ -96,6 +99,10 @@ const PRESETS := {
 			"help": "A comms ROOM: it needs a corridor. Its signal is adjustable: turn it down to use less electricity and show less on electronic radar."},
 		"long_range": {"label": "Long range transmitter", "kind": "room", "stats": {"strength": 6.0, "elec_w_per_m3": 4200.0},
 			"help": "A room with a strong signal. Very visible on electronic radar."},
+	},
+	ModuleCatalog.ENGINE_ROOM: {
+		"control": {"label": "Engine control room", "stats": {"elec_w_per_m3": 350.0}, "help": "Controls every thruster of the ship."},
+		"automated": {"label": "Automated engine bay", "stats": {"elec_w_per_m3": 900.0}, "help": "Computers do the work: more electricity per m3."},
 	},
 	ModuleCatalog.RADAR: {
 		"electronic": {"label": "Electronic radar", "kind": "electronic", "stats": {"range_per_m": 2200.0, "precision": 0.65, "elec_w_per_m3": 2500.0},
