@@ -54,6 +54,28 @@ theme_override_constants/margin_right = 8
 layout_mode = 2
 custom_minimum_size = Vector2(300, 0)
 
+[node name="ViewTitleLabel" type="Label" parent="MapPanel/MapRow/OrdersMargin/OrdersColumn"]
+layout_mode = 2
+text = "VIEW"
+
+[node name="ViewRow" type="HBoxContainer" parent="MapPanel/MapRow/OrdersMargin/OrdersColumn"]
+layout_mode = 2
+
+[node name="View2DButton" type="Button" parent="MapPanel/MapRow/OrdersMargin/OrdersColumn/ViewRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "2D  (from above)"
+toggle_mode = true
+button_pressed = true
+size_flags_horizontal = 3
+
+[node name="View3DButton" type="Button" parent="MapPanel/MapRow/OrdersMargin/OrdersColumn/ViewRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "3D  (tilted, shows height)"
+toggle_mode = true
+size_flags_horizontal = 3
+
 [node name="OrdersTitleLabel" type="Label" parent="MapPanel/MapRow/OrdersMargin/OrdersColumn"]
 layout_mode = 2
 text = "ORDERS"
@@ -61,14 +83,14 @@ text = "ORDERS"
 [node name="GoToButton" type="Button" parent="MapPanel/MapRow/OrdersMargin/OrdersColumn"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "GO TO  (stop there)"
+text = "GO TO  (stop there, or follow a ship)"
 toggle_mode = true
 button_pressed = true
 
 [node name="DriveButton" type="Button" parent="MapPanel/MapRow/OrdersMargin/OrdersColumn"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "DRIVE  (never stops)"
+text = "DRIVE  (an arrow, never stops)"
 toggle_mode = true
 
 [node name="ThrustRow" type="HBoxContainer" parent="MapPanel/MapRow/OrdersMargin/OrdersColumn"]
@@ -150,7 +172,7 @@ autowrap_mode = 3
 
 [node name="MapHelpLabel" type="Label" parent="MapPanel/MapRow/OrdersMargin/OrdersColumn"]
 layout_mode = 2
-text = "Click: set a waypoint (and go).  Click an enemy: lock it, and in DRIVE mode ram it.\nRight-drag: pan.  Wheel: zoom.  Right ruler: click to set the height."
+text = "GO TO: click a place to fly there and stop, or click a SHIP to follow it.\nDRIVE: click sets an ARROW (the direction to fly, forever); click an enemy and the arrow follows it, aimed at where it will be.\n2D: right-drag pans, right ruler sets the height.\n3D: right-drag turns the view, middle-drag pans, Ctrl+wheel sets the height. Wheel: zoom."
 autowrap_mode = 3
 modulate = Color(1, 1, 1, 0.6)
 

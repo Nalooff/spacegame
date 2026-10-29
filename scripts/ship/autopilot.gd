@@ -41,6 +41,8 @@ var on_target: bool = false
 var throttle: float = 1.0               ## DRIVE: fraction of the best-axis acceleration that is asked for (0..1)
 var track_ship: Ship = null             ## DRIVE: follow this ship instead of the fixed `target` (ramming a moving enemy)
 var face_turrets: bool = false          ## attitude follows the turret-facing lock (see ShipTurrets.best_facing_axis)
+var heading: Vector3 = Vector3.ZERO     ## DRIVE: a fixed world DIRECTION (unit vector) to fly along, forever. ZERO = fly at `target` / `track_ship`
+var follow_distance: float = 40.0       ## GOTO on a ship: it holds this far from it, matching its velocity
 var player_order: bool = false          ## true: the player gave this order; the commander AI must not replace it
 
 # outputs (body frame), read by Ship
@@ -74,6 +76,7 @@ func configure(s: Ship) -> void:
 
 
 func go_to(p: Vector3, by_player: bool = false) -> void:
+	heading = Vector3.ZERO
 	target = p
 	mode = Mode.GOTO
 	player_order = by_player
@@ -83,8 +86,30 @@ func go_to(p: Vector3, by_player: bool = false) -> void:
 	on_target = false
 
 
+## GO TO a moving ship: fly to it and hold `follow_distance` from it, matching its velocity (it is the frame of reference).
+func go_follow(other: Ship, by_player: bool = true) -> void:
+	go_to(other.global_position, by_player)
+	track_ship = other
+
+
+## DRIVE along a DIRECTION (an arrow, not a point): push that way with thrust `thr` 0..1, forever. Sideways drift is cancelled.
+func drive_heading(dir: Vector3, thr: float, by_player: bool = true) -> void:
+	if dir.length_squared() < 1e-8:
+		return
+	heading = dir.normalized()
+	track_ship = null
+	target = ship.global_position + heading * 1000.0
+	throttle = clampf(thr, 0.0, 1.0)
+	mode = Mode.DRIVE
+	player_order = by_player
+	_arrived_sent = true
+	on_target = false
+
+
 ## DRIVE towards `p` (or keep driving at `follow`, whose position is tracked) with thrust `thr` 0..1. Never stops by itself.
+## Chasing a ship aims at its INTERCEPT point (where it will be when we get there), not where it is now.
 func drive_to(p: Vector3, thr: float, follow: Ship = null, by_player: bool = true) -> void:
+	heading = Vector3.ZERO
 	target = p
 	track_ship = follow
 	throttle = clampf(thr, 0.0, 1.0)
@@ -92,6 +117,38 @@ func drive_to(p: Vector3, thr: float, follow: Ship = null, by_player: bool = tru
 	player_order = by_player
 	_arrived_sent = true       # DRIVE never reports "arrived"
 	on_target = false
+
+
+## Where a target moving at `tvel` from `tpos` will be when this ship gets there. The ship accelerates at `accel` m/s2 from
+## its own velocity `own_vel`; a few rounds of "time to cover the distance, then where is the target by then" settle it.
+static func intercept_point(from: Vector3, own_vel: Vector3, accel: float, tpos: Vector3, tvel: Vector3) -> Vector3:
+	var aim := tpos
+	for _i in 6:
+		var to := aim - from
+		var d := to.length()
+		if d < 0.01:
+			return tpos
+		var v0 := maxf(own_vel.dot(to / d), 0.0)
+		var t := d / maxf(v0, 1.0)
+		if accel > 0.001:
+			t = (-v0 + sqrt(v0 * v0 + 2.0 * accel * d)) / accel
+		aim = tpos + tvel * minf(t, 120.0)
+	return aim
+
+
+## The point the order really steers at: the intercept point of a tracked ship, the fixed target otherwise.
+func aim_point() -> Vector3:
+	if track_ship != null and is_instance_valid(track_ship) and track_ship.alive and ship != null:
+		return intercept_point(ship.global_position, ship.linear_velocity, _a_eff, track_ship.global_position, track_ship.linear_velocity)
+	return current_target()
+
+
+## The world direction DRIVE pushes along (unit vector).
+func drive_direction() -> Vector3:
+	if heading != Vector3.ZERO and track_ship == null:
+		return heading
+	var to := aim_point() - ship.global_position
+	return to.normalized() if to.length() > 1e-6 else ship.global_transform.basis * ship.alloc.u_best
 
 
 ## The point the ship is currently heading for (follows `track_ship`).
@@ -113,6 +170,7 @@ func brake() -> void:
 
 
 func cancel() -> void:
+	heading = Vector3.ZERO
 	mode = Mode.OFF
 	player_order = false
 	track_ship = null
@@ -169,12 +227,23 @@ func update(dt: float) -> void:
 		return
 	var s := ship
 	var b := s.global_transform.basis
+	var tvel := Vector3.ZERO           # a tracked ship is the frame of reference: we steer relative to it
+	if track_ship != null:
+		if is_instance_valid(track_ship) and track_ship.alive:
+			target = track_ship.global_position
+			tvel = track_ship.linear_velocity
+		else:
+			track_ship = null          # it is gone: carry on to where it was
 	var err := target - s.global_position
 	var d := err.length()
+	if track_ship != null and d > 1e-6:
+		err -= err / d * minf(d, follow_distance)       # hold `follow_distance` short of it
+		d = err.length()
 	distance = d
-	var speed := s.linear_velocity.length()
+	var v_rel := s.linear_velocity - tvel
+	var speed := v_rel.length()
 	var v_des := err / d * _desired_speed(d, speed) if d > 1e-9 else Vector3.ZERO
-	var a_cmd := (kv * (v_des - s.linear_velocity)).limit_length(_a_eff)
+	var a_cmd := (kv * (v_des - v_rel)).limit_length(_a_eff)
 	var a_mag := a_cmd.length()
 	var big_push := a_mag > 0.8 * _arcs_eff and s.alloc.f_best > 0.0
 	if big_push:
@@ -202,7 +271,7 @@ func update(dt: float) -> void:
 		phase = "FINE-RCS"
 	elif not fired:
 		phase = "TURN"
-	elif speed > 1e-3 and a_cmd.dot(s.linear_velocity) < 0.0:
+	elif speed > 1e-3 and a_cmd.dot(v_rel) < 0.0:
 		phase = "BRAKE"
 	elif d > d_fine and speed >= 0.98 * _desired_speed(d, speed):
 		phase = "CRUISE"
@@ -243,7 +312,7 @@ func _update_drive(dt: float) -> void:
 	var err := current_target() - s.global_position
 	var d := err.length()
 	distance = d
-	var dir := err / d if d > 1e-6 else b * s.alloc.u_best
+	var dir := drive_direction()
 	var v := s.linear_velocity
 	var lateral := v - dir * v.dot(dir)
 	# push along the line to the target, but lean against sideways drift so the ship really goes THERE

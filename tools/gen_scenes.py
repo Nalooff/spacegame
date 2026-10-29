@@ -89,8 +89,10 @@ def hud():
 # =============================================================== tactical map (Nebulous-style orders)
 def tactical_map():
     canvas = N("MapCanvas", "Control", {"layout_mode": 2, "size_flags_horizontal": 3, "size_flags_vertical": 3, "clip_contents": "true", "focus_mode": 2}, unique=True)
-    go_b = button("GO TO  (stop there)", "GoToButton", unique=True, toggle_mode="true", button_pressed="true")
-    drive_b = button("DRIVE  (never stops)", "DriveButton", unique=True, toggle_mode="true")
+    go_b = button("GO TO  (stop there, or follow a ship)", "GoToButton", unique=True, toggle_mode="true", button_pressed="true")
+    drive_b = button("DRIVE  (an arrow, never stops)", "DriveButton", unique=True, toggle_mode="true")
+    v2 = button("2D  (from above)", "View2DButton", unique=True, toggle_mode="true", button_pressed="true", size_flags_horizontal=3)
+    v3 = button("3D  (tilted, shows height)", "View3DButton", unique=True, toggle_mode="true", size_flags_horizontal=3)
     thrust = N("ThrustSlider", "HSlider", {"layout_mode": 2, "size_flags_horizontal": 3, "min_value": 0.0, "max_value": 100.0, "step": 1.0, "value": 100.0}, unique=True)
     thrust_val = label("100%", "ThrustValueLabel", unique=True, custom_minimum_size="Vector2(48, 0)")
     alt = spin("AltitudeSpin", -100000, 100000, 1, 0, allow_greater="true", allow_lesser="true", suffix=s(" m"))
@@ -101,8 +103,8 @@ def tactical_map():
     cancel = button("Cancel order", "MapCancelButton", unique=True)
     close = button("Close  (M)", "CloseMapButton", unique=True)
     info = label("", "OrderInfoLabel", unique=True, wrap=True)
-    help_ = label("Click: set a waypoint (and go).  Click an enemy: lock it, and in DRIVE mode ram it.\nRight-drag: pan.  Wheel: zoom.  Right ruler: click to set the height.", "MapHelpLabel", wrap=True, modulate="Color(1, 1, 1, 0.6)")
-    col = vbox("OrdersColumn", [label("ORDERS", "OrdersTitleLabel"), go_b, drive_b,
+    help_ = label("GO TO: click a place to fly there and stop, or click a SHIP to follow it.\nDRIVE: click sets an ARROW (the direction to fly, forever); click an enemy and the arrow follows it, aimed at where it will be.\n2D: right-drag pans, right ruler sets the height.\n3D: right-drag turns the view, middle-drag pans, Ctrl+wheel sets the height. Wheel: zoom.", "MapHelpLabel", wrap=True, modulate="Color(1, 1, 1, 0.6)")
+    col = vbox("OrdersColumn", [label("VIEW", "ViewTitleLabel"), hbox("ViewRow", [v2, v3]), label("ORDERS", "OrdersTitleLabel"), go_b, drive_b,
         hbox("ThrustRow", [label("Thrust", "ThrustLabel"), thrust, thrust_val]),
         hbox("AltitudeRow", [label("Height", "AltitudeLabel"), alt]),
         face, free, chase, hbox("StopRow", [brake, cancel]), info, help_, close], custom_minimum_size="Vector2(300, 0)")
