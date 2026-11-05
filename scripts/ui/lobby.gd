@@ -17,6 +17,8 @@ const SEAT_PICKER := preload("res://scenes/seat_picker.tscn")
 @onready var leave_crew_button: Button = %LeaveCrewButton
 @onready var start_button: Button = %StartButton
 @onready var status_label: Label = %StatusLabel
+@onready var join_game_button: Button = %JoinGameButton
+@onready var late_join_check: CheckBox = %LateJoinCheck
 
 var _ship_paths: Array[String] = []
 var _chosen_valid: bool = false
@@ -43,6 +45,9 @@ func _ready() -> void:
 		team_picker.add_item("Team %d" % t)
 	Net.roster_changed.connect(_refresh_all)
 	start_button.visible = Net.is_host()
+	late_join_check.visible = Net.is_host()
+	late_join_check.set_pressed_no_signal(Net.late_join)
+	Net.late_join_changed.connect(func(): late_join_check.set_pressed_no_signal(Net.late_join))
 	_refresh_all()
 
 
@@ -186,6 +191,12 @@ func _update_join_crew_button() -> void:
 
 # ---------------------------------------------------------------- start / leave
 func _update_start_button() -> void:
+	join_game_button.visible = Net.game_running and not Net.is_host()
+	if Net.game_running and not Net.is_host():
+		var chosen: bool = _me().get("ship", "") != "" or _me().get("crew_of", 0) != 0
+		join_game_button.text = "JOIN THE GAME" if chosen else "JOIN (random ship)"
+		status_label.text = "The game is running. Pick a ship (or a crew) and jump in whenever you like."
+		return
 	if not Net.is_host():
 		status_label.text = "Waiting for the host to start. Lock in your ship (or join a crew) before the timer ends."
 		return
@@ -204,6 +215,15 @@ func _update_start_button() -> void:
 		start_button.text = "Waiting for %d player(s)..." % waiting
 		status_label.text = "Force launch unlocks when the timer reaches zero."
 	status_label.text += "\n" + Net.nat.message   # internet status (UPnP / public address) so the host can see why a friend cannot join
+
+
+func _on_join_game_pressed() -> void:
+	join_game_button.disabled = true
+	Net.request_enter_running_game()
+
+
+func _on_late_join_toggled(on: bool) -> void:
+	Net.set_late_join(on)
 
 
 func _on_start_pressed() -> void:

@@ -115,6 +115,7 @@ func update_info(info: Dictionary) -> void:
 	_set_data("host", str(info.get("host", persona_name)))
 	_set_data("private", "1" if info.get("private", false) else "0")
 	_set_data("players", str(int(info.get("players", 1))))
+	_set_data("running", "1" if info.get("running", false) else "0")
 	_set_data("max", str(int(info.get("max", 16))))
 
 
@@ -192,5 +193,5 @@ func _on_join_requested(id: int, _friend: int = 0) -> void:
 func lobby_entry(id: int) -> Dictionary:
 	return {"id": id, "name": str(api.call("getLobbyData", id, "name")), "host": str(api.call("getLobbyData", id, "host")),
 		"private": str(api.call("getLobbyData", id, "private")) == "1",
-		"players": int(api.call("getNumLobbyMembers", id)), "max": int(api.call("getLobbyMemberLimit", id)),
+		"running": str(api.call("getLobbyData", id, "running")) == "1", "players": int(api.call("getNumLobbyMembers", id)), "max": int(api.call("getLobbyMemberLimit", id)),
 		"address": "", "port": 0, "source": "steam", "steam_lobby": id}

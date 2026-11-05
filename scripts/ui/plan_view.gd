@@ -39,6 +39,15 @@ func _ready() -> void:
 	_build_layer_row()
 	%ResetPlanButton.pressed.connect(func(): canvas.reset_plan())
 	%ClosePlanButton.pressed.connect(func(): visible = false)
+	# Only the exploded 3D view is offered (the flat deck / side / front / sheet drawings and the corridor tools are gone from the UI).
+	for n in ["ViewTopButton", "ViewSideButton", "ViewFrontButton", "ViewSheetButton", "ViewIsoButton", "PaperButton", "DeckPicker",
+			"ToolViewButton", "ToolDrawButton", "ToolEraseButton", "ToolDoorButton"]:
+		var node := get_node_or_null("%" + n) as Control
+		if node != null:
+			node.visible = false
+	tool_row.visible = false
+	canvas.set_view(PlanCanvas.View.ISO)
+	%ExplodeRow.visible = true
 	visible = false
 
 
@@ -122,20 +131,22 @@ func open_design(d: ShipDesign) -> void:
 	_live = null
 	%PlanTabs.visible = false
 	%PlanTabs.current_tab = 0
-	title_label.text = "SHIP PLAN  (the hull holds the corridors; you draw them)"
-	tool_row.visible = true
+	title_label.text = "EXPLODED 3D PLAN  (drag to turn, wheel to zoom)"
+	tool_row.visible = false
 	visible = true
 	canvas.show_design(d, true)
+	canvas.set_view(PlanCanvas.View.ISO)
 	_update_status()
 
 
 func open_ship(s: Ship) -> void:
 	_live = s
 	%PlanTabs.visible = true
-	title_label.text = "SHIP PLAN  (live)"
+	title_label.text = "EXPLODED 3D PLAN  (live)"
 	tool_row.visible = false
 	visible = true
 	canvas.show_design(s.design, false, s)
+	canvas.set_view(PlanCanvas.View.ISO)
 	_update_status()
 
 

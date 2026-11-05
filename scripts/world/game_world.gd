@@ -38,6 +38,8 @@ func _spawn_for_peer(id: int) -> void:
 		Net._distribute_blobs()
 		entry = Net.players[id]
 	Net.srv_reset_seats(id)
+	Net.srv_reset_recent(id)
+	Net.srv_register_stats(id)
 	var n := spawn_points.get_child_count()
 	var marker := spawn_points.get_child(_spawn_index % n) as Marker3D
 	_spawn_index += 1
@@ -53,10 +55,12 @@ func _on_peer_left(id: int) -> void:
 ## Called by a ship's owner when its last Commander is gone. Runs on the host only.
 ## `ship_name` is the node name: a peer id for a flown ship, "d<N>" for a derelict (a torn-off part nobody flies).
 @rpc("any_peer", "call_local", "reliable")
-func report_death(ship_name: String) -> void:
+func report_death(ship_name: String, voluntary: bool = false) -> void:
 	if not multiplayer.is_server():
 		return
-	await get_tree().create_timer(Data.RESPAWN_DELAY).timeout
+	if ship_name.is_valid_int():
+		Net.srv_record_death(int(ship_name), voluntary)       # scoreboard: a death for the pilot, a kill for who hurt him most
+	await get_tree().create_timer(Data.RESPAWN_DELAY_SELF if voluntary else Data.RESPAWN_DELAY).timeout
 	var old := ships_root.get_node_or_null(ship_name)
 	if old != null:
 		old.queue_free()

@@ -166,6 +166,7 @@ func _ready() -> void:
 	_rebuild_systems()
 	$TransformSync.add_visibility_filter(_net_filter)     # no data for peers whose ship is beyond Data.NET_RANGE
 	$StateSync.add_visibility_filter(_net_filter)
+	Net.world_peers_changed.connect(_refresh_net_visibility)
 	_setup_flames()
 
 	if is_multiplayer_authority():
@@ -266,7 +267,16 @@ func is_wreck() -> bool:
 
 ## Visibility filter of both synchronizers: no data for peers whose ship is out of range.
 func _net_filter(peer: int) -> bool:
-	return not net_far.get(peer, false)
+	return (not Net.game_running or Net.world_peers.has(peer)) and not net_far.get(peer, false)
+
+
+## A peer finished loading its world: it may now receive this ship (spawn + data).
+func _refresh_net_visibility() -> void:
+	if not multiplayer.has_multiplayer_peer():
+		return
+	for peer in multiplayer.get_peers():
+		$TransformSync.update_visibility(peer)
+		$StateSync.update_visibility(peer)
 
 
 ## Authority: decide which peers still get this ship's data (distance between ships).
@@ -415,11 +425,44 @@ func apply_hit(hit: DamageHit) -> void:
 	if result.is_empty():
 		return
 	if result.hp_damage > 0.0 and module_hp[hit.module] > 0.0:
+		_note_damage(hit, minf(result.hp_damage, module_hp[hit.module]))
 		_remove_module_hp(hit.module, result.hp_damage)
 	if result.dent_depth > 0.005 and alive and design.modules[hit.module]["type"] != ModuleCatalog.BARREL:
 		_dent(hit.module, hit.point, result.dent_direction, result.dent_depth, result.dent_radius)
 	_damage_corridors(hit, result)
 	BusEvent.ship_hit.emit(self, hit, result)
+
+
+## SCOREBOARD: remember how much damage came from which player's ship; _flush_damage tells the host a few times a second.
+## Only ships flown by a player count (not derelict parts), and not wrecks or yourself.
+var _dmg_in: Dictionary = {}          # attacker peer -> damage not yet reported
+var _dmg_timer: float = 0.0
+
+
+func _note_damage(hit: DamageHit, amount: float) -> void:
+	if amount <= 0.0 or not str(name).is_valid_int() or int(str(name)) != get_multiplayer_authority():
+		return
+	var src := hit.source as Ship
+	if src == null or src == self or not is_instance_valid(src) or src.is_wreck():
+		return
+	var attacker := src.get_multiplayer_authority()
+	_dmg_in[attacker] = float(_dmg_in.get(attacker, 0.0)) + amount
+
+
+func _flush_damage(dt: float, force: bool = false) -> void:
+	_dmg_timer -= dt
+	if _dmg_in.is_empty() or (_dmg_timer > 0.0 and not force):
+		return
+	_dmg_timer = 0.5
+	for attacker in _dmg_in:
+		Net.report_damage(int(attacker), float(_dmg_in[attacker]))
+	_dmg_in.clear()
+
+
+## The pilot gave up: the ship is destroyed on purpose and respawns soon. Counts as a death (and a kill for whoever hurt it most).
+func respawn_now() -> void:
+	if is_multiplayer_authority() and alive:
+		_die(true)
 
 
 ## Old shortcut kept for tests/tools: plain bullet damage.
@@ -648,13 +691,14 @@ func _check_structure() -> void:
 var _commander_count_alive_before: int = -1   ## set when the hull is ready
 
 
-func _die() -> void:
+func _die(voluntary: bool = false) -> void:
 	if not alive:
 		return
 	alive = false
+	_flush_damage(0.0, true)          # the host must know every hit before it counts the death
 	var world := get_tree().get_first_node_in_group("world")
 	if world != null:
-		world.report_death.rpc_id(1, str(name))
+		world.report_death.rpc_id(1, str(name), voluntary)
 
 
 ## Splitting (authority): every group except the one holding the pilot's seat becomes a new ship.
@@ -954,6 +998,8 @@ func _exit_tree() -> void:
 func _physics_process(dt: float) -> void:
 	if not alive:
 		return
+	if is_multiplayer_authority():
+		_flush_damage(dt)
 	if _mesh_dirty:
 		_update_mesh()
 	if _function_dirty:

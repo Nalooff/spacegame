@@ -40,9 +40,10 @@ func _draw() -> void:
 	draw_string(font, Vector2(16, size.y - 170), header, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.75))
 	var line := 1
 	for c in det.contacts:
-		var other: Ship = c["ship"]
-		if not is_instance_valid(other):
+		var other_v: Variant = c["ship"]
+		if not is_instance_valid(other_v):
 			continue
+		var other: Ship = other_v
 		var col := FRIEND if c["friendly"] else ENEMY
 		var is_locked := other == det.locked
 		if is_locked:

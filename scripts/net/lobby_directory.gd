@@ -105,6 +105,6 @@ func _rebuild() -> void:
 			continue
 		var e: Dictionary = rec["entry"]
 		lobbies.append({"id": id, "name": str(e.get("name", "?")), "private": bool(e.get("private", false)),
-			"host": str(e.get("host", "?")), "players": int(e.get("players", 1)), "max": int(e.get("max", Data.MAX_PLAYERS)),
+			"host": str(e.get("host", "?")), "running": bool(e.get("running", false)), "players": int(e.get("players", 1)), "max": int(e.get("max", Data.MAX_PLAYERS)),
 			"address": str(e["address"]), "port": int(e.get("port", Data.DEFAULT_PORT))})
 	lobbies.sort_custom(func(a, b): return a["name"].naturalnocasecmp_to(b["name"]) < 0)

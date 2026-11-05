@@ -1,0 +1,55 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/scoreboard.gd" id="1_s"]
+
+[node name="ScoreboardPanel" type="PanelContainer"]
+script = ExtResource("1_s")
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -340.0
+offset_top = -200.0
+offset_right = 340.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ScoreMargin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="ScoreColumn" type="VBoxContainer" parent="ScoreMargin"]
+layout_mode = 2
+custom_minimum_size = Vector2(640, 0)
+
+[node name="ScoreTitle" type="Label" parent="ScoreMargin/ScoreColumn"]
+layout_mode = 2
+text = "SCOREBOARD"
+horizontal_alignment = 1
+
+[node name="ScoreGrid" type="GridContainer" parent="ScoreMargin/ScoreColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 8
+theme_override_constants/h_separation = 18
+theme_override_constants/v_separation = 4
+
+[node name="OpenJoinCheck" type="CheckBox" parent="ScoreMargin/ScoreColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Let new players join while the game runs  (host only)"
+visible = false
+
+[node name="ScoreHint" type="Label" parent="ScoreMargin/ScoreColumn"]
+layout_mode = 2
+text = "Hold Tab to see this.  Respawning counts as a death: whoever did the most damage to you gets the kill."
+autowrap_mode = 3
+modulate = Color(1, 1, 1, 0.55)
+
+[connection signal="toggled" from="ScoreMargin/ScoreColumn/OpenJoinCheck" to="." method="_on_open_join_toggled"]

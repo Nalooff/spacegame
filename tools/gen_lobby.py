@@ -76,7 +76,9 @@ def room():
         hbox("CrewButtonsRow", [join_crew, leave_crew])])
     start = button("START GAME", "StartButton", unique=True, custom_minimum_size="Vector2(220, 48)", visible="false")
     leave = button("Leave lobby", "LeaveLobbyButton", custom_minimum_size="Vector2(160, 48)")
-    footer = hbox("FooterRow", [label("", "StatusLabel", unique=True, wrap=True, size_flags_horizontal=3), start, leave])
+    join_game = button("JOIN THE GAME", "JoinGameButton", unique=True, custom_minimum_size="Vector2(220, 48)", visible="false")
+    late = N("LateJoinCheck", "CheckBox", {"layout_mode": 2, "text": s("Allow players to join while the game runs"), "visible": "false"}, unique=True)
+    footer = hbox("FooterRow", [label("", "StatusLabel", unique=True, wrap=True, size_flags_horizontal=3), late, join_game, start, leave])
     root = N("LobbyRoom", "Control", {**full_rect()}, [bg(), margin("RoomMargin", [N("RoomColumn", "VBoxContainer", {"layout_mode": 2, "theme_override_constants/separation": 14},
         [header, sep("HeaderSeparator"), N("RoomColumns", "HBoxContainer", {"layout_mode": 2, "size_flags_vertical": 3, "theme_override_constants/separation": 30}, [ship_col, crew_col]), footer])])],
              script='ExtResource("1_s")')
@@ -85,7 +87,7 @@ def room():
     C("item_selected", ship_list, "_on_ship_selected"); C("pressed", lock, "_on_lock_pressed"); C("pressed", my_seat, "_on_my_seat_pressed"); C("item_selected", team, "_on_team_selected")
     C("item_selected", players, "_on_player_selected"); C("nothing_selected", players, "_on_player_deselected")
     C("pressed", join_crew, "_on_join_crew_pressed"); C("pressed", leave_crew, "_on_leave_crew_pressed")
-    C("pressed", start, "_on_start_pressed"); C("pressed", leave, "_on_leave_pressed")
+    C("pressed", join_game, "_on_join_game_pressed"); C("toggled", late, "_on_late_join_toggled"); C("pressed", start, "_on_start_pressed"); C("pressed", leave, "_on_leave_pressed")
     write("lobby.tscn", sc)
 
 # =============================================================== seat picker (overlay opened from the room)

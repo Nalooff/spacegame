@@ -156,6 +156,19 @@ text = ""
 autowrap_mode = 3
 size_flags_horizontal = 3
 
+[node name="LateJoinCheck" type="CheckBox" parent="RoomMargin/RoomColumn/FooterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Allow players to join while the game runs"
+visible = false
+
+[node name="JoinGameButton" type="Button" parent="RoomMargin/RoomColumn/FooterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "JOIN THE GAME"
+custom_minimum_size = Vector2(220, 48)
+visible = false
+
 [node name="StartButton" type="Button" parent="RoomMargin/RoomColumn/FooterRow"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -176,5 +189,7 @@ custom_minimum_size = Vector2(160, 48)
 [connection signal="nothing_selected" from="RoomMargin/RoomColumn/RoomColumns/CrewColumn/PlayerTree" to="." method="_on_player_deselected"]
 [connection signal="pressed" from="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow/JoinCrewButton" to="." method="_on_join_crew_pressed"]
 [connection signal="pressed" from="RoomMargin/RoomColumn/RoomColumns/CrewColumn/CrewButtonsRow/LeaveCrewButton" to="." method="_on_leave_crew_pressed"]
+[connection signal="pressed" from="RoomMargin/RoomColumn/FooterRow/JoinGameButton" to="." method="_on_join_game_pressed"]
+[connection signal="toggled" from="RoomMargin/RoomColumn/FooterRow/LateJoinCheck" to="." method="_on_late_join_toggled"]
 [connection signal="pressed" from="RoomMargin/RoomColumn/FooterRow/StartButton" to="." method="_on_start_pressed"]
 [connection signal="pressed" from="RoomMargin/RoomColumn/FooterRow/LeaveLobbyButton" to="." method="_on_leave_pressed"]

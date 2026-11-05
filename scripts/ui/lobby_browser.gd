@@ -88,7 +88,7 @@ func _rebuild_list() -> void:
 			item.set_icon(0, LOCK_ICON)
 			item.set_tooltip_text(0, "Private: needs a password")
 		item.set_text(1, l["host"] + {"internet": "  (internet)", "steam": "  (Steam)"}.get(l.get("source", ""), "  (LAN)"))
-		item.set_text(2, "%d / %d" % [l["players"], l["max"]])
+		item.set_text(2, "%d / %d%s" % [l["players"], l["max"], "  (in progress)" if l.get("running", false) else ""])
 		item.set_metadata(0, l["id"])
 		if l["id"] == _selected_id:
 			item.select(0)

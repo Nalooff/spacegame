@@ -13,6 +13,7 @@ func _ready() -> void:
 	BusEvent.module_destroyed.connect(_on_module_destroyed)
 	BusEvent.ship_died.connect(_on_ship_died)
 	BusEvent.notify.connect(show_banner)
+	Net.kill_feed.connect(_on_kill_feed)
 	_on_local_ship_changed(Data.local_ship)
 
 
@@ -53,8 +54,16 @@ func _on_banner_timer_timeout() -> void:
 	%BannerLabel.text = ""
 
 
-func _process(_dt: float) -> void:
+func _process(dt: float) -> void:
 	%PlayersLabel.text = _players_text()
+	if not _feed.is_empty():
+		for e in _feed:
+			e[1] -= dt
+		var before := _feed.size()
+		_feed = _feed.filter(func(e): return e[1] > 0.0)
+		if _feed.size() != before:
+			_show_feed()
+	%RespawnButton.visible = is_instance_valid(ship) and ship.alive and ship.is_multiplayer_authority()
 	if not is_instance_valid(ship):
 		%FlightLabel.text = "No ship yet..."
 		return
@@ -97,6 +106,31 @@ func _on_cancel_pressed() -> void:
 func _on_brake_pressed() -> void:
 	if is_instance_valid(ship) and ship.alive:
 		ship.autopilot.brake()
+
+
+func _on_respawn_pressed() -> void:
+	if is_instance_valid(ship) and ship.alive and ship.is_multiplayer_authority():
+		ship.respawn_now()
+
+
+func _on_scoreboard_pressed() -> void:
+	%Scoreboard.toggle_pinned()
+
+
+var _feed: Array = []   # [text, seconds left]
+
+func _on_kill_feed(text: String) -> void:
+	_feed.append([text, 8.0])
+	while _feed.size() > 5:
+		_feed.pop_front()
+	_show_feed()
+
+
+func _show_feed() -> void:
+	var lines: PackedStringArray = []
+	for e in _feed:
+		lines.append(e[0])
+	%KillFeedLabel.text = "\n".join(lines)
 
 
 func _on_leave_pressed() -> void:

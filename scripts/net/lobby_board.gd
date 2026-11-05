@@ -36,7 +36,7 @@ func _process(dt: float) -> void:
 func post(info: Dictionary) -> void:
 	if not Data.BOARD_ENABLED:
 		return
-	var changed: bool = _info.is_empty() or int(info.get("players", 0)) != _sent_players or info.get("name") != _info.get("name")
+	var changed: bool = _info.is_empty() or int(info.get("players", 0)) != _sent_players or info.get("name") != _info.get("name") or info.get("running") != _info.get("running")
 	_info = info
 	if changed:
 		_send(false)
@@ -118,6 +118,6 @@ func parse(text: String) -> void:
 		if bool(e.get("closed", false)) or now - float(newest[id]["time"]) > Data.BOARD_STALE or id == _id:
 			continue
 		lobbies.append({"id": id, "name": str(e.get("name", "?")).left(40), "private": bool(e.get("private", false)),
-			"host": str(e.get("host", "?")).left(20), "players": int(e.get("players", 1)), "max": int(e.get("max", Data.MAX_PLAYERS)),
+			"host": str(e.get("host", "?")).left(20), "running": bool(e.get("running", false)), "players": int(e.get("players", 1)), "max": int(e.get("max", Data.MAX_PLAYERS)),
 			"address": str(e.get("address", "")), "lan": str(e.get("lan", "")), "port": int(e.get("port", Data.DEFAULT_PORT)), "source": "internet"})
 	lobbies.sort_custom(func(a, b): return a["name"].naturalnocasecmp_to(b["name"]) < 0)

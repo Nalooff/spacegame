@@ -29,6 +29,21 @@ signal crew_orphaned(peer_id: int)  # in game: the captain left, this crew membe
 
 var players: Dictionary = {}
 var in_game: bool = false
+var late_join: bool = false          # host option: players may join (and pick a ship) while the game is running
+var game_running: bool = false       # the host has started the game (clients learn it when they join)
+signal late_join_changed
+var world_peers: Dictionary = {}     # once the game runs: the peers that have (or are loading) the world. Nothing is replicated to the others (late joiners still in the lobby).
+signal world_peers_changed
+
+## SCOREBOARD. peer id (the pilot) -> {name, kills, deaths, damage (dealt), taken}. The HOST keeps it and sends it to everybody.
+## A death is counted when a ship is destroyed OR its pilot presses Respawn; the player who did the MOST damage to that ship since it
+## spawned gets the kill (nobody, if nobody hurt it). Crew damage counts for the ship's pilot.
+signal stats_changed
+signal kill_feed(text: String)
+var stats: Dictionary = {}
+var _recent: Dictionary = {}        # host: victim peer -> {attacker peer: damage since the victim last spawned}
+var _stats_dirty: bool = false
+var _stats_timer: float = 0.0
 
 ## Ship files by content hash. The host has every chosen ship, a client has its own + those sent at game start.
 var blobs: Dictionary = {}
@@ -101,6 +116,12 @@ func _notification(what: int) -> void:
 
 func _process(dt: float) -> void:
 	directory.poll(dt)
+	if _stats_dirty and is_host():
+		_stats_timer -= dt
+		if _stats_timer <= 0.0:
+			_stats_timer = 0.5
+			_stats_dirty = false
+			sync_stats.rpc(stats)
 	if _lobby_open or (not is_host() and not in_game):
 		lobby_seconds_left = maxf(lobby_seconds_left - dt, 0.0)
 	if _lobby_open and is_host():
@@ -128,6 +149,11 @@ func host_lobby(lobby: String, is_private: bool, password: String) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	players.clear()
+	stats.clear()
+	_recent.clear()
+	game_running = false
+	late_join = false
+	world_peers.clear()
 	in_game = false
 	lobby_name = lobby.strip_edges() if lobby.strip_edges() != "" else "%s's lobby" % Data.player_name
 	lobby_private = is_private
@@ -150,6 +176,11 @@ func steam_active() -> bool:
 ## Host through Steam. The answer comes later: signal steam_host_result (the room can open when ok).
 func host_steam(lobby: String, is_private: bool, password: String) -> void:
 	players.clear()
+	stats.clear()
+	_recent.clear()
+	game_running = false
+	late_join = false
+	world_peers.clear()
 	in_game = false
 	lobby_name = lobby.strip_edges() if lobby.strip_edges() != "" else "%s's lobby" % Data.player_name
 	lobby_private = is_private
@@ -209,6 +240,11 @@ func leave() -> void:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	players.clear()
+	stats.clear()
+	_recent.clear()
+	game_running = false
+	late_join = false
+	world_peers.clear()
 	in_game = false
 	_lobby_open = false
 	_accepted = false
@@ -225,7 +261,7 @@ func my_id() -> int:
 
 func _advertise() -> void:
 	var info := {"name": lobby_name, "private": lobby_private, "host": Data.player_name,
-		"players": players.size(), "max": Data.MAX_PLAYERS, "port": _game_port}
+		"players": players.size(), "max": Data.MAX_PLAYERS, "port": _game_port, "running": game_running}
 	if _steam_hosting:                               # Steam lists the lobby; no LAN broadcast / board needed
 		steam.update_info(info)
 		return
@@ -274,25 +310,26 @@ func request_join(pname: String, pw_hash: String) -> void:
 		return
 	var id := multiplayer.get_remote_sender_id()
 	var reason := ""
-	if not _lobby_open:
+	if not _lobby_open or (game_running and not late_join):
 		reason = "The game has already started."
 	elif players.size() >= Data.MAX_PLAYERS:
 		reason = "The lobby is full."
 	elif lobby_private and pw_hash != _password_hash:
 		reason = "Wrong password."
 	if reason != "":
-		join_result.rpc_id(id, false, reason, "", false, 0.0)
+		join_result.rpc_id(id, false, reason, "", false, 0.0, false)
 		await get_tree().create_timer(0.4).timeout # let the answer arrive before the line is cut
 		if multiplayer.has_multiplayer_peer() and multiplayer.get_peers().has(id):
 			multiplayer.multiplayer_peer.disconnect_peer(id)
 		return
 	players[id] = _new_entry(pname)
-	join_result.rpc_id(id, true, "", lobby_name, lobby_private, lobby_seconds_left)
+	join_result.rpc_id(id, true, "", lobby_name, lobby_private, lobby_seconds_left, game_running)
+	sync_late_join.rpc_id(id, late_join)
 	_broadcast()
 
 
 @rpc("authority", "reliable")
-func join_result(ok: bool, reason: String, lobby: String, is_private: bool, seconds_left: float) -> void:
+func join_result(ok: bool, reason: String, lobby: String, is_private: bool, seconds_left: float, running: bool = false) -> void:
 	if not ok:
 		leave()
 		join_rejected.emit(reason)
@@ -300,6 +337,7 @@ func join_result(ok: bool, reason: String, lobby: String, is_private: bool, seco
 	lobby_name = lobby
 	lobby_private = is_private
 	lobby_seconds_left = seconds_left
+	game_running = running
 	_accepted = true
 	joined.emit()
 
@@ -747,7 +785,7 @@ func all_locked() -> bool:
 
 
 func can_start() -> bool:
-	return is_host() and _lobby_open and (all_locked() or lobby_seconds_left <= 0.0)
+	return is_host() and _lobby_open and not game_running and (all_locked() or lobby_seconds_left <= 0.0)
 
 
 # =====================================================================
@@ -763,15 +801,71 @@ func start_game() -> bool:
 		if p["crew_of"] == 0 and p["ship"] == "":
 			_give_random_ship(id)
 		p["locked"] = true
-	_lobby_open = false
-	steam.set_open(false)
-	directory.stop_advertising()
-	board.close()
+	game_running = true
+	world_peers.clear()
+	for id in players:
+		world_peers[id] = true
+	sync_world_peers.rpc(world_peers.keys(), true)
+	if not late_join:
+		_close_lobby()
+	else:
+		_advertise()
 	_distribute_blobs()
 	sync_roster.rpc(players)
 	roster_changed.emit()
 	_load_world.rpc()
 	return true
+
+
+func _close_lobby() -> void:
+	_lobby_open = false
+	steam.set_open(false)
+	directory.stop_advertising()
+	board.close()
+
+
+## Host: allow / forbid joining while the game runs (works before and during the game).
+func set_late_join(on: bool) -> void:
+	if not is_host():
+		return
+	late_join = on
+	if game_running:
+		if on:
+			_lobby_open = true
+			steam.set_open(true)
+			_advertise()
+		else:
+			_close_lobby()
+	sync_late_join.rpc(on)
+	late_join_changed.emit()
+
+
+@rpc("authority", "reliable")
+func sync_late_join(on: bool) -> void:
+	late_join = on
+	late_join_changed.emit()
+
+
+## A player who joined a running game presses "join the game": the host gives them a ship and sends them in.
+func request_enter_running_game() -> void:
+	_ask_host(&"srv_enter_game", [])
+
+
+@rpc("any_peer", "reliable")
+func srv_enter_game() -> void:
+	if not multiplayer.is_server():
+		return
+	var id := _sender()
+	if not game_running or not players.has(id) or id == 1:
+		return
+	var p: Dictionary = players[id]
+	if p["crew_of"] == 0 and p["ship"] == "":
+		_give_random_ship(id)
+	p["locked"] = true
+	_distribute_blobs()
+	sync_roster.rpc(players)
+	roster_changed.emit()
+	_load_world.rpc_id(id)
 
 
 ## Host: send every ship that is in play to every peer that does not have it yet.
@@ -816,7 +910,124 @@ func _load_world() -> void:
 func world_ready() -> void:
 	if multiplayer.is_server():
 		var id := multiplayer.get_remote_sender_id()
+		world_peers[id if id > 0 else 1] = true
+		sync_world_peers.rpc(world_peers.keys(), true)
+		if id > 1:
+			sync_stats.rpc_id(id, stats)      # the scoreboard as it is now (a player who joins late sees the whole game)
 		peer_ready_in_world.emit(id if id > 0 else 1) # 0 = the host calling itself
+
+
+@rpc("authority", "call_local", "reliable")
+func sync_world_peers(ids: Array, running: bool) -> void:
+	game_running = running or game_running
+	world_peers.clear()
+	for i in ids:
+		world_peers[int(i)] = true
+	world_peers_changed.emit()
+
+
+# =====================================================================
+#  Scoreboard (host keeps the numbers)
+# =====================================================================
+func stat_of(id: int) -> Dictionary:
+	if not stats.has(id):
+		stats[id] = {"name": str(players.get(id, {}).get("name", "Player %d" % id)), "kills": 0, "deaths": 0, "damage": 0.0, "taken": 0.0}
+	return stats[id]
+
+
+## A victim's peer reports the damage it took from `attacker` (the pilot of the ship that shot / rammed it). Batched by the ship.
+func report_damage(attacker: int, amount: float) -> void:
+	_ask_host(&"srv_report_damage", [attacker, amount])
+
+
+@rpc("any_peer", "reliable")
+func srv_report_damage(attacker: int, amount: float) -> void:
+	if not multiplayer.is_server():
+		return
+	srv_add_damage(attacker, _sender(), amount)
+
+
+## Host: `victim` took `amount` damage from `attacker`.
+func srv_add_damage(attacker: int, victim: int, amount: float) -> void:
+	if not is_finite(amount) or amount <= 0.0 or amount > 1.0e7 or attacker == victim:
+		return
+	if not players.has(attacker) or not players.has(victim):
+		return
+	stat_of(attacker)["damage"] = float(stat_of(attacker)["damage"]) + amount
+	stat_of(victim)["taken"] = float(stat_of(victim)["taken"]) + amount
+	var rec: Dictionary = _recent.get_or_add(victim, {})
+	rec[attacker] = float(rec.get(attacker, 0.0)) + amount
+	_stats_dirty = true
+
+
+## Host: the ship of `victim` was destroyed (or the pilot pressed Respawn). Counts the death; whoever did the most damage since it
+## spawned gets the kill. Returns that player's id (0 = nobody).
+func srv_record_death(victim: int, voluntary: bool = false) -> int:
+	if not players.has(victim):
+		return 0
+	stat_of(victim)["deaths"] = int(stat_of(victim)["deaths"]) + 1
+	var best := 0
+	var best_dmg := 0.0
+	for attacker in _recent.get(victim, {}):
+		var dmg := float((_recent[victim] as Dictionary)[attacker])
+		if dmg > best_dmg and players.has(attacker):
+			best_dmg = dmg
+			best = int(attacker)
+	_recent.erase(victim)
+	if best != 0:
+		stat_of(best)["kills"] = int(stat_of(best)["kills"]) + 1
+	var vn := str(players[victim]["name"])
+	var text := ""
+	if best != 0 and voluntary:
+		text = "%s respawned (%s gets the kill)" % [vn, players[best]["name"]]
+	elif best != 0:
+		text = "%s destroyed %s" % [players[best]["name"], vn]
+	else:
+		text = "%s respawned" % vn if voluntary else "%s was destroyed" % vn
+	announce.rpc(text)
+	_stats_dirty = true
+	return best
+
+
+## Host: make sure `peer` has a line on the scoreboard (zeros) and everybody gets it.
+func srv_register_stats(peer: int) -> void:
+	if players.has(peer):
+		stat_of(peer)
+		_stats_dirty = true
+
+
+## A ship of `peer` has just spawned: damage done to its previous ship no longer counts.
+func srv_reset_recent(peer: int) -> void:
+	_recent.erase(peer)
+
+
+## Everybody sees the kill feed (host -> all, also on the host itself).
+@rpc("authority", "call_local", "reliable")
+func announce(text: String) -> void:
+	kill_feed.emit(text)
+
+
+@rpc("authority", "reliable")
+func sync_stats(s: Dictionary) -> void:
+	stats = s
+	stats_changed.emit()
+
+
+## Sorted for the scoreboard: most kills first, then fewest deaths, then most damage.
+func ranking() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for id in stats:
+		var e: Dictionary = (stats[id] as Dictionary).duplicate()
+		e["id"] = id
+		e["here"] = players.has(id)
+		out.append(e)
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a["kills"] != b["kills"]:
+			return a["kills"] > b["kills"]
+		if a["deaths"] != b["deaths"]:
+			return a["deaths"] < b["deaths"]
+		return a["damage"] > b["damage"])
+	return out
 
 
 # =====================================================================
@@ -841,6 +1052,8 @@ func sync_roster(roster: Dictionary) -> void:
 func _on_peer_disconnected(id: int) -> void:
 	if multiplayer.is_server():
 		players.erase(id)
+		if world_peers.erase(id):
+			sync_world_peers.rpc(world_peers.keys(), true)
 		_peer_has.erase(id)
 		_uploads.erase(id)
 		# crew of the player who left

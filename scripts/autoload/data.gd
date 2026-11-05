@@ -13,6 +13,7 @@ const MAX_PLAYERS := 16
 
 # ------------------------------------------------------------------ gameplay
 const RESPAWN_DELAY := 4.0          # seconds between death and respawn
+const RESPAWN_DELAY_SELF := 1.0     # ... when the pilot pressed Respawn himself
 const RCS_FRACTION := 0.05          # RCS force = this * ship's best-direction thrust
 const PROJECTILE_POOL_SIZE := 256    # bullets that can be in flight at once
 
