@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_s"]
 [ext_resource type="Script" path="res://scripts/ui/contact_markers.gd" id="2_markers"]
 [ext_resource type="PackedScene" path="res://scenes/plan_view.tscn" id="3_plan"]
 [ext_resource type="PackedScene" path="res://scenes/tactical_map.tscn" id="4_map"]
 [ext_resource type="PackedScene" path="res://scenes/scoreboard.tscn" id="5_score"]
+[ext_resource type="PackedScene" path="res://scenes/settings.tscn" id="6_set"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_s")
@@ -95,7 +96,7 @@ anchor_right = 1.0
 offset_left = -220.0
 offset_top = 10.0
 offset_right = -10.0
-offset_bottom = 230.0
+offset_bottom = 262.0
 grow_horizontal = 0
 
 [node name="PlayersColumn" type="VBoxContainer" parent="HudRoot/PlayersPanel"]
@@ -116,6 +117,10 @@ layout_mode = 2
 text = "Respawn  (counts as a death)"
 tooltip_text = "Destroy your ship and come back with a fresh one. The player who did the most damage to you gets a kill."
 
+[node name="SettingsButton" type="Button" parent="HudRoot/PlayersPanel/PlayersColumn"]
+layout_mode = 2
+text = "Settings"
+
 [node name="LeaveButton" type="Button" parent="HudRoot/PlayersPanel/PlayersColumn"]
 layout_mode = 2
 text = "Leave game"
@@ -126,9 +131,9 @@ anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -420.0
-offset_top = 240.0
+offset_top = 272.0
 offset_right = -10.0
-offset_bottom = 340.0
+offset_bottom = 372.0
 grow_horizontal = 0
 mouse_filter = 2
 
@@ -181,6 +186,7 @@ layout_mode = 2
 text = ""
 
 [node name="ControlsHelpLabel" type="Label" parent="HudRoot"]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
@@ -208,7 +214,11 @@ unique_name_in_owner = true
 [node name="Scoreboard" parent="HudRoot" instance=ExtResource("5_score")]
 unique_name_in_owner = true
 
+[node name="SettingsOverlay" parent="HudRoot" instance=ExtResource("6_set")]
+unique_name_in_owner = true
+
 [connection signal="pressed" from="HudRoot/PlayersPanel/PlayersColumn/RespawnButton" to="." method="_on_respawn_pressed"]
+[connection signal="pressed" from="HudRoot/PlayersPanel/PlayersColumn/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="HudRoot/PlayersPanel/PlayersColumn/ScoreboardButton" to="." method="_on_scoreboard_pressed"]
 [connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/OpenMapButton" to="." method="_on_open_map_pressed"]
 [connection signal="pressed" from="HudRoot/AutopilotPanel/AutopilotColumn/AutopilotButtonsRow/BrakeButton" to="." method="_on_brake_pressed"]

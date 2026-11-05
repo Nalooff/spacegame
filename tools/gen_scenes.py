@@ -19,7 +19,8 @@ def main_menu():
     root = N("MainMenu", "Control", {**full_rect()}, [bg, center], script='ExtResource("1_s")')
     sc = Scene(root); sc.ext_res("1_s", "Script", "res://scripts/ui/main_menu.gd")
     sc.connect("pressed", creation, "_on_creation_pressed"); sc.connect("pressed", play, "_on_play_pressed"); sc.connect("pressed", presets, "_on_presets_pressed"); sc.connect("pressed", quit_, "_on_quit_pressed")
-    write("main_menu.tscn", sc)
+    # main_menu.tscn is edited by hand in the Godot editor now (uids, layout): do not overwrite it. Write to a scratch name instead.
+    # (not written)
 
 # =============================================================== preset creator
 def preset_creator():
@@ -78,10 +79,11 @@ def hud():
     leave = button("Leave game", "LeaveButton")
     respawn = button("Respawn  (counts as a death)", "RespawnButton", unique=True, tooltip_text=s("Destroy your ship and come back with a fresh one. The player who did the most damage to you gets a kill."))
     score_btn = button("Scoreboard  (Tab)", "ScoreboardButton")
+    settings_btn = button("Settings", "SettingsButton")
     kill_feed = label("", "KillFeedLabel", unique=True, horizontal_alignment=2, modulate="Color(1, 0.85, 0.5, 0.95)")
     right_top = N("PlayersPanel", "PanelContainer", {"layout_mode": 1, "anchors_preset": 1, "anchor_left": 1.0, "anchor_right": 1.0, "offset_left": -220.0, "offset_top": 10.0,
-                  "offset_right": -10.0, "offset_bottom": 230.0, "grow_horizontal": 0}, [vbox("PlayersColumn", [label("", "PlayersLabel", unique=True), score_btn, respawn, leave])])
-    feed_panel = N("KillFeedPanel", "Control", {"layout_mode": 1, "anchors_preset": 1, "anchor_left": 1.0, "anchor_right": 1.0, "offset_left": -420.0, "offset_top": 240.0, "offset_right": -10.0, "offset_bottom": 340.0, "grow_horizontal": 0, "mouse_filter": 2}, [kill_feed])
+                  "offset_right": -10.0, "offset_bottom": 262.0, "grow_horizontal": 0}, [vbox("PlayersColumn", [label("", "PlayersLabel", unique=True), score_btn, respawn, settings_btn, leave])])
+    feed_panel = N("KillFeedPanel", "Control", {"layout_mode": 1, "anchors_preset": 1, "anchor_left": 1.0, "anchor_right": 1.0, "offset_left": -420.0, "offset_top": 272.0, "offset_right": -10.0, "offset_bottom": 372.0, "grow_horizontal": 0, "mouse_filter": 2}, [kill_feed])
     map_btn = button("Tactical map  (M)", "OpenMapButton")
     brake, cancel = button("Brake (X)", "BrakeButton"), button("Cancel order", "CancelButton")
     fire_state = label("", "FireStateLabel", unique=True)
@@ -90,17 +92,18 @@ def hud():
         [vbox("AutopilotColumn", [label("FLIGHT ORDERS", "AutopilotTitleLabel"), map_btn, hbox("AutopilotButtonsRow", [brake, cancel]), fire_state])])
     help_ = N("ControlsHelpLabel", "Label", {"layout_mode": 1, "anchors_preset": 2, "anchor_top": 1.0, "anchor_bottom": 1.0, "offset_left": 10.0, "offset_top": -150.0, "offset_right": 600.0,
                "offset_bottom": -10.0, "grow_vertical": 0, "vertical_alignment": 2, "modulate": "Color(1, 1, 1, 0.6)",
-               "text": s("W/S forward/back  A/D strafe  Space/C up/down  Arrows pitch/yaw  Q/E roll\nLMB fire at cursor (commander mode: hold LMB to fire at the lock)   R lock next enemy (guns lead it)   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P exploded 3D plan   X brake   T flight-assist   M tactical map (click = waypoint)   H weapons free   Any manual key cancels the autopilot")})
+               "text": s("W/S forward/back  A/D strafe  Space/C up/down  Arrows pitch/yaw  Q/E roll\nLMB fire at cursor (commander mode: hold LMB to fire at the lock)   R lock next enemy (guns lead it)   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P exploded 3D plan   X brake   T flight-assist   M tactical map (click = waypoint)   H weapons free   Any manual key cancels the autopilot")}, unique=True)
     banner_timer = N("BannerTimer", "Timer", {"wait_time": 3.0, "one_shot": "true"}, unique=True)
     markers = N("ContactMarkers", "Control", {**full_rect(), "mouse_filter": 2}, [], script='ExtResource("2_markers")')
     plan_view = N("PlanView", None, {}, unique=True, instance='ExtResource("3_plan")')
     tac_map = N("TacticalMap", None, {}, unique=True, instance='ExtResource("4_map")')
     score = N("Scoreboard", None, {}, unique=True, instance='ExtResource("5_score")')
-    root = N("HudRoot", "Control", {**full_rect(), "mouse_filter": 2}, [markers, left_panel, banner, right_top, feed_panel, ap, help_, banner_timer, plan_view, tac_map, score])
+    settings_overlay = N("SettingsOverlay", None, {}, unique=True, instance='ExtResource("6_set")')
+    root = N("HudRoot", "Control", {**full_rect(), "mouse_filter": 2}, [markers, left_panel, banner, right_top, feed_panel, ap, help_, banner_timer, plan_view, tac_map, score, settings_overlay])
     top = N("HUD", "CanvasLayer", {}, [root], script='ExtResource("1_s")')
-    sc = Scene(top); sc.ext_res("1_s", "Script", "res://scripts/ui/hud.gd"); sc.ext_res("2_markers", "Script", "res://scripts/ui/contact_markers.gd"); sc.ext_res("3_plan", "PackedScene", "res://scenes/plan_view.tscn"); sc.ext_res("4_map", "PackedScene", "res://scenes/tactical_map.tscn"); sc.ext_res("5_score", "PackedScene", "res://scenes/scoreboard.tscn")
+    sc = Scene(top); sc.ext_res("1_s", "Script", "res://scripts/ui/hud.gd"); sc.ext_res("2_markers", "Script", "res://scripts/ui/contact_markers.gd"); sc.ext_res("3_plan", "PackedScene", "res://scenes/plan_view.tscn"); sc.ext_res("4_map", "PackedScene", "res://scenes/tactical_map.tscn"); sc.ext_res("5_score", "PackedScene", "res://scenes/scoreboard.tscn"); sc.ext_res("6_set", "PackedScene", "res://scenes/settings.tscn")
     C = sc.connect
-    C("pressed", respawn, "_on_respawn_pressed"); C("pressed", score_btn, "_on_scoreboard_pressed")
+    C("pressed", respawn, "_on_respawn_pressed"); C("pressed", settings_btn, "_on_settings_pressed"); C("pressed", score_btn, "_on_scoreboard_pressed")
     C("pressed", map_btn, "_on_open_map_pressed"); C("pressed", brake, "_on_brake_pressed"); C("pressed", cancel, "_on_cancel_pressed")
     C("pressed", leave, "_on_leave_pressed"); C("timeout", banner_timer, "_on_banner_timer_timeout")
     write("hud.tscn", sc)
@@ -166,6 +169,7 @@ def world():
         N("ProjectilePool", "Node3D", {}, [], script='ExtResource("2_pool")'),
         rig,
         N("StationCamera", "Camera3D", {"fov": 80.0, "far": 6000.0}, [], script='ExtResource("6_stcam")'),
+        N("OrderControls", "Node3D", {}, [], script='ExtResource("7_orders")'),
         N("TargetMarker", "MeshInstance3D", {"visible": "false", "mesh": 'SubResource("Mesh_marker")'}),
         hud_inst], script='ExtResource("1_world")')
     sc = Scene(root)
@@ -173,6 +177,7 @@ def world():
     sc.ext_res("2_pool", "Script", "res://scripts/world/projectile_pool.gd")
     sc.ext_res("3_cam", "Script", "res://scripts/world/chase_camera.gd")
     sc.ext_res("6_stcam", "Script", "res://scripts/world/station_camera.gd")
+    sc.ext_res("7_orders", "Script", "res://scripts/world/order_controls.gd")
     sc.ext_res("5_hud", "PackedScene", "res://scenes/hud.tscn")
     sh = sc.sub("Shader_sky", "Shader", code=sky_shader)
     skm = sc.sub("Mat_sky", "ShaderMaterial", shader=sh)

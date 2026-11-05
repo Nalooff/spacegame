@@ -49,17 +49,31 @@ Without, someone has to walk the report along the corridors (seconds shown on th
 **"?" sphere** ("something happened around here"), and rooms with no open corridor to the bridge are marked **NO LINK** - they cannot be ordered and their
 reports wait until comms or a corridor is back. Thrusters and external antennas work without a corridor.
 
-## Controls
-| Key | Action |
+## Controls and settings
+**Settings** (main menu, or the Settings button in game) are saved to `user://settings.cfg` (`scripts/autoload/prefs.gd`) and apply at once:
+* **Movement scheme** (`scripts/ship/flight_controls.gd`, `scripts/world/order_controls.gd`). All schemes also accept the keyboard and gamepad 0 (left stick strafe/forward, right stick turn, triggers up/down, bumpers roll):
+  1. **Classic keyboard**: W/S, A/D, Space/C thrust, arrows pitch/yaw, Q/E roll.
+  2. **Mouse flight (Star Wars Outlaws style)**: the cursor's distance from the screen centre steers pitch/yaw (dead zone, strength, invert in settings); W/S thrust, A/D strafe, Q/E roll; hold the right mouse button to look around without turning.
+  3. **Mouse flight + throttle lever**: the same, but W/S move a lever that stays put (X = zero; an autopilot order releases it).
+  4. **Point and click circle (Nebulous style)**: press **G**, a ring follows the cursor over the plane at the ship's height (x, z); hold **Alt** and move the mouse up/down to change the height (y) instead; click to fly there, Esc / right click cancels. Firing is blocked while the circle is open.
+  5. **Click orders (EVE Online style)**: double click in space = align and fly that way (double click a contact = approach it); **Z** approach, **O** orbit (new autopilot mode `ORBIT`), **K** keep at range the locked enemy (R locks, or the closest one); **[ ]** change the distance.
+* Other settings: mouse strength, invert, dead zone, lever speed, orbit distance, **every key can be rebound**; camera FOV / start distance / orbit speed / invert; fullscreen, V-sync, 3D render scale, FPS cap, interface scale, FPS counter; master volume; pilot name.
+
+| Key (default) | Action |
 |---|---|
 | W / S, A / D, Space / C | thrust forward-back, strafe, up-down (ship-local; the thruster allocator + RCS solve it) |
 | arrows, Q / E | pitch / yaw, roll |
-| X | brake · **T** hold attitude (flight assist) · **R** lock the target under the cursor |
+| X | brake · **T** hold attitude (flight assist) · **R** lock the next enemy |
 | left mouse | fire at the cursor (hold = weapons free in commander mode; crew: fires the station's turret) |
-| **H** | weapons free on / off · **M** tactical map · **P** ship plan (live status) |
+| **H** | weapons free on / off · **M** tactical map · **P** exploded 3D plan (live status) |
 | **V** | commander / crew mode · **F** next station · Esc autopilot panel |
+| **Tab** | scoreboard (hold) · the **Respawn** button counts as a death |
 | right mouse drag, wheel | orbit the camera, zoom |
 Any manual flight key cancels the autopilot.
+
+## Scoreboard, respawn, joining a running game
+* `Net` keeps per-player **kills, deaths, damage dealt, damage taken** (host-authoritative, synced every 0.5 s; the victim's owner reports hits, the host validates). A death is counted when your ship is destroyed or you press **Respawn**; the player who did the **most damage to that ship since it spawned** gets the kill (none if nobody hit it). Crew damage counts for the pilot. Kill feed on the HUD, table on **Tab**.
+* **Join in progress**: the host ticks "Allow players to join while the game runs" (lobby, or scoreboard in game). Players can then join a running game (the browser shows "(in progress)"), choose a ship in the lobby and press **JOIN THE GAME**. Until a peer has loaded the world nothing is replicated to it (`Net.world_peers`).
 
 ## Ship model
 * A ship is a set of **modules**; a module is a set of polygon faces. All modules share ONE vertex pool (`ShipDesign.vertices`): two modules that use the
@@ -76,16 +90,9 @@ Any manual flight key cancels the autopilot.
 * Thrusters have any position, direction and power; force is applied AT the thruster, so they make torque.
 
 ## Ship plan (emergency map)
-Generated from the modules (`scripts/data/ship_plan.gd`), drawn by `scripts/ui/plan_canvas.gd`. Open it with **Plan** in the editor (you can edit the corridors) or **P** in game (live status).
-* **Rooms** are drawn with their real footprint and a three-letter code in the box (ENG, GUN, CMD, RDR, ANT) with a small icon.
-* **Two rooms that touch** need no corridor: just a **door** in the shared wall. **Stairs**: a room on another deck gets one small disc marker with an
-  up / down arrow and the number of the deck it leads to, **inside the room** (and straight below / above it on the other deck) - no long corridor to get down.
-* **Corridors** can start anywhere in the hull, bend, and split other corridors (a junction); bulkhead **doors** can be placed on them. Corridors never leave the ship.
-  While drawing, the thing a click would link to lights up (a room, a junction or a point on a corridor) and the line snaps to it; a click **anywhere inside a room** links to that room.
-* The deck view shows the **deck below as a faint ghost** (layer "Deck below"), so you can see what to line up with.
-* **Views**: Deck (one deck), Side, Front, **Sheet** (all decks on one page, like a blueprint), **Exploded 3D** (isometric, hover a module and the others push away
-  and it grows), white paper / dark paper. **Layers** (Hull, Rooms and corridors; more can be registered, e.g. electricity) can be switched on and off.
-* Labels and markers avoid overlapping each other. The legend lists: stairs, corridor, module (the code in the box says which).
+Generated from the modules (`scripts/data/ship_plan.gd`), drawn by `scripts/ui/plan_canvas.gd`. Open it with **Plan** in the editor or **P** in game (live status). Only the **exploded 3D view** is offered now (the flat deck / side / front / sheet drawings and the corridor drawing tools were removed from the UI; corridors are generated).
+* **Rooms** are boxes with a three-letter code (ENG, GUN, CMD, RDR, ANT); hover a module and the others push away and it grows. Drag to turn, wheel to zoom.
+* **Stairs**, **doors** and corridors are drawn between the decks; **Layers** switch hull / rooms and corridors.
 * Plan tabs: MAP, STATUS, LOGS (what the commander was told and when).
 
 ## Damage and deformation (`scripts/damage/`)
@@ -154,7 +161,7 @@ they use the real game code. Shaping vertices needs the real game, so **Open in 
 `run/window_placement/game_embed_mode`) so it opens inside the editor window. Note: the vertex builder itself is not a `@tool` script, so it cannot be drawn in the editor viewport itself.
 
 ## Autoloads
-`Data` (every tunable constant + the local player's choices) · `BusEvent` (signal hub) · `Game` (scene paths, `go_to()`) · `Net` (lobby rules - the host is the referee,
+`Data` (every tunable constant + the local player's choices) · `Prefs` (saved settings) · `BusEvent` (signal hub) · `Game` (scene paths, `go_to()`) · `Net` (lobby rules - the host is the referee,
 roster, ENet / Steam host and join, `Net.players[id]`).
 
 ## Scene tree (everything fixed lives in .tscn files)
@@ -180,7 +187,7 @@ the bullets and only the owner of the hit ship applies damage. The host spawns s
 Headless, from the project folder (`GODOT` = your binary):
 `$GODOT --headless --path . res://tests/test_<name>.tscn` for **structure, combat, builder, damage, graph, scale, plan, scenes, steam, fuzz, fuzz_live**;
 `$GODOT --headless --fixed-fps 60 --path . -s res://tests/test_drive.gd -- "Twin Hull"` (DRIVE and facing lock);
-`tests/run_net_test.sh`, `run_lobby_test.sh`, `run_board_test.sh`, `run_cli_test.sh` (the ship command line of the editor plugin); also **presets, map**; `-s res://tests/test_heading.gd` (arrow DRIVE, intercept, follow). **fuzz** = random modelling operators, save/load, random damage and comms, every plan view;
+`tests/run_net_test.sh`, `run_lobby_test.sh`, `run_board_test.sh`, `run_cli_test.sh` (the ship command line of the editor plugin); also **presets, map, scoreboard, controls**; `-s res://tests/test_orbit.gd` (orbit autopilot); `tests/run_late_test.sh` (join in progress); `-s res://tests/test_heading.gd` (arrow DRIVE, intercept, follow). **fuzz** = random modelling operators, save/load, random damage and comms, every plan view;
 **fuzz_live** = real ships flying random orders while damaged. `bash tools/check_warnings.sh` prints nothing when there is no GDScript warning (the project treats them as errors).
 Screenshots (needs a virtual display): `tools/shots.sh` with `tests/shot_*.tscn`.
 

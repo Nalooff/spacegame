@@ -9,6 +9,7 @@ var target: Node3D
 var _yaw: float = 0.0
 var _pitch: float = -0.35
 var _dist: float = 40.0
+var _dist_set: bool = false
 var _orbit: bool = false
 
 
@@ -32,11 +33,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			_dist = minf(_dist * 1.1, max_dist)
 	elif event is InputEventMouseMotion and _orbit:
 		var mm := event as InputEventMouseMotion
-		_yaw -= mm.relative.x * 0.005
-		_pitch = clampf(_pitch - mm.relative.y * 0.005, -1.45, 1.45)
+		var k := 0.005 * Prefs.cam_sens
+		_yaw -= mm.relative.x * k
+		_pitch = clampf(_pitch - mm.relative.y * k * (-1.0 if Prefs.cam_invert_y else 1.0), -1.45, 1.45)
 
 
 func _process(_dt: float) -> void:
+	if not _dist_set:
+		_dist_set = true
+		_dist = clampf(Prefs.cam_dist, min_dist, max_dist)
+	$Pivot/Camera3D.fov = Prefs.fov
 	if is_instance_valid(target):
 		global_position = target.global_position
 	rotation = Vector3(_pitch, _yaw, 0.0)

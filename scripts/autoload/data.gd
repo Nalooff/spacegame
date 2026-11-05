@@ -92,6 +92,7 @@ const SAVED_SHIP_DIR := "user://ships/"
 
 # ------------------------------------------------------------------ local player state
 var player_name: String = "Pilot"
+var cursor_busy: bool = false        ## a cursor tool (move circle) owns the mouse: no firing, no mouse steering
 ## JSON text of the design the local player will fly.
 var selected_ship_json: String = ""
 ## Path the ship builder should open on start ("" = new ship).

@@ -20,7 +20,7 @@ extends Node
 
 signal arrived
 
-enum Mode { OFF, GOTO, DRIVE }
+enum Mode { OFF, GOTO, DRIVE, ORBIT }
 
 @export var brake_frac_main: float = 0.5 ## share of best-axis acceleration used by the planned brake
 @export var brake_frac_rcs: float = 0.5
@@ -43,6 +43,8 @@ var track_ship: Ship = null             ## DRIVE: follow this ship instead of th
 var face_turrets: bool = false          ## attitude follows the turret-facing lock (see ShipTurrets.best_facing_axis)
 var heading: Vector3 = Vector3.ZERO     ## DRIVE: a fixed world DIRECTION (unit vector) to fly along, forever. ZERO = fly at `target` / `track_ship`
 var follow_distance: float = 40.0       ## GOTO on a ship: it holds this far from it, matching its velocity
+var orbit_radius: float = 150.0         ## ORBIT: circle the tracked ship at this distance (m)
+var orbit_dir: float = 1.0              ## ORBIT: +1 / -1 = which way round
 var player_order: bool = false          ## true: the player gave this order; the commander AI must not replace it
 
 # outputs (body frame), read by Ship
@@ -90,6 +92,27 @@ func go_to(p: Vector3, by_player: bool = false) -> void:
 func go_follow(other: Ship, by_player: bool = true) -> void:
 	go_to(other.global_position, by_player)
 	track_ship = other
+
+
+## ORBIT a ship (EVE style): circle it at `radius`, in the horizontal plane through it, matching its drift.
+func go_orbit(other: Ship, radius: float, by_player: bool = true) -> void:
+	go_to(other.global_position, by_player)
+	track_ship = other
+	orbit_radius = maxf(radius, 5.0)
+	mode = Mode.ORBIT
+	_arrived_sent = true
+
+
+## The velocity (relative to the orbited ship) an orbit asks for: tangential speed plus a radial correction towards the circle.
+static func orbit_velocity(rel_pos: Vector3, radius: float, tangent_speed: float, dir_sign: float = 1.0) -> Vector3:
+	var d := rel_pos.length()
+	var radial := rel_pos / d if d > 1e-6 else Vector3.RIGHT
+	var tangent := Vector3.UP.cross(radial)
+	if tangent.length() < 0.05:
+		tangent = Vector3.RIGHT.cross(radial)
+	tangent = tangent.normalized() * dir_sign
+	var radial_speed := clampf((radius - d) * 0.5, -tangent_speed, tangent_speed)
+	return tangent * tangent_speed + radial * radial_speed
 
 
 ## DRIVE along a DIRECTION (an arrow, not a point): push that way with thrust `thr` 0..1, forever. Sideways drift is cancelled.
@@ -225,6 +248,9 @@ func update(dt: float) -> void:
 	if mode == Mode.DRIVE:
 		_update_drive(dt)
 		return
+	if mode == Mode.ORBIT:
+		_update_orbit(dt)
+		return
 	var s := ship
 	var b := s.global_transform.basis
 	var tvel := Vector3.ZERO           # a tracked ship is the frame of reference: we steer relative to it
@@ -303,6 +329,38 @@ func _apply_facing(dt: float) -> bool:
 	_att_axis = _face_axis
 	_goal = to.normalized()
 	return true
+
+
+## ORBIT: same velocity loop as GOTO, but the wanted velocity goes round the ship instead of to a point.
+func _update_orbit(dt: float) -> void:
+	var s := ship
+	var b := s.global_transform.basis
+	if track_ship == null or not is_instance_valid(track_ship) or not track_ship.alive:
+		go_to(s.global_position, player_order)   # the orbited ship is gone: stay here
+		return
+	var tvel := track_ship.linear_velocity
+	var rel := s.global_position - track_ship.global_position
+	target = track_ship.global_position
+	distance = rel.length()
+	var v_rel := s.linear_velocity - tvel
+	var v_tan := clampf(sqrt(maxf(_a_eff, 0.01) * orbit_radius * 0.5), 2.0, 60.0)   # centripetal acceleration v2/r stays within half the push
+	var v_des := orbit_velocity(rel, orbit_radius, v_tan, orbit_dir)
+	var a_cmd := (kv * (v_des - v_rel)).limit_length(_a_eff)
+	var a_mag := a_cmd.length()
+	if a_mag > 1e-4:
+		_goal = a_cmd / a_mag
+	_att_axis = s.alloc.u_best
+	var faced := _apply_facing(dt)
+	var tau_att := _attitude_torque(b)
+	var f_des := s.mass * (b.transposed() * a_cmd)
+	if s.alloc.f_best > 0.0 and a_mag > 0.8 * _arcs_eff and (faced or att_error < deg_to_rad(align_gate_deg)):
+		out_throttle = s.alloc.allocate(f_des, out_throttle)
+	else:
+		out_throttle.fill(0.0)
+	out_f_rcs = f_des - s.alloc.force_of(out_throttle)
+	out_tau = tau_att - s.alloc.torque_of(out_throttle)
+	phase = "ORBIT %.0f m" % orbit_radius
+	on_target = false
 
 
 ## DRIVE: push towards the target with `throttle` of the best-axis acceleration, never slowing for arrival.

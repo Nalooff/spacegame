@@ -1184,7 +1184,7 @@ func _gunnery(k: float, gui_typing: bool) -> void:
 		if lead != Vector3.ZERO:
 			aim = lead
 	_take_aim(aim)
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not Data.cursor_busy:
 		weapons.try_fire(aim, k, PackedInt32Array(), true)       # crew mode: the trigger fires the turret you control, aimed or not
 
 
@@ -1213,7 +1213,7 @@ func _auto_gunnery(k: float) -> void:
 	var dist: float = c["dist"]
 	# HALF AUTOMATIC: radar locks and the turrets keep aiming, but the guns only fire when the player says so
 	# (hold the left mouse button over the 3D view, or switch WEAPONS FREE on with H).
-	var trigger := weapons_free or (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and get_viewport().gui_get_hovered_control() == null)
+	var trigger := weapons_free or (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not Data.cursor_busy and get_viewport().gui_get_hovered_control() == null)
 	fire_ready = dist <= Data.AUTO_FIRE_RANGE
 	if fire_ready and trigger:
 		weapons.try_fire(lead, k)
@@ -1293,7 +1293,7 @@ func _crew_step(dt: float) -> void:
 		if fl["active"] or _crew_was_flying:
 			request_flight.rpc_id(get_multiplayer_authority(), fl["move"], fl["rot"])
 		_crew_was_flying = fl["active"]
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not Data.cursor_busy:
 		weapons.request_fire.rpc_id(get_multiplayer_authority(), aim)
 	else:
 		weapons.request_aim.rpc_id(get_multiplayer_authority(), aim)
@@ -1309,17 +1309,14 @@ func _remote_step() -> void:
 	linear_velocity = sync_vel
 
 
+var flight_in := FlightControls.new()
+
 func _read_manual(typing: bool) -> Dictionary:
-	var move := Vector3.ZERO
-	var rot := Vector3.ZERO
-	if not typing:
-		move = Vector3(Input.get_axis("thrust_left", "thrust_right"),
-			Input.get_axis("thrust_down", "thrust_up"),
-			-Input.get_axis("thrust_back", "thrust_fwd")) # body -Z is forward
-		rot = Vector3(Input.get_axis("pitch_down", "pitch_up"),
-			Input.get_axis("yaw_right", "yaw_left"),
-			-Input.get_axis("roll_left", "roll_right"))
-	return {"move": move, "rot": rot, "active": move != Vector3.ZERO or rot != Vector3.ZERO}
+	if typing:
+		return {"move": Vector3.ZERO, "rot": Vector3.ZERO, "active": false}
+	var scheme := Prefs.scheme
+	var raw := FlightControls.read_raw(get_viewport(), stations.is_commander_mode(), scheme)
+	return flight_in.compute(scheme, raw, get_physics_process_delta_time(), Prefs.values(), autopilot.is_active())
 
 
 ## Manual flight: wanted force/rotation in the body frame -> throttles, RCS, gyro.

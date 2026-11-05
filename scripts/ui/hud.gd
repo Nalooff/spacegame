@@ -14,6 +14,9 @@ func _ready() -> void:
 	BusEvent.ship_died.connect(_on_ship_died)
 	BusEvent.notify.connect(show_banner)
 	Net.kill_feed.connect(_on_kill_feed)
+	%SettingsOverlay.visible = false
+	Prefs.changed.connect(_refresh_help)
+	_refresh_help()
 	_on_local_ship_changed(Data.local_ship)
 
 
@@ -111,6 +114,22 @@ func _on_brake_pressed() -> void:
 func _on_respawn_pressed() -> void:
 	if is_instance_valid(ship) and ship.alive and ship.is_multiplayer_authority():
 		ship.respawn_now()
+
+
+func _on_settings_pressed() -> void:
+	%SettingsOverlay.visible = true
+
+
+## The key help at the bottom follows the movement scheme chosen in the settings.
+func _refresh_help() -> void:
+	var lines := {
+		0: "W/S forward/back  A/D strafe  Space/C up/down  Arrows pitch/yaw  Q/E roll",
+		1: "MOUSE steers (move the cursor away from the centre)  W/S thrust  A/D strafe  Space/C up/down  Q/E roll  RMB free look",
+		2: "MOUSE steers  W/S move the throttle lever  X lever to zero  A/D strafe  Space/C up/down  Q/E roll  RMB free look",
+		3: "G move circle: cursor = x,z   hold ALT = height   click = fly there   Esc cancel     (keys WASD / arrows still fly)",
+		4: "Double click space = fly that way   R lock   Z approach   O orbit   K keep at range   [ ] range     (keys still fly)",
+	}
+	%ControlsHelpLabel.text = "%s\nLMB fire (commander mode: hold LMB to fire at the lock)   R lock next enemy   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P exploded 3D plan   X brake   T flight-assist   M tactical map   H weapons free   Tab scoreboard" % lines.get(Prefs.scheme, "")
 
 
 func _on_scoreboard_pressed() -> void:

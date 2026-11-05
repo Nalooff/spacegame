@@ -6,6 +6,7 @@ const MENU_SCENE := "res://scenes/main_menu.tscn"
 const BUILDER_SCENE := "res://scenes/ship_builder.tscn"
 const BROWSER_SCENE := "res://scenes/lobby_browser.tscn"
 const PRESETS_SCENE := "res://scenes/preset_creator.tscn"
+const SETTINGS_SCENE := "res://scenes/settings.tscn"
 const LOBBY_SCENE := "res://scenes/lobby.tscn"
 const WORLD_SCENE := "res://scenes/game_world.tscn"
 

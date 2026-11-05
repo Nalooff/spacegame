@@ -63,6 +63,11 @@ custom_minimum_size = Vector2(320, 44)
 layout_mode = 2
 text = "Module presets  (weapons, thrusters, armor)"
 
+[node name="SettingsButton" type="Button" parent="MenuCenter/MenuButtonsColumn"]
+layout_mode = 2
+custom_minimum_size = Vector2(320, 44)
+text = "Settings  (controls, camera, video, audio)"
+
 [node name="QuitButton" type="Button" parent="MenuCenter/MenuButtonsColumn"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(320, 40)
@@ -78,4 +83,5 @@ horizontal_alignment = 1
 [connection signal="pressed" from="MenuCenter/MenuButtonsColumn/CreationButton" to="." method="_on_creation_pressed"]
 [connection signal="pressed" from="MenuCenter/MenuButtonsColumn/PlayButton" to="." method="_on_play_pressed"]
 [connection signal="pressed" from="MenuCenter/MenuButtonsColumn/PresetsButton" to="." method="_on_presets_pressed"]
+[connection signal="pressed" from="MenuCenter/MenuButtonsColumn/SettingsButton" to="." method="_on_settings_pressed"]
 [connection signal="pressed" from="MenuCenter/MenuButtonsColumn/QuitButton" to="." method="_on_quit_pressed"]

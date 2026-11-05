@@ -1,9 +1,10 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/game_world.gd" id="1_world"]
 [ext_resource type="Script" path="res://scripts/world/projectile_pool.gd" id="2_pool"]
 [ext_resource type="Script" path="res://scripts/world/chase_camera.gd" id="3_cam"]
 [ext_resource type="Script" path="res://scripts/world/station_camera.gd" id="6_stcam"]
+[ext_resource type="Script" path="res://scripts/world/order_controls.gd" id="7_orders"]
 [ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="5_hud"]
 
 [sub_resource type="Shader" id="Shader_sky"]
@@ -462,6 +463,9 @@ fov = 70.0
 script = ExtResource("6_stcam")
 fov = 80.0
 far = 6000.0
+
+[node name="OrderControls" type="Node3D" parent="."]
+script = ExtResource("7_orders")
 
 [node name="TargetMarker" type="MeshInstance3D" parent="."]
 visible = false
