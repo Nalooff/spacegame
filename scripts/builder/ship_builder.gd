@@ -1114,6 +1114,8 @@ func set_thruster_direction(dir: Vector3) -> void:
 		return
 	checkpoint("dir")    # (also the mount axis of a turret base)
 	design.modules[active_module]["dir"] = dir.normalized() if dir.length() > 0.001 else Vector3(0, 0, -1)
+	if design.modules[active_module]["type"] == ModuleCatalog.BARREL:
+		design.modules[active_module]["aim_set"] = 1.0     # from now on the barrel points where the designer says
 	on_design_changed()
 
 

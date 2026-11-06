@@ -454,5 +454,7 @@
  "Volume": "Громкость",
  "Profile": "Профиль",
  "changes apply and save at once": "изменения применяются и сохраняются сразу",
- "click a key, then press the new one; Esc cancels": "нажмите на клавишу, затем на новую; Esc — отмена"
+ "click a key, then press the new one; Esc cancels": "нажмите на клавишу, затем на новую; Esc — отмена",
+ "BARREL DIRECTION": "НАПРАВЛЕНИЕ СТВОЛА",
+ "Direction the barrel FIRES when the turret is at rest. The red tube in front of it (the size of its bullet) must stay free.": "Направление, в котором СТРЕЛЯЕТ ствол при неподвижной башне. Красная труба перед ним (размером с снаряд) должна оставаться свободной."
 }

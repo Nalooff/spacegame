@@ -454,5 +454,7 @@
  "Volume": "Lautstärke",
  "Profile": "Profil",
  "changes apply and save at once": "Änderungen werden sofort angewendet und gespeichert",
- "click a key, then press the new one; Esc cancels": "Taste anklicken, dann die neue drücken; Esc bricht ab"
+ "click a key, then press the new one; Esc cancels": "Taste anklicken, dann die neue drücken; Esc bricht ab",
+ "BARREL DIRECTION": "RICHTUNG DES ROHRS",
+ "Direction the barrel FIRES when the turret is at rest. The red tube in front of it (the size of its bullet) must stay free.": "Richtung, in die das Rohr FEUERT, wenn der Turm in Ruhe ist. Die rote Röhre davor (so groß wie sein Geschoss) muss frei bleiben."
 }

@@ -48,6 +48,8 @@ const EXHAUST_MAX_LENGTH := 40.0
 const EXHAUST_MARGIN := 0.15          # metres added around the nozzle outline
 const EXHAUST_NOZZLE_SLICE_M := 0.2   # the nozzle = the last slice of the thruster along the exhaust: at least this thick ...
 const EXHAUST_NOZZLE_SLICE_FRACTION := 0.08   # ... or this fraction of its length
+const BARREL_TUBE_LENGTH := 4.0      # the tube in front of a barrel's muzzle (the size of its bullet) that nothing may block, metres
+const BARREL_TUBE_MARGIN := 0.05
 const EXHAUST_BURN_DPS := 40.0        # burn damage per second at full throttle for a module inside the cone
 const TURRET_AIM_TOLERANCE_DEG := 1.5  # a turret fires once its barrel points this close to the aim point
 const TURRET_SPREAD_DEG := 1.2        # extra spread of a turret with precision 0 (precision 1 adds none)

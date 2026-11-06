@@ -49,6 +49,9 @@ Without, someone has to walk the report along the corridors (seconds shown on th
 **"?" sphere** ("something happened around here"), and rooms with no open corridor to the bridge are marked **NO LINK** - they cannot be ordered and their
 reports wait until comms or a corridor is back. Thrusters and external antennas work without a corridor.
 
+## Barrels: direction, muzzle tube, aiming circles
+A barrel has its own **direction** (Properties tab, like a thruster) that is where it fires when the turret is at rest (older ships keep "base to barrel"). In front of the muzzle a **tube the size of the barrel's bullet** (`Data.BARREL_TUBE_LENGTH`, red in the builder) must stay free: a ship with a module in it cannot be saved. The builder draws two circles through the barrel (horizontal = yaw around the mount axis, vertical = pitch); the bright part is the allowed arc, a full bright circle means 360 degrees. Turning the turret turns the vertical circle around the horizontal one. Test: `tests/test_barrel_dir.tscn`.
+
 ## Controls and settings
 **Flying**: the flight keys, the mouse schemes and the G / EVE orders work in commander mode (full ship control) and at a pilot seat, not at a gun station (there the mouse aims the turret) and not while walking. **Gun-station camera**: the eye is placed on the side of the turret with the clearest view, so an upside-down or buried turret never puts the camera inside the hull (`tests/test_station_cam.tscn`). **3D tactical map**: the plane a click lands on (the chosen order height) is drawn as a cyan grid, the cursor marker and read-out show x, z and height.
 **Settings** (main menu, or the Settings button in game) are saved to `user://settings.cfg` (`scripts/autoload/prefs.gd`) and apply at once:

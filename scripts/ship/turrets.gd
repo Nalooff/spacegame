@@ -112,6 +112,8 @@ func _make_rig(d: ShipDesign, bi: int, bar: int) -> Rig:
 	r.barrel = bar
 	r.pivot = d.module_centroid(bi)
 	var rest := (d.module_centroid(bar) - r.pivot)
+	if float(d.extra(bar, "aim_set")) > 0.5:         # the designer chose where this barrel points
+		rest = d.barrel_dir(bar) * maxf(rest.length(), 0.5)
 	r.up = (d.modules[bi]["dir"] as Vector3)
 	r.up = r.up.normalized() if r.up.length() > 0.001 else Vector3.UP
 	var flat := rest - r.up * rest.dot(r.up)

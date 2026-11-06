@@ -16,6 +16,10 @@ const LINKED_DOT_COLOR := Color(0.35, 1.0, 0.45)
 const PLAIN_DOT_COLOR := Color(0.92, 0.92, 0.97)
 const THRUSTER_ARROW_COLOR := Color(0.3, 0.95, 1.0)
 const EXHAUST_COLOR := Color(1.0, 0.5, 0.1)
+const BARREL_TUBE_COLOR := Color(1.0, 0.25, 0.25, 0.6)
+const CIRCLE_YAW_COLOR := Color(0.35, 0.8, 1.0, 0.9)
+const CIRCLE_PITCH_COLOR := Color(0.6, 1.0, 0.45, 0.9)
+const CIRCLE_DIM := 0.28
 const EXHAUST_ZONE_COLOR := Color(1.0, 0.6, 0.1, 0.55)
 const TURRET_LINK_COLOR := Color(1.0, 0.4, 0.9, 0.9)
 const ORPHAN_FILL_COLOR := Color(1.0, 0.0, 0.3, 0.55)    # faces that belong to no module
@@ -177,6 +181,13 @@ func _redraw_overlay(b: ShipBuilder) -> void:
 		for mi in d.modules.size():
 			if d.modules[mi]["type"] == ModuleCatalog.THRUSTER and not b.is_hidden(mi):
 				_draw_exhaust(im, ExhaustZone.zone(d, mi))
+	# barrel tubes: the free space in front of each muzzle (the size of its bullet)
+	if not b.is_large() and b.overlays["turrets"]:
+		for mi in d.modules.size():
+			if d.modules[mi]["type"] == ModuleCatalog.BARREL and not b.is_hidden(mi):
+				_draw_exhaust(im, ExhaustZone.barrel_zone(d, mi), BARREL_TUBE_COLOR)
+				var bc := d.module_centroid(mi)
+				_line(im, bc, bc + d.barrel_dir(mi) * 1.0, BARREL_TUBE_COLOR)
 	# turrets: link line base -> barrel and the firing arc (yaw limits)
 	for mi in d.modules.size():
 		if d.modules[mi]["type"] == ModuleCatalog.TURRET and b.overlays["turrets"] and not b.is_hidden(mi):
@@ -233,7 +244,7 @@ func _fill_face(im: ImmediateMesh, d: ShipDesign, mi: int, fi: int, color: Color
 			im.surface_add_vertex(corner)
 
 
-func _draw_exhaust(im: ImmediateMesh, z: Dictionary) -> void:
+func _draw_exhaust(im: ImmediateMesh, z: Dictionary, col: Color = EXHAUST_ZONE_COLOR) -> void:
 	# the nozzle outline at the start, at the end, and straight lines between them (a prism, not a cone)
 	var o: Vector3 = z["origin"]
 	var ax: Vector3 = z["axis"]
@@ -247,38 +258,59 @@ func _draw_exhaust(im: ImmediateMesh, z: Dictionary) -> void:
 		var b: Vector2 = outline[(i + 1) % n]
 		var pa: Vector3 = o + (z["u"] as Vector3) * a.x + (z["v"] as Vector3) * a.y
 		var pb: Vector3 = o + (z["u"] as Vector3) * b.x + (z["v"] as Vector3) * b.y
-		_line(im, pa, pb, EXHAUST_ZONE_COLOR)
-		_line(im, pa + far, pb + far, EXHAUST_ZONE_COLOR)
+		_line(im, pa, pb, col)
+		_line(im, pa + far, pb + far, col)
 		if i % maxi(int(n / 8.0), 1) == 0:
-			_line(im, pa, pa + far, EXHAUST_ZONE_COLOR)
+			_line(im, pa, pa + far, col)
 
 
 func _draw_turret(im: ImmediateMesh, d: ShipDesign, mi: int) -> void:
 	var c := d.module_centroid(mi)
 	var up: Vector3 = (d.modules[mi]["dir"] as Vector3).normalized()
-	var first := true
+	var yaw_min := deg_to_rad(float(d.extra(mi, "yaw_min")))
+	var yaw_max := deg_to_rad(float(d.extra(mi, "yaw_max")))
+	var pitch_min := deg_to_rad(float(d.extra(mi, "pitch_min")))
+	var pitch_max := deg_to_rad(float(d.extra(mi, "pitch_max")))
 	for bar in d.barrels_of(mi):
 		if bar < 0 or bar >= d.modules.size():
 			continue
-		_line(im, c, d.module_centroid(bar), TURRET_LINK_COLOR)
-		if not first:
-			continue
-		first = false
-		var rest := d.module_centroid(bar) - c
-		var flat := rest - up * rest.dot(up)
-		if flat.length() > 0.001:
-			var fwd := flat.normalized()
-			var yaw_min := deg_to_rad(float(d.extra(mi, "yaw_min")))
-			var yaw_max := deg_to_rad(float(d.extra(mi, "yaw_max")))
-			if yaw_max - yaw_min < TAU - 0.01:
-				var r := maxf(rest.length() * 1.4, 0.5)
-				_line(im, c, c + fwd.rotated(up, yaw_min) * r, TURRET_LINK_COLOR)
-				_line(im, c, c + fwd.rotated(up, yaw_max) * r, TURRET_LINK_COLOR)
-				var steps := 10
-				for i in steps:
-					var a0 := lerpf(yaw_min, yaw_max, float(i) / steps)
-					var a1 := lerpf(yaw_min, yaw_max, float(i + 1) / steps)
-					_line(im, c + fwd.rotated(up, a0) * r, c + fwd.rotated(up, a1) * r, TURRET_LINK_COLOR)
+		var bc := d.module_centroid(bar)
+		_line(im, c, bc, TURRET_LINK_COLOR)
+		# the two circles through the barrel: HORIZONTAL (yaw: around the mount axis) and VERTICAL (pitch). They cross
+		# at the rest direction of the barrel; turning the barrel (yaw) turns the vertical circle round the horizontal one.
+		var dir := d.barrel_dir(bar)
+		var flat := dir - up * dir.dot(up)
+		if flat.length() < 0.001:
+			flat = Vector3.FORWARD - up * Vector3.FORWARD.dot(up)
+			if flat.length() < 0.001:
+				flat = Vector3.RIGHT
+		var fwd := flat.normalized()
+		var right := fwd.cross(up).normalized()
+		var rest_pitch := atan2(dir.dot(up), 1.0 * flat.length() / maxf(dir.length(), 0.001))
+		var r := maxf(bc.distance_to(c), 0.6)
+		# horizontal circle: radius = the barrel's horizontal reach, at the barrel's height above the base centre
+		var rh := r * cos(rest_pitch)
+		var hc := c + up * (r * sin(rest_pitch))
+		_arc_circle(im, hc, up, fwd * rh, yaw_min, yaw_max, CIRCLE_YAW_COLOR)
+		# vertical circle: through the pivot, containing the mount axis and the barrel's direction
+		_arc_circle(im, c, right, fwd * r, pitch_min, pitch_max, CIRCLE_PITCH_COLOR)
+		# the barrel direction itself, and the turret arc limits as radial lines
+		_line(im, c, c + (Basis(right, rest_pitch) * fwd) * r * 1.25, CIRCLE_PITCH_COLOR)
+		if yaw_max - yaw_min < TAU - 0.01:
+			_line(im, hc, hc + fwd.rotated(up, yaw_min) * rh * 1.2, CIRCLE_YAW_COLOR)
+			_line(im, hc, hc + fwd.rotated(up, yaw_max) * rh * 1.2, CIRCLE_YAW_COLOR)
+
+
+## A circle of 48 segments round `axis` through `centre`; `start` is the radius vector at angle 0. The part between
+## the angles lo..hi (radians from `start`) is bright, the rest dim: the bright part is where the turret may point.
+func _arc_circle(im: ImmediateMesh, centre: Vector3, axis: Vector3, start: Vector3, lo: float, hi: float, col: Color) -> void:
+	var steps := 48
+	for i in steps:
+		var a0 := TAU * float(i) / steps
+		var a1 := TAU * float(i + 1) / steps
+		var m := wrapf((a0 + a1) * 0.5, -PI, PI)
+		var cc := col if (m >= lo and m <= hi) else Color(col, col.a * CIRCLE_DIM)
+		_line(im, centre + start.rotated(axis, a0), centre + start.rotated(axis, a1), cc)
 
 
 func _line(im: ImmediateMesh, a: Vector3, b: Vector3, color: Color) -> void:

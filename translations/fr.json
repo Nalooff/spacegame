@@ -454,5 +454,7 @@
  "Volume": "Volume",
  "Profile": "Profil",
  "changes apply and save at once": "les changements s'appliquent et s'enregistrent immédiatement",
- "click a key, then press the new one; Esc cancels": "cliquez sur une touche, puis appuyez sur la nouvelle ; Échap annule"
+ "click a key, then press the new one; Esc cancels": "cliquez sur une touche, puis appuyez sur la nouvelle ; Échap annule",
+ "BARREL DIRECTION": "DIRECTION DU CANON",
+ "Direction the barrel FIRES when the turret is at rest. The red tube in front of it (the size of its bullet) must stay free.": "Direction dans laquelle le canon TIRE quand la tourelle est au repos. Le tube rouge devant lui (la taille de son projectile) doit rester libre."
 }

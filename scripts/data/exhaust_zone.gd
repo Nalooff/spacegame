@@ -13,7 +13,14 @@ extends RefCounted
 ## something may sit right beside it; a wide nozzle blocks a wide tube.
 static func zone(d: ShipDesign, mi: int) -> Dictionary:
 	var push: Vector3 = (d.modules[mi]["dir"] as Vector3).normalized()
-	var axis := -push                          # exhaust flies this way
+	var heat_mw := d.thruster_power(mi) * d.stat(mi, "heat_per_n") / 1.0e6
+	return zone_along(d, mi, -push, minf(Data.EXHAUST_BASE_LENGTH + Data.EXHAUST_LENGTH_PER_MW * heat_mw, Data.EXHAUST_MAX_LENGTH), Data.EXHAUST_MARGIN)
+
+
+## The OPENING of module `mi` seen along `axis` (the outline of its last slice) pushed `length` metres straight on.
+## Used for the thruster exhaust AND for the tube in front of a barrel's muzzle (axis = where the barrel points).
+static func zone_along(d: ShipDesign, mi: int, axis: Vector3, length: float, margin: float) -> Dictionary:
+	axis = axis.normalized()
 	var centre := d.module_centroid(mi)
 	var pts := d.module_points(mi)
 	var reach := 0.0                           # how far the module extends along the exhaust direction
@@ -40,12 +47,15 @@ static func zone(d: ShipDesign, mi: int) -> Dictionary:
 	var outline := Geometry2D.convex_hull(flat) if flat.size() >= 3 else PackedVector2Array([Vector2(-0.1, -0.1), Vector2(0.1, -0.1), Vector2(0.1, 0.1), Vector2(-0.1, 0.1)])
 	if outline.size() > 1 and outline[0] == outline[outline.size() - 1]:
 		outline.remove_at(outline.size() - 1)      # convex_hull repeats the first point
-	var grown := Geometry2D.offset_polygon(outline, Data.EXHAUST_MARGIN)
+	var grown := Geometry2D.offset_polygon(outline, margin)
 	if not grown.is_empty():
 		outline = grown[0]
-	var heat_mw := d.thruster_power(mi) * d.stat(mi, "heat_per_n") / 1.0e6
-	return {"origin": centre + axis * reach, "axis": axis, "u": u, "v": v, "outline": outline, "radius": radius + Data.EXHAUST_MARGIN,
-		"length": minf(Data.EXHAUST_BASE_LENGTH + Data.EXHAUST_LENGTH_PER_MW * heat_mw, Data.EXHAUST_MAX_LENGTH)}
+	return {"origin": centre + axis * reach, "axis": axis, "u": u, "v": v, "outline": outline, "radius": radius + margin, "length": length}
+
+
+## The tube in front of a barrel: the size of the barrel's own opening (= its bullet), along the barrel's direction.
+static func barrel_zone(d: ShipDesign, bar: int) -> Dictionary:
+	return zone_along(d, bar, d.barrel_dir(bar), Data.BARREL_TUBE_LENGTH, Data.BARREL_TUBE_MARGIN)
 
 
 static func contains(z: Dictionary, p: Vector3) -> bool:
@@ -79,6 +89,27 @@ static func conflicts(d: ShipDesign, hull_ids: Array = []) -> Array[Vector2i]:
 				continue
 			for p in pts:
 				if contains(zones[i], p):
+					out.append(Vector2i(i, j))
+					break
+	return out
+
+
+## [Vector2i(barrel, blocking module)]: modules standing in the tube in front of a barrel's muzzle. Its own turret
+## (base and sibling barrels) never block it.
+static func barrel_conflicts(d: ShipDesign, hull_ids: Array = []) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for i in d.modules.size():
+		if d.modules[i]["type"] != ModuleCatalog.BARREL:
+			continue
+		var tb := d.turret_of(i)
+		var z := barrel_zone(d, i)
+		for j in d.modules.size():
+			var t: String = d.modules[j]["type"]
+			if j == i or t == ModuleCatalog.LOOSE or j == tb or (tb >= 0 and d.barrels_of(tb).has(j)):
+				continue
+			var pts := HullShapes.points(d, hull_ids[j] if j < hull_ids.size() else HullShapes.hull_ids(d, j, 200))
+			for p in pts:
+				if contains(z, p):
 					out.append(Vector2i(i, j))
 					break
 	return out

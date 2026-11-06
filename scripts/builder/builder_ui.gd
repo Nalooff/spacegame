@@ -386,9 +386,16 @@ func _refresh_selection_tab() -> void:
 		turret_pitch_max_spin.set_value_no_signal(d.extra(am, "pitch_max"))
 		var bars := d.barrels_of(am)
 		turret_link_label.text = tr("Barrels: %s") % str(bars) if not bars.is_empty() else tr("No barrel linked yet (select base + barrel(s), press T).")
-	thruster_section.visible = m["type"] == ModuleCatalog.THRUSTER
+	var is_barrel: bool = m["type"] == ModuleCatalog.BARREL
+	thruster_section.visible = m["type"] == ModuleCatalog.THRUSTER or is_barrel
 	if thruster_section.visible:
-		var dir: Vector3 = m["dir"]
+		var head := thruster_section.find_child("ThrusterHeading", true, false) as Label
+		var help := thruster_section.find_child("ThrusterDirHelp", true, false) as Label
+		if head != null:
+			head.text = tr("BARREL DIRECTION") if is_barrel else tr("THRUSTER")
+		if help != null:
+			help.text = tr("Direction the barrel FIRES when the turret is at rest. The red tube in front of it (the size of its bullet) must stay free.") if is_barrel else tr("Direction the thruster PUSHES the ship.\n(The flame goes the opposite way.)")
+		var dir: Vector3 = d.barrel_dir(am) if is_barrel else m["dir"]
 		thrust_dir_x_spin.set_value_no_signal(dir.x)
 		thrust_dir_y_spin.set_value_no_signal(dir.y)
 		thrust_dir_z_spin.set_value_no_signal(dir.z)

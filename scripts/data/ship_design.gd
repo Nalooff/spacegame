@@ -25,8 +25,9 @@ extends RefCounted
 const PRETTY_JSON_MAX_VERTICES := 20000  # bigger ships are saved as compressed binary (.ship)
 const BINARY_MAGIC := "VSHP"
 ## Extra per-module settings (turret base: arc and speed; barrel link). Saved only when present.
-const MODULE_EXTRA_KEYS := ["yaw_min", "yaw_max", "pitch_min", "pitch_max"]
-const EXTRA_DEFAULTS := {"yaw_min": -180.0, "yaw_max": 180.0, "pitch_min": -10.0, "pitch_max": 85.0}
+const MODULE_EXTRA_KEYS := ["yaw_min", "yaw_max", "pitch_min", "pitch_max", "aim_set"]
+## aim_set (barrels): 1 = the barrel has its own chosen direction ("dir"); 0 = older ships, it points from its turret base to itself.
+const EXTRA_DEFAULTS := {"yaw_min": -180.0, "yaw_max": 180.0, "pitch_min": -10.0, "pitch_max": 85.0, "aim_set": 0.0}
 
 var ship_name: String = "New Ship"
 var vertices: PackedVector3Array = PackedVector3Array()
@@ -103,6 +104,27 @@ func remove_module(mi: int) -> void:
 ## Setting `key` of module `mi` (EXTRA_DEFAULTS when it was never set): turret arcs.
 func extra(mi: int, key: String) -> Variant:
 	return modules[mi].get(key, EXTRA_DEFAULTS[key])
+
+
+## The turret base that barrel `bar` is mounted on (-1 = none).
+func turret_of(bar: int) -> int:
+	for i in modules.size():
+		if modules[i]["type"] == ModuleCatalog.TURRET and barrels_of(i).has(bar):
+			return i
+	return -1
+
+
+## Where barrel `bar` points when the turret is at rest (unit vector): its own direction when the designer chose one,
+## otherwise (older ships) the line from its turret base to the barrel.
+func barrel_dir(bar: int) -> Vector3:
+	if float(extra(bar, "aim_set")) > 0.5 and (modules[bar]["dir"] as Vector3).length() > 0.001:
+		return (modules[bar]["dir"] as Vector3).normalized()
+	var tb := turret_of(bar)
+	if tb >= 0:
+		var r := module_centroid(bar) - module_centroid(tb)
+		if r.length() > 0.001:
+			return r.normalized()
+	return Vector3(0, 0, -1)
 
 
 # ---- module configuration (see ModulePresets) --------------------------------------------------------------------
@@ -885,6 +907,7 @@ func validate() -> Array[String]:
 	for m in ModuleGraph.unreachable(self):
 		errors.append("Module %d (%s) is not connected to a commander (share a vertex with a module that is). It would fall off." % [m, modules[m]["type"]])
 	errors.append_array(exhaust_errors())
+	errors.append_array(barrel_tube_errors())
 	errors.append_array(turret_errors())
 	return errors
 
@@ -897,6 +920,14 @@ func unwalkable_rooms() -> PackedInt32Array:
 		if modules[r]["type"] == ModuleCatalog.COMMANDER:
 			cmds.append(r)
 	return pl.unlinked_rooms(cmds)
+
+
+## Errors for modules standing in the tube in front of a barrel (see ExhaustZone.barrel_zone).
+func barrel_tube_errors() -> Array[String]:
+	var out: Array[String] = []
+	for c in ExhaustZone.barrel_conflicts(self):
+		out.append("Module %d (%s) blocks the muzzle of barrel %d. Move it out of the red tube in front of the barrel (or turn the barrel)." % [c.y, modules[c.y]["type"], c.x])
+	return out
 
 
 ## Errors for modules standing in a thruster's exhaust (see ExhaustZone).
@@ -1050,7 +1081,7 @@ func to_dict() -> Dictionary:
 		var entry := {"type": m["type"], "faces": faces}
 		if m.get("material", "") != "":
 			entry["material"] = m["material"]
-		if m["type"] == ModuleCatalog.THRUSTER or m["type"] == ModuleCatalog.TURRET:
+		if m["type"] == ModuleCatalog.THRUSTER or m["type"] == ModuleCatalog.TURRET or m["type"] == ModuleCatalog.BARREL:
 			var d: Vector3 = m["dir"]
 			entry["dir"] = [d.x, d.y, d.z]
 		entry["cfg"] = (m["cfg"] as Dictionary).duplicate(true)
