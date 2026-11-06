@@ -151,7 +151,6 @@
  "Join selected lobby": "加入所选大厅",
  "Joining '%s' through Steam ...": "正通过 Steam 加入“%s”……",
  "Joining '%s' via %s ...": "正在加入“%s”（经由 %s）……",
- "KEY BINDINGS  (click a key, then press the new one; Esc cancels)": "按键绑定（点击一个按键，然后按下新按键；Esc 取消）",
  "Keep target at range": "与目标保持距离",
  "Keep these numbers as your own preset for this module type": "将这些数值保存为此模块类型的自定义预设",
  "Keep turrets facing the enemy": "让炮塔始终对准敌人",
@@ -446,5 +445,14 @@
  "Public (anyone can join)": "公开（任何人都可加入）",
  "Seats": "座位",
  "Status": "状态",
- "choosing": "选择中"
+ "choosing": "选择中",
+ "Flying": "飞行",
+ "Sensitivity": "灵敏度",
+ "Key bindings": "按键绑定",
+ "Display": "显示",
+ "Performance": "性能",
+ "Volume": "音量",
+ "Profile": "个人资料",
+ "changes apply and save at once": "更改会立即生效并保存",
+ "click a key, then press the new one; Esc cancels": "点击按键，然后按下新的按键；Esc 取消"
 }

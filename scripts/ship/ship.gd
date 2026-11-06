@@ -1065,7 +1065,7 @@ func _authority_step(dt: float) -> void:
 			stations.toggle_mode()
 		elif Input.is_action_just_pressed("next_station") and stations.mode == "crew":
 			stations.next_station()
-	var typing := gui_typing or not stations.can_fly()     # only the pilot seat flies the ship (see ShipStations)
+	var typing := gui_typing        # the flight controls work from anywhere (commander mode, any station) as long as THIS bridge holds them
 	var manual := _read_manual(typing)
 	if not i_fly():
 		# the owner sits at a gunner-only bridge: the ship is flown by a CREW member at a pilot bridge (if any)
@@ -1315,7 +1315,7 @@ func _read_manual(typing: bool) -> Dictionary:
 	if typing:
 		return {"move": Vector3.ZERO, "rot": Vector3.ZERO, "active": false}
 	var scheme := Prefs.scheme
-	var raw := FlightControls.read_raw(get_viewport(), stations.is_commander_mode(), scheme)
+	var raw := FlightControls.read_raw(get_viewport(), stations.is_commander_mode() or stations.can_fly(), scheme)
 	return flight_in.compute(scheme, raw, get_physics_process_delta_time(), Prefs.values(), autopilot.is_active())
 
 

@@ -27,7 +27,7 @@ for f in glob.glob(ROOT + "/scripts/**/*.gd", recursive=True):
             add(m.group(1))
         for m in re.finditer(r'_check\(p, "[^"]*", "[^"]*", ' + LIT, src):
             add(m.group(1))
-        for m in re.finditer(r'_page\(' + LIT, src):
+        for m in re.finditer(r'_(?:page|section)\(\w*,? ?' + LIT, src):
             add(m.group(1))
         for m in re.finditer(r'_row\(p, ' + LIT + r', ' + LIT, src):
             add(m.group(1)); add(m.group(2))

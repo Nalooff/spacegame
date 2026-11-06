@@ -118,7 +118,7 @@ the person actually walking (only the path length); balance numbers are first gu
 ## 6. What is not covered
 
 * No automated test drives the real keyboard / mouse input of the first-person camera; it was checked by screenshot only.
-* Crew members from the lobby do not get stations; only the pilot does.
+* Crew members from the lobby do not get stations; only the pilot does. Flight input (keys, mouse schemes, orders) is read wherever the player is, as long as their bridge flies the ship (`Ship.i_fly()`).
 * Balance numbers (presets, signature references, ranges) are first guesses: tune them in `ModulePresets` and `Data`.
 
 

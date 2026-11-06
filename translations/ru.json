@@ -151,7 +151,6 @@
  "Join selected lobby": "Войти в выбранное лобби",
  "Joining '%s' through Steam ...": "Вход в «%s» через Steam ...",
  "Joining '%s' via %s ...": "Вход в «%s» через %s ...",
- "KEY BINDINGS  (click a key, then press the new one; Esc cancels)": "НАЗНАЧЕНИЕ КЛАВИШ  (щёлкните по клавише, затем нажмите новую; Esc — отмена)",
  "Keep target at range": "Держать цель на дистанции",
  "Keep these numbers as your own preset for this module type": "Сохранить эти значения как свой пресет для этого типа модулей",
  "Keep turrets facing the enemy": "Держать турели направленными на врага",
@@ -446,5 +445,14 @@
  "Public (anyone can join)": "Открытое (может войти любой)",
  "Seats": "Места",
  "Status": "Состояние",
- "choosing": "выбирает"
+ "choosing": "выбирает",
+ "Flying": "Полёт",
+ "Sensitivity": "Чувствительность",
+ "Key bindings": "Клавиши",
+ "Display": "Экран",
+ "Performance": "Производительность",
+ "Volume": "Громкость",
+ "Profile": "Профиль",
+ "changes apply and save at once": "изменения применяются и сохраняются сразу",
+ "click a key, then press the new one; Esc cancels": "нажмите на клавишу, затем на новую; Esc — отмена"
 }

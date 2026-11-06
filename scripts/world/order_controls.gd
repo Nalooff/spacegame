@@ -94,7 +94,7 @@ static func pick_contact(contacts: Array, origin: Vector3, dir: Vector3, max_ang
 # ------------------------------------------------------------------ live
 func _local() -> Ship:
 	var s := Data.local_ship
-	if is_instance_valid(s) and s.alive and s.is_multiplayer_authority() and s.stations.can_fly():
+	if is_instance_valid(s) and s.alive and s.is_multiplayer_authority() and s.i_fly():
 		return s
 	return null
 

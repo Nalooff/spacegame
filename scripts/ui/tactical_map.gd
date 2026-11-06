@@ -298,7 +298,7 @@ func _apply_altitude() -> void:
 ## The ship object under the cursor (or an empty dictionary).
 func ship_at(p: Vector2) -> Dictionary:
 	var best := {}
-	var best_d := 14.0
+	var best_d := 14.0 if not _view3d else 9.0
 	for o in _objects:
 		if o["kind"] != "ship":
 			continue
@@ -382,6 +382,19 @@ func _draw_map() -> void:
 	while z < f.z + reach:
 		canvas.draw_line(_proj(Vector3(f.x - reach, gy, z)), _proj(Vector3(f.x + reach, gy, z)), GRID, 1.0)
 		z += step
+	# 3D: the plane a click lands on (the chosen order height) is drawn too, so the point you
+	# aim at on screen is exactly the point on this grid, never a guess about the height
+	var oy := altitude_spin.value
+	if _view3d and absf(oy - gy) > 0.5:
+		var gc := Color(0.4, 0.9, 1.0, 0.16)
+		var ox := floorf((f.x - reach) / step) * step
+		while ox < f.x + reach:
+			canvas.draw_line(_proj(Vector3(ox, oy, f.z - reach)), _proj(Vector3(ox, oy, f.z + reach)), gc, 1.0)
+			ox += step
+		var oz := floorf((f.z - reach) / step) * step
+		while oz < f.z + reach:
+			canvas.draw_line(_proj(Vector3(f.x - reach, oy, oz)), _proj(Vector3(f.x + reach, oy, oz)), gc, 1.0)
+			oz += step
 	canvas.draw_string(font, Vector2(10, sz.y - 10), tr("grid %s m   (%s)") % [str(step), tr("ground = your height, drag right button to turn") if _view3d else tr("north = -Z, up")], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(INK, 0.6))
 	var me3 := ship.global_position
 	var me := _proj(me3)
@@ -420,7 +433,11 @@ func _draw_map() -> void:
 	# cursor read-out: the point of the plane at the chosen height
 	if _hover.x < sz.x - (0.0 if _view3d else RULER_W):
 		var w := _unproject(_hover, altitude_spin.value if _view3d else gy)
-		canvas.draw_string(font, _hover + Vector2(14, 18), "%.0f, %.0f" % [w.x, w.z], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(INK, 0.6))
+		if _view3d:
+			var hc := Color(0.4, 0.9, 1.0)
+			canvas.draw_circle(_hover, 4.0, Color(hc, 0.9))
+			_stilt(w, hc)
+		canvas.draw_string(font, _hover + Vector2(14, 18), "%.0f, %.0f  h %.0f" % [w.x, w.z, w.y], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(INK, 0.6))
 	# legend
 	var ly := 18.0
 	for item in [["enemy ship", ENEMY], ["friend", FRIEND], ["shot", SHOT], ["landmark", ROCK]]:

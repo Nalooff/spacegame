@@ -151,7 +151,6 @@
  "Join selected lobby": "選択したロビーに参加",
  "Joining '%s' through Steam ...": "Steam 経由で「%s」に参加中...",
  "Joining '%s' via %s ...": "「%s」に参加中（%s 経由）...",
- "KEY BINDINGS  (click a key, then press the new one; Esc cancels)": "キー割り当て（キーをクリックして新しいキーを押す。Esc でキャンセル）",
  "Keep target at range": "目標との距離を維持",
  "Keep these numbers as your own preset for this module type": "この数値をこのモジュール種別の自分用プリセットとして保存",
  "Keep turrets facing the enemy": "砲塔を敵に向け続ける",
@@ -446,5 +445,14 @@
  "Public (anyone can join)": "公開（誰でも参加可）",
  "Seats": "席",
  "Status": "状態",
- "choosing": "選択中"
+ "choosing": "選択中",
+ "Flying": "飛行",
+ "Sensitivity": "感度",
+ "Key bindings": "キー割り当て",
+ "Display": "表示",
+ "Performance": "パフォーマンス",
+ "Volume": "音量",
+ "Profile": "プロフィール",
+ "changes apply and save at once": "変更はすぐに適用・保存されます",
+ "click a key, then press the new one; Esc cancels": "キーをクリックして新しいキーを押す。Esc でキャンセル"
 }

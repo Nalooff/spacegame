@@ -151,7 +151,6 @@
  "Join selected lobby": "Rejoindre le salon sélectionné",
  "Joining '%s' through Steam ...": "Connexion à « %s » via Steam ...",
  "Joining '%s' via %s ...": "Connexion à « %s » via %s ...",
- "KEY BINDINGS  (click a key, then press the new one; Esc cancels)": "RACCOURCIS CLAVIER  (cliquez sur une touche, puis appuyez sur la nouvelle ; Échap annule)",
  "Keep target at range": "Garder la cible à distance",
  "Keep these numbers as your own preset for this module type": "Garder ces valeurs comme préréglage personnel pour ce type de module",
  "Keep turrets facing the enemy": "Garder les tourelles face à l'ennemi",
@@ -446,5 +445,14 @@
  "Public (anyone can join)": "Public (tout le monde peut rejoindre)",
  "Seats": "Sièges",
  "Status": "État",
- "choosing": "choisit"
+ "choosing": "choisit",
+ "Flying": "Pilotage",
+ "Sensitivity": "Sensibilité",
+ "Key bindings": "Touches",
+ "Display": "Affichage",
+ "Performance": "Performances",
+ "Volume": "Volume",
+ "Profile": "Profil",
+ "changes apply and save at once": "les changements s'appliquent et s'enregistrent immédiatement",
+ "click a key, then press the new one; Esc cancels": "cliquez sur une touche, puis appuyez sur la nouvelle ; Échap annule"
 }

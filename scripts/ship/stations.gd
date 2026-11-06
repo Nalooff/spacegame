@@ -58,9 +58,9 @@ func rebuild() -> void:
 			var label := ("Pilot seat (module %d)" if d.can_pilot(mi) else "Gunner bridge (module %d)") % mi
 			if not linked.is_empty():
 				label += "  + turrets %s linked" % str(linked)
-			stations.append({"module": mi, "kind": "pilot", "pos": _eye_above(d, mi, Vector3.UP), "label": label})
+			stations.append({"module": mi, "kind": "pilot", "pos": _clear_eye(d, mi, Vector3.UP), "label": label})
 		elif t == ModuleCatalog.TURRET and not d.barrels_of(mi).is_empty() and d.controls(mine, mi):
-			stations.append({"module": mi, "kind": "gun", "pos": _eye_above(d, mi, d.modules[mi]["dir"]), "label": "Gun station (turret %d)" % mi})
+			stations.append({"module": mi, "kind": "gun", "pos": _clear_eye(d, mi, d.modules[mi]["dir"]), "label": "Gun station (turret %d)" % mi})
 	current = 0
 	for i in stations.size():
 		if int(stations[i]["module"]) == keep_module:
@@ -78,6 +78,40 @@ func _eye_above(d: ShipDesign, mi: int, up: Vector3) -> Vector3:
 	for p in d.module_points(mi):
 		reach = maxf(reach, (p - c).dot(u))
 	return c + u * (reach + EYE_CLEARANCE)
+
+
+## Like `_eye_above`, but tries several directions (the preferred one first) and keeps the
+## one whose eye has the clearest view: an upside-down turret, or one buried in the hull,
+## would otherwise put the camera inside other modules.
+func _clear_eye(d: ShipDesign, mi: int, preferred: Vector3) -> Vector3:
+	var pref := preferred.normalized() if preferred.length() > 0.001 else Vector3.UP
+	var dirs: Array[Vector3] = [pref, Vector3.UP, -pref, Vector3.DOWN, Vector3.RIGHT, Vector3.LEFT, Vector3.BACK, Vector3.FORWARD]
+	var best := Vector3.ZERO
+	var best_cost := INF
+	for u in dirs:
+		var eye := _eye_above(d, mi, u)
+		var cost := eye_blockage(d, mi, eye, u)
+		if cost < best_cost - 0.001:
+			best_cost = cost
+			best = eye
+		if cost == 0.0:
+			break
+	return best
+
+
+## How obstructed an eye at `eye` looking along `u` is by the vertices of the OTHER modules:
+## points right next to the eye, or inside a ~40 degree cone in front of it, each count 1.
+static func eye_blockage(d: ShipDesign, mi: int, eye: Vector3, u: Vector3) -> float:
+	var cost := 0.0
+	for oi in d.modules.size():
+		if oi == mi:
+			continue
+		for p in d.module_points(oi):
+			var v := p - eye
+			var l := v.length()
+			if l < 0.6 or (l > 0.0 and v.dot(u) / l > 0.75):
+				cost += 1.0
+	return cost
 
 
 func current_station() -> Dictionary:
