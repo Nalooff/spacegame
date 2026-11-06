@@ -215,11 +215,14 @@ func _test_stations() -> void:
 	check(t > 0.5, "walking to another station takes time (%.1f s)" % t)
 	st.go_to(1)
 	check(st.walking and not st.can_fly(), "cannot fly while walking")
+	check(not st.flight_input_ok(), "no flight input while walking")
 	await _frames(int(t * 60.0) + 20)
 	check(not st.walking and st.current == 1 and st.current_station()["kind"] == "gun", "arrived at the gun station")
 	check(st.active_base() == int(st.current_station()["module"]) and not st.can_fly(), "gun station: only that turret, cannot fly")
+	check(not st.flight_input_ok(), "gun station: flight keys / orders are off (the mouse aims the turret)")
 	st.toggle_mode()
-	check(st.is_commander_mode() and st.active_base() == -2 and not st.can_fly(), "commander mode: automatic, all guns, no manual flight")
+	check(st.is_commander_mode() and st.active_base() == -2 and not st.can_fly(), "commander mode: automatic, all guns, no pilot seat")
+	check(st.flight_input_ok(), "commander mode (full ship control): flight keys, mouse schemes and orders work")
 	st.toggle_mode()
 	# link a turret to the commander: the pilot seat can fire it
 	var d := s.design

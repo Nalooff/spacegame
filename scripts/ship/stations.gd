@@ -183,6 +183,12 @@ func can_fly() -> bool:
 	return not walking and current_station().get("kind", "") == "pilot" and ship.design.can_pilot(int(current_station()["module"]))
 
 
+## Flight input (keys, mouse schemes, G / EVE orders) is read in commander mode (full ship control) and at a
+## pilot seat; NOT at a gun station or while walking, where the mouse aims the turret.
+func flight_input_ok() -> bool:
+	return is_commander_mode() or can_fly()
+
+
 ## Which turret base the player's guns are: -2 = all of them (commander mode: automatic gunnery),
 ## -1 = none (walking, or in a pilot seat without a linked turret), otherwise the module index of the base,
 ## -3 = several: the turrets linked to the commander (see active_set()).
