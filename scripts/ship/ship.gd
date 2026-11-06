@@ -1355,7 +1355,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_H \
 			and not (get_viewport().gui_get_focus_owner() is LineEdit):
 		weapons_free = not weapons_free
-		BusEvent.notify.emit("WEAPONS FREE: the guns fire on their own" if weapons_free else "WEAPONS HOLD: hold the left mouse button to fire")
+		BusEvent.notify.emit(tr("WEAPONS FREE: the guns fire on their own") if weapons_free else tr("WEAPONS HOLD: hold the left mouse button to fire"))
 
 
 # ----------------------------------------------------------------- visuals

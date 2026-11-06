@@ -60,7 +60,7 @@ func _refresh_list() -> void:
 	preset_list.clear()
 	for id in _ids:
 		var label := str(ModulePresets.preset(type, id).get("label", id))
-		preset_list.add_item(label + ("" if ModulePresets.is_builtin(type, id) else "   (yours)"))
+		preset_list.add_item(label + ("" if ModulePresets.is_builtin(type, id) else tr("   (yours)")))
 
 
 ## Fill the form from a preset.
@@ -139,12 +139,12 @@ func _on_kind_selected(_index: int) -> void:
 func _on_new_pressed() -> void:
 	name_edit.text = ""
 	name_edit.grab_focus()
-	message.text = "Type a name, change the numbers and press Save."
+	message.text = tr("Type a name, change the numbers and press Save.")
 
 
 func _on_save_pressed() -> void:
 	var err := save_form()
-	message.text = err if err != "" else "Saved. It is in the preset list of the ship builder now."
+	message.text = err if err != "" else tr("Saved. It is in the preset list of the ship builder now.")
 
 
 ## Save what the form says. Returns "" or the reason it was refused.
@@ -169,10 +169,10 @@ func _on_delete_pressed() -> void:
 		return
 	var id := _ids[sel[0]]
 	if ModulePresets.is_builtin(current_type(), id):
-		message.text = "Built-in presets cannot be deleted. Use \"New preset from this one\" to make your own."
+		message.text = tr("Built-in presets cannot be deleted. Use \"New preset from this one\" to make your own.")
 		return
 	ModulePresets.delete_custom(current_type(), id)
-	message.text = "Deleted."
+	message.text = tr("Deleted.")
 	_refresh_list()
 	if not _ids.is_empty():
 		preset_list.select(0)

@@ -29,7 +29,7 @@ func _ready() -> void:
 	col.add_theme_constant_override("separation", 12)
 	margin.add_child(col)
 	var title := Label.new()
-	title.text = "SETTINGS"
+	title.text = tr("SETTINGS")
 	title.add_theme_font_size_override("font_size", 32)
 	col.add_child(title)
 	_tabs = TabContainer.new()
@@ -45,7 +45,7 @@ func _ready() -> void:
 	row.add_theme_constant_override("separation", 12)
 	col.add_child(row)
 	var reset := Button.new()
-	reset.text = "Reset everything to default"
+	reset.text = tr("Reset everything to default")
 	reset.pressed.connect(_on_reset)
 	row.add_child(reset)
 	var spacer := Control.new()
@@ -53,7 +53,7 @@ func _ready() -> void:
 	row.add_child(spacer)
 	var back := Button.new()
 	back.name = "BackButton"
-	back.text = "Back"
+	back.text = tr("Back")
 	back.custom_minimum_size = Vector2(180, 44)
 	back.pressed.connect(_on_back)
 	row.add_child(back)
@@ -63,12 +63,14 @@ func _ready() -> void:
 func _page(name_: String) -> VBoxContainer:
 	var scroll := ScrollContainer.new()
 	scroll.name = name_
+	scroll.set_meta("title", tr(name_))
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var box := VBoxContainer.new()
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 10)
 	scroll.add_child(box)
 	_tabs.add_child(scroll)
+	_tabs.set_tab_title(_tabs.get_tab_count() - 1, tr(name_))
 	return box
 
 
@@ -76,9 +78,9 @@ func _row(parent: Control, text: String, tip: String = "") -> HBoxContainer:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 14)
 	var l := Label.new()
-	l.text = text
+	l.text = tr(text)
 	l.custom_minimum_size = Vector2(300, 0)
-	l.tooltip_text = tip
+	l.tooltip_text = tr(tip)
 	h.add_child(l)
 	parent.add_child(h)
 	return h
@@ -109,8 +111,8 @@ func _slider(parent: Control, text: String, key: String, lo: float, hi: float, s
 func _check(parent: Control, text: String, key: String, tip: String = "") -> CheckBox:
 	var c := CheckBox.new()
 	c.name = "Check_" + key
-	c.text = text
-	c.tooltip_text = tip
+	c.text = tr(text)
+	c.tooltip_text = tr(tip)
 	c.button_pressed = bool(Prefs.get(key))
 	c.toggled.connect(func(on: bool): _apply(key, on))
 	parent.add_child(c)
@@ -132,18 +134,18 @@ func _build_controls() -> void:
 	var opt := OptionButton.new()
 	opt.name = "SchemePicker"
 	for n in FlightControls.NAMES:
-		opt.add_item(n)
+		opt.add_item(tr(n))
 	opt.select(Prefs.scheme)
 	opt.custom_minimum_size = Vector2(380, 0)
 	h.add_child(opt)
 	_scheme_help = Label.new()
 	_scheme_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_scheme_help.modulate = Color(1, 1, 1, 0.75)
-	_scheme_help.text = FlightControls.HELP[Prefs.scheme]
+	_scheme_help.text = tr(FlightControls.HELP[Prefs.scheme])
 	p.add_child(_scheme_help)
 	opt.item_selected.connect(func(i: int):
 		_apply("scheme", i)
-		_scheme_help.text = FlightControls.HELP[i])
+		_scheme_help.text = tr(FlightControls.HELP[i]))
 	_slider(p, "Mouse steering strength", "mouse_sens", 0.2, 4.0, 0.05, "", "Mouse flight: how quickly the turn grows when you move the cursor away from the centre")
 	_slider(p, "Dead zone", "deadzone", 0.0, 0.5, 0.01, "", "Mouse flight and gamepad: no turning inside this circle")
 	_check(p, "Invert mouse pitch (cursor up = nose down)", "invert_y")
@@ -152,7 +154,7 @@ func _build_controls() -> void:
 	var sep := HSeparator.new()
 	p.add_child(sep)
 	var t := Label.new()
-	t.text = "KEY BINDINGS  (click a key, then press the new one; Esc cancels)"
+	t.text = tr("KEY BINDINGS  (click a key, then press the new one; Esc cancels)")
 	p.add_child(t)
 	for e in Prefs.REBINDABLE:
 		var r := _row(p, e[1])
@@ -163,7 +165,7 @@ func _build_controls() -> void:
 		var action: String = e[0]
 		b.pressed.connect(func():
 			_waiting_action = action
-			b.text = "press a key...")
+			b.text = tr("press a key..."))
 		r.add_child(b)
 		_bind_buttons[action] = b
 
@@ -193,6 +195,21 @@ func _build_audio() -> void:
 
 func _build_player() -> void:
 	var p := _page("Player")
+	var hl := _row(p, "Language", "")
+	var lang := OptionButton.new()
+	lang.name = "LanguagePicker"
+	lang.custom_minimum_size = Vector2(300, 0)
+	lang.add_item(tr("Automatic (system language)"))
+	var sel := 0
+	for i in Prefs.LANGUAGES.size():
+		lang.add_item(Prefs.LANGUAGES[i][1])
+		if Prefs.LANGUAGES[i][0] == Prefs.language:
+			sel = i + 1
+	lang.select(sel)
+	lang.item_selected.connect(func(i: int):
+		_apply("language", "" if i == 0 else Prefs.LANGUAGES[i - 1][0])
+		_on_language_changed())
+	hl.add_child(lang)
 	var h := _row(p, "Pilot name", "Shown to other players and on the scoreboard")
 	var e := LineEdit.new()
 	e.name = "NameEdit"
@@ -219,14 +236,25 @@ func _input(event: InputEvent) -> void:
 	(_bind_buttons[action] as Button).text = OS.get_keycode_string(Prefs.key_of(action) as Key)
 
 
-func _on_reset() -> void:
-	Prefs.reset_defaults()
-	Prefs.save_file()
+func _on_language_changed() -> void:
+	_rebuild.call_deferred()
+
+
+## Build the screen again (new language, or defaults restored).
+func _rebuild() -> void:
+	var page := _tabs.current_tab if _tabs != null else 0
 	for c in get_children():
 		c.queue_free()
 	_bind_buttons.clear()
 	_building = true
-	call_deferred("_ready")
+	_ready()
+	_tabs.current_tab = clampi(page, 0, _tabs.get_tab_count() - 1)
+
+
+func _on_reset() -> void:
+	Prefs.reset_defaults()
+	Prefs.save_file()
+	_rebuild.call_deferred()
 
 
 func _on_back() -> void:

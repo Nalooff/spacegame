@@ -71,6 +71,11 @@ reports wait until comms or a corridor is back. Thrusters and external antennas 
 | right mouse drag, wheel | orbit the camera, zoom |
 Any manual flight key cancels the autopilot.
 
+## Languages
+English, Français, Deutsch, Español, Русский, 简体中文, 日本語. Pick one in **Settings > Player > Language** (default: the operating system's language). The English texts are the keys: scenes and `tr("...")` calls hold English, `translations/<code>.json` maps them to the other languages, anything missing shows English.
+* Add or change a text: write it as English in a scene or inside `tr("...")`, run `python3 tools/i18n_extract.py` (rebuilds `translations/keys.json`), add the six translations to a `translations/src/t*.py` file and run `python3 translations/src/build.py` (writes the json files and reports missing texts / wrong `%` placeholders). `tests/test_i18n.tscn` checks every language is complete.
+* Chinese and Japanese need a system font with those characters (Windows, macOS and most Linux have one; Godot falls back to it automatically).
+
 ## Scoreboard, respawn, joining a running game
 * `Net` keeps per-player **kills, deaths, damage dealt, damage taken** (host-authoritative, synced every 0.5 s; the victim's owner reports hits, the host validates). A death is counted when your ship is destroyed or you press **Respawn**; the player who did the **most damage to that ship since it spawned** gets the kill (none if nobody hit it). Crew damage counts for the pilot. Kill feed on the HUD, table on **Tab**.
 * **Join in progress**: the host ticks "Allow players to join while the game runs" (lobby, or scoreboard in game). Players can then join a running game (the browser shows "(in progress)"), choose a ship in the lobby and press **JOIN THE GAME**. Until a peer has loaded the world nothing is replicated to it (`Net.world_peers`).

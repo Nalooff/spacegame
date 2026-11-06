@@ -70,7 +70,7 @@ func refresh() -> void:
 
 func _cell(text: String, header: bool, mine: bool) -> Label:
 	var l := Label.new()
-	l.text = text
+	l.text = tr(text) if header else text
 	if header:
 		l.modulate = Color(0.6, 0.85, 1.0)
 	elif mine:

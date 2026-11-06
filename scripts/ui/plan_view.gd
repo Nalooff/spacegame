@@ -57,7 +57,7 @@ func _build_layer_row() -> void:
 	for c in row.get_children():
 		c.queue_free()
 	var lab := Label.new()
-	lab.text = "Layers:"
+	lab.text = tr("Layers:")
 	row.add_child(lab)
 	for l in canvas.layers:
 		var cb := CheckBox.new()
@@ -83,7 +83,7 @@ func _refresh_info() -> void:
 	if not info.visible:
 		return
 	if _live == null or not is_instance_valid(_live):
-		info.text = "Status and logs exist for a ship in flight."
+		info.text = tr("Status and logs exist for a ship in flight.")
 		return
 	var rep := _live.reports
 	var t := ""
@@ -98,7 +98,7 @@ func _refresh_info() -> void:
 			var state := "[color=gray]GONE[/color]" if hp < 0.0 else ("[color=red]DESTROYED[/color]" if hp <= 0.0 else "%d%%" % int(100.0 * hp / maxf(_live.module_max_hp[mi], 0.001)))
 			var note := ""
 			if cut.has(mi):
-				note = "   [color=orange]NO LINK: cannot be ordered[/color]"
+				note = tr("   [color=orange]NO LINK: cannot be ordered[/color]")
 			t += "%-3d %-12s %s%s\n" % [mi, type, state, note]
 		t += "\nAs the commander KNOWS it: changes can still be on their way."
 	else:
@@ -123,7 +123,7 @@ func _on_decks_changed(count: int) -> void:
 	if picker.item_count != count:
 		picker.clear()
 		for k in count:
-			picker.add_item("Deck %d" % (k + 1))
+			picker.add_item(tr("Deck %d") % (k + 1))
 	picker.select(canvas.deck)
 
 
@@ -131,7 +131,7 @@ func open_design(d: ShipDesign) -> void:
 	_live = null
 	%PlanTabs.visible = false
 	%PlanTabs.current_tab = 0
-	title_label.text = "EXPLODED 3D PLAN  (drag to turn, wheel to zoom)"
+	title_label.text = tr("EXPLODED 3D PLAN  (drag to turn, wheel to zoom)")
 	tool_row.visible = false
 	visible = true
 	canvas.show_design(d, true)
@@ -142,7 +142,7 @@ func open_design(d: ShipDesign) -> void:
 func open_ship(s: Ship) -> void:
 	_live = s
 	%PlanTabs.visible = true
-	title_label.text = "EXPLODED 3D PLAN  (live)"
+	title_label.text = tr("EXPLODED 3D PLAN  (live)")
 	tool_row.visible = false
 	visible = true
 	canvas.show_design(s.design, false, s)
@@ -167,7 +167,7 @@ func _update_status() -> void:
 		return
 	var lost := canvas.design.unwalkable_rooms() if _live == null else PackedInt32Array()
 	if _live == null:
-		status_label.text = "Every room can be reached." if lost.is_empty() else "%d room(s) have NO corridor to a commander: %s" % [lost.size(), str(Array(lost))]
+		status_label.text = tr("Every room can be reached.") if lost.is_empty() else tr("%d room(s) have NO corridor to a commander: %s") % [lost.size(), str(Array(lost))]
 
 
 func _process(dt: float) -> void:

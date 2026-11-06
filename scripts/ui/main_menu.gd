@@ -2,7 +2,7 @@ extends Control
 ## Main menu. Buttons/labels are nodes in scenes/main_menu.tscn; signals connected there.
 
 func _ready() -> void:
-	%NoticeLabel.text = Data.notice
+	%NoticeLabel.text = tr(Data.notice)
 	Data.notice = ""
 	%QuitButton.visible = OS.get_name() != "Web"
 

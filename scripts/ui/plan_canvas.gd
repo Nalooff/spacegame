@@ -672,7 +672,7 @@ func _layer_below(font: Font) -> void:
 		draw_polyline(_closed(poly), Color(_ink, 0.38 if room else 0.2), 1.2 if room else 1.0, true)
 		if room:
 			draw_string(font, _centroid(poly) + Vector2(-9, 4), ROOM_CODES.get(t, "???"), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.35))
-	draw_string(font, Vector2(12, size.y - 28), "faint = deck %d below" % deck, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.4))
+	draw_string(font, Vector2(12, size.y - 28), tr("faint = deck %d below") % deck, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.4))
 
 
 ## LAYER "rooms": rooms, corridors, doors, damage colours and the "?" spheres.
@@ -786,7 +786,7 @@ func _layer_rooms(font: Font) -> void:
 				var dt0 := "%.0fs" % delay
 				draw_string(font, _place_text(font, dt0, cp0 + Vector2(4, 14), 10), dt0, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.6))
 			elif delay == INF and ship.reports.known_state.reach[room] == INF:
-				draw_string(font, _place_text(font, "NO LINK", cp0 + Vector2(-6, 14), 10), "NO LINK", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.45, 0.2))
+				draw_string(font, _place_text(font, tr("NO LINK"), cp0 + Vector2(-6, 14), 10), tr("NO LINK"), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.45, 0.2))
 	# 4. junction marks
 	for ni in plan.nodes.size():
 		if not _node_visible(ni):
@@ -814,7 +814,7 @@ func _layer_rooms(font: Font) -> void:
 			_dashed_circle(cs, rr * _scale)
 			draw_string(font, _place_text(font, "?", cs + Vector2(-4, 5), 16), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, _ink)
 			if rep.get("nolink", false):
-				draw_string(font, _place_text(font, "NO LINK", cs + Vector2(-26, 22), 10), "NO LINK", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.45, 0.2))
+				draw_string(font, _place_text(font, tr("NO LINK"), cs + Vector2(-26, 22), 10), tr("NO LINK"), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.45, 0.2))
 	# 5. the path being drawn, with the thing a click would link to highlighted (and the line ending exactly on it)
 	var target := -1
 	var target_edge := {}
@@ -848,7 +848,7 @@ func _draw_link_target(node: int, edge_hit: Dictionary) -> void:
 	elif not edge_hit.is_empty():
 		draw_arc(edge_hit["point"], 7.0, 0.0, TAU, 16, col, 2.0, true)
 		var font := ThemeDB.fallback_font
-		draw_string(font, edge_hit["point"] + Vector2(10, -8), "junction", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col)
+		draw_string(font, edge_hit["point"] + Vector2(10, -8), tr("junction"), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col)
 
 
 ## A tiny symbol for the room type (the little pictograms on a wall plan).
@@ -894,23 +894,23 @@ func _draw_frame(font: Font) -> void:
 	var y0 := 12.0
 	draw_rect(Rect2(x0, y0, 176.0, 74.0), Color(_paper, 0.9))
 	draw_rect(Rect2(x0, y0, 176.0, 74.0), Color(_ink, 0.45), false, 1.0)
-	draw_string(font, Vector2(x0 + 8, y0 + 14), "LEGEND", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(_ink, 0.7))
+	draw_string(font, Vector2(x0 + 8, y0 + 14), tr("LEGEND"), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(_ink, 0.7))
 	# stairs: the small disc with an arrow (the number is the deck it leads to)
 	var sc := Vector2(x0 + 17.0, y0 + 28.0)
 	draw_circle(sc, 6.5, _paper)
 	draw_arc(sc, 6.5, 0.0, TAU, 14, _ink, 1.2, true)
 	draw_colored_polygon(PackedVector2Array([sc + Vector2(0, -3.2), sc + Vector2(-3.4, 2.6), sc + Vector2(3.4, 2.6)]), _ink)
-	draw_string(font, Vector2(x0 + 32, y0 + 32), "Stairs (to deck n)", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.8))
+	draw_string(font, Vector2(x0 + 32, y0 + 32), tr("Stairs (to deck n)"), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.8))
 	# corridor
 	var cy := y0 + 46.0
 	draw_line(Vector2(x0 + 8, cy), Vector2(x0 + 26, cy), _ink, 6.0)
 	draw_line(Vector2(x0 + 8, cy), Vector2(x0 + 26, cy), _fill, 4.0)
-	draw_string(font, Vector2(x0 + 32, cy + 4), "Corridor", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.8))
+	draw_string(font, Vector2(x0 + 32, cy + 4), tr("Corridor"), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.8))
 	# every module type: one entry, the code in the box says which one it is
 	var my := y0 + 62.0
 	draw_rect(Rect2(x0 + 8, my - 5, 18, 10), Color(_ink, 0.8), false, 1.2)
-	draw_string(font, Vector2(x0 + 10, my + 3), "ABC", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(_ink, 0.8))
-	draw_string(font, Vector2(x0 + 32, my + 4), "Module (code in the box)", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.8))
+	draw_string(font, Vector2(x0 + 10, my + 3), tr("ABC"), HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color(_ink, 0.8))
+	draw_string(font, Vector2(x0 + 32, my + 4), tr("Module (code in the box)"), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.8))
 
 
 func _draw_title_block(font: Font) -> void:
@@ -924,12 +924,12 @@ func _draw_title_block(font: Font) -> void:
 	draw_string(font, Vector2(12, 20), "%s   %s" % [design.ship_name.to_upper(), deck_name], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, _ink)
 	if ship != null and ship.reports != null and ship.reports.known_state != null:
 		var online := ship.reports.known_state.comms_ok
-		draw_string(font, Vector2(12, 38), "COMMS  " + ("ONLINE: orders and reports are instant" if online else "OFFLINE: orders and reports are walked (seconds shown)"), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(_ink, 0.75))
+		draw_string(font, Vector2(12, 38), tr("COMMS  ") + (tr("ONLINE: orders and reports are instant") if online else tr("OFFLINE: orders and reports are walked (seconds shown)")), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(_ink, 0.75))
 		if not online:
 			var cut := ship.reports.cut_off_rooms(ship).size()
 			var lost := ship.reports.unreachable_reports()
 			if cut > 0 or lost > 0:
-				draw_string(font, Vector2(12, 54), "%d room(s) CUT OFF - cannot be ordered, state unknown.  %d damage report(s) cannot reach the bridge until comms or a corridor is repaired." % [cut, lost], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.45, 0.2))
+				draw_string(font, Vector2(12, 54), tr("%d room(s) CUT OFF - cannot be ordered, state unknown.  %d damage report(s) cannot reach the bridge until comms or a corridor is repaired.") % [cut, lost], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.45, 0.2))
 	var lx := 12.0
 	var ly := size.y - 10.0
 	for item in [["OK", 1.0], ["WORN", 0.75], ["HURT", 0.5], ["BAD", 0.2], ["DEAD", 0.0]]:
@@ -989,7 +989,7 @@ func _draw_sheet(font: Font) -> void:
 		deck = k
 		_origin = tl + tile * 0.5 + Vector2(0, 8) - (lo + hi) * 0.5 * _scale
 		_draw_deck_content(font)
-		draw_string(font, tl + Vector2(12, 20), "DECK %d" % (k + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, _ink)
+		draw_string(font, tl + Vector2(12, 20), tr("DECK %d") % (k + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, _ink)
 	_sheet_pass = false
 	view = keep_view
 	deck = keep_deck

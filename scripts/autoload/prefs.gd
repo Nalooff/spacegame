@@ -18,6 +18,12 @@ const REBINDABLE: Array = [
 	["order_keep_range", "Keep target at range"], ["range_less", "Orbit / range smaller"], ["range_more", "Orbit / range bigger"],
 ]
 
+## Languages: [locale code, name written in that language]. Texts live in res://translations/<code>.json
+## ({"English text": "translation"}); anything missing falls back to the English text.
+const LANGUAGES: Array = [["en", "English"], ["fr", "Français"], ["de", "Deutsch"], ["es", "Español"], ["ru", "Русский"],
+	["zh_CN", "简体中文"], ["ja", "日本語"]]
+
+var language: String = ""            ## "" = follow the operating system (English when it is not supported)
 var scheme: int = 0                  ## FlightControls.Scheme
 var mouse_sens: float = 1.0          ## mouse stick: how far the cursor has to be from the centre for full turn (higher = more turn)
 var invert_y: bool = false           ## mouse stick: pull down to pitch up
@@ -43,6 +49,7 @@ var _defaults_binds: Dictionary = {}
 
 
 func _ready() -> void:
+	_load_translations()
 	for e in REBINDABLE:
 		var evs := InputMap.action_get_events(e[0])
 		for ev in evs:
@@ -54,7 +61,7 @@ func _ready() -> void:
 
 
 func values() -> Dictionary:
-	return {"scheme": scheme, "mouse_sens": mouse_sens, "invert_y": invert_y, "deadzone": deadzone, "lever_rate": lever_rate,
+	return {"language": language, "scheme": scheme, "mouse_sens": mouse_sens, "invert_y": invert_y, "deadzone": deadzone, "lever_rate": lever_rate,
 		"order_range": order_range, "fov": fov, "cam_dist": cam_dist, "cam_sens": cam_sens, "cam_invert_y": cam_invert_y,
 		"master_volume": master_volume, "fullscreen": fullscreen, "vsync": vsync, "render_scale": render_scale, "max_fps": max_fps,
 		"show_fps": show_fps, "ui_scale": ui_scale, "player_name": player_name}
@@ -69,6 +76,8 @@ func set_values(d: Dictionary) -> void:
 
 ## Clamp everything to sane ranges (a hand-edited or old file must not break the game).
 func sanitize() -> void:
+	if language != "" and not language_supported(language):
+		language = ""
 	scheme = clampi(scheme, 0, 4)
 	mouse_sens = clampf(mouse_sens, 0.2, 4.0)
 	deadzone = clampf(deadzone, 0.0, 0.5)
@@ -112,7 +121,7 @@ func load_file(path: String = FILE) -> void:
 
 
 func reset_defaults() -> void:
-	set_values({"scheme": 0, "mouse_sens": 1.0, "invert_y": false, "deadzone": 0.08, "lever_rate": 0.5, "order_range": 150.0, "fov": 70.0,
+	set_values({"language": "", "scheme": 0, "mouse_sens": 1.0, "invert_y": false, "deadzone": 0.08, "lever_rate": 0.5, "order_range": 150.0, "fov": 70.0,
 		"cam_dist": 40.0, "cam_sens": 1.0, "cam_invert_y": false, "master_volume": 1.0, "fullscreen": false, "vsync": true,
 		"render_scale": 1.0, "max_fps": 0, "show_fps": false, "ui_scale": 1.0})
 	binds.clear()
@@ -150,6 +159,7 @@ func apply_all() -> void:
 	for a in _defaults_binds:
 		_apply_bind(a, key_of(a))
 	Data.player_name = player_name
+	TranslationServer.set_locale(effective_language())
 	var root := get_tree().root
 	root.content_scale_factor = ui_scale
 	root.scaling_3d_scale = render_scale
@@ -162,6 +172,46 @@ func apply_all() -> void:
 			DisplayServer.window_set_mode(want)
 	_update_fps_label()
 	changed.emit()
+
+
+static func language_supported(code: String) -> bool:
+	for l in LANGUAGES:
+		if l[0] == code:
+			return true
+	return false
+
+
+## The language in use: the chosen one, else the operating system's when we have it, else English.
+func effective_language() -> String:
+	if language != "":
+		return language
+	var os_loc := OS.get_locale()                         # e.g. "fr_FR", "zh_CN", "ja"
+	if language_supported(os_loc):
+		return os_loc
+	var base := OS.get_locale_language()
+	if base == "zh":
+		return "zh_CN"
+	return base if language_supported(base) else "en"
+
+
+## Reads res://translations/<code>.json for every language but English (English is the text in the code and the scenes).
+func _load_translations() -> void:
+	for l in LANGUAGES:
+		var code: String = l[0]
+		if code == "en":
+			continue
+		var f := FileAccess.open("res://translations/%s.json" % code, FileAccess.READ)
+		if f == null:
+			continue
+		var data: Variant = JSON.parse_string(f.get_as_text())
+		if typeof(data) != TYPE_DICTIONARY:
+			push_warning("translations/%s.json is not a JSON object" % code)
+			continue
+		var tr_res := Translation.new()
+		tr_res.locale = code
+		for k in data:
+			tr_res.add_message(k, str(data[k]))
+		TranslationServer.add_translation(tr_res)
 
 
 func _update_fps_label() -> void:
@@ -180,4 +230,4 @@ func _update_fps_label() -> void:
 
 func _process(_dt: float) -> void:
 	if _fps_label != null and show_fps:
-		_fps_label.text = "%d FPS" % Engine.get_frames_per_second()
+		_fps_label.text = tr("%d FPS") % Engine.get_frames_per_second()

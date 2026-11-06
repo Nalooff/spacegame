@@ -26,11 +26,11 @@ var _selected_player: int = -1
 
 
 func _ready() -> void:
-	lobby_title_label.text = "%s%s" % [Net.lobby_name, "  (private)" if Net.lobby_private else ""]
-	player_tree.set_column_title(0, "Pilot")
-	player_tree.set_column_title(1, "Ship")
-	player_tree.set_column_title(2, "Seats")
-	player_tree.set_column_title(3, "Status")
+	lobby_title_label.text = "%s%s" % [Net.lobby_name, tr("  (private)") if Net.lobby_private else ""]
+	player_tree.set_column_title(0, tr("Pilot"))
+	player_tree.set_column_title(1, tr("Ship"))
+	player_tree.set_column_title(2, tr("Seats"))
+	player_tree.set_column_title(3, tr("Status"))
 	player_tree.set_column_expand(0, true)
 	player_tree.set_column_expand(1, true)
 	player_tree.set_column_expand(2, false)
@@ -38,11 +38,11 @@ func _ready() -> void:
 	player_tree.set_column_custom_minimum_width(3, 100)
 	player_tree.select_mode = Tree.SELECT_ROW
 	for e in ShipDesign.list_ships():
-		ship_list.add_item(("[premade] " if e["premade"] else "[custom] ") + e["name"])
+		ship_list.add_item((tr("[premade] ") if e["premade"] else tr("[custom] ")) + e["name"])
 		_ship_paths.append(e["path"])
-	team_picker.add_item("No team: everybody else is an enemy")
+	team_picker.add_item(tr("No team: everybody else is an enemy"))
 	for t in range(1, 5):
-		team_picker.add_item("Team %d" % t)
+		team_picker.add_item(tr("Team %d") % t)
 	Net.roster_changed.connect(_refresh_all)
 	start_button.visible = Net.is_host()
 	late_join_check.visible = Net.is_host()
@@ -53,7 +53,7 @@ func _ready() -> void:
 
 func _process(_dt: float) -> void:
 	var t := int(ceil(Net.lobby_seconds_left))
-	timer_label.text = "%d:%02d" % [int(t / 60.0), t % 60] if t > 0 else "Time is up"
+	timer_label.text = "%d:%02d" % [int(t / 60.0), t % 60] if t > 0 else tr("Time is up")
 	timer_label.modulate = Color(1, 0.5, 0.4) if t <= 0 else Color(1, 1, 1)
 	_update_start_button()
 
@@ -71,7 +71,7 @@ func _on_ship_selected(index: int) -> void:
 	var errors := d.validate()
 	_chosen_valid = errors.is_empty()
 	var p := d.compute_props()
-	ship_info_label.text = "%s: %d modules, %d thrusters, %d turrets, %.0f kg, %d seat%s%s" % [d.ship_name, d.modules.size(),
+	ship_info_label.text = tr("%s: %d modules, %d thrusters, %d turrets, %.0f kg, %d seat%s%s") % [d.ship_name, d.modules.size(),
 		p["thrusters"].size(), p["turrets"].size(), p["mass"], d.crew_capacity(), "" if d.crew_capacity() == 1 else "s",
 		"" if _chosen_valid else "\nINVALID: " + errors[0]]
 	if _chosen_valid:
@@ -119,7 +119,7 @@ func _refresh_all() -> void:
 	team_picker.select(int(me.get("team", 0)))
 	team_picker.disabled = locked or is_crew
 	lock_button.visible = not is_crew
-	lock_button.text = "Unlock ship (also releases your crew)" if locked else "Lock in ship"
+	lock_button.text = tr("Unlock ship (also releases your crew)") if locked else tr("Lock in ship")
 	lock_button.disabled = not locked and (me.get("ship", "") == "")
 	leave_crew_button.visible = is_crew
 	my_seat_button.visible = locked and not is_crew and (me.get("slots", {}) as Dictionary).size() > 1
@@ -137,12 +137,12 @@ func _refresh_tree() -> void:
 		if p["crew_of"] != 0:
 			continue
 		var it := player_tree.create_item(root)
-		it.set_text(0, "%s%s%s%s" % [p["name"], "  (host)" if id == 1 else "", "  (you)" if id == Net.my_id() else "",
+		it.set_text(0, "%s%s%s%s" % [p["name"], tr("  (host)") if id == 1 else "", tr("  (you)") if id == Net.my_id() else "",
 			"  [team %d]" % int(p.get("team", 0)) if int(p.get("team", 0)) > 0 else ""])
-		it.set_text(1, p["ship_name"] if p["ship_name"] != "" else "- not chosen -")
+		it.set_text(1, p["ship_name"] if p["ship_name"] != "" else tr("- not chosen -"))
 		if p["ship"] != "":
 			it.set_text(2, "%d / %d" % [1 + Net.crew_count(id), p["seats"]])
-		it.set_text(3, "LOCKED" if p["locked"] else "choosing")
+		it.set_text(3, tr("LOCKED") if p["locked"] else tr("choosing"))
 		it.set_custom_color(3, Color(0.5, 1, 0.6) if p["locked"] else Color(1, 0.8, 0.4))
 		it.set_metadata(0, id)
 		items[id] = it
@@ -151,8 +151,8 @@ func _refresh_tree() -> void:
 		var p: Dictionary = Net.players[id]
 		if p["crew_of"] != 0 and items.has(p["crew_of"]):
 			var it := player_tree.create_item(items[p["crew_of"]])
-			it.set_text(0, "%s%s" % [p["name"], "  (you)" if id == Net.my_id() else ""])
-			it.set_text(3, "CREW")
+			it.set_text(0, "%s%s" % [p["name"], tr("  (you)") if id == Net.my_id() else ""])
+			it.set_text(3, tr("CREW"))
 			it.set_custom_color(3, Color(0.5, 0.8, 1))
 			it.set_metadata(0, id)
 	for it in items.values():
@@ -180,11 +180,11 @@ func _update_join_crew_button() -> void:
 	if _selected_player > 0 and _selected_player != Net.my_id():
 		var target: Dictionary = Net.players.get(_selected_player, {})
 		if target.get("crew_of", 0) != 0 or not target.get("locked", false):
-			join_crew_button.tooltip_text = "That player has not locked in a ship yet."
+			join_crew_button.tooltip_text = tr("That player has not locked in a ship yet.")
 		elif Net.seats_free(_selected_player) <= 0:
-			join_crew_button.tooltip_text = "That ship is full."
+			join_crew_button.tooltip_text = tr("That ship is full.")
 		elif Net.crew_count(Net.my_id()) > 0:
-			join_crew_button.tooltip_text = "Unlock your own ship first (your crew would be released)."
+			join_crew_button.tooltip_text = tr("Unlock your own ship first (your crew would be released).")
 		else:
 			join_crew_button.tooltip_text = ""
 
@@ -194,11 +194,11 @@ func _update_start_button() -> void:
 	join_game_button.visible = Net.game_running and not Net.is_host()
 	if Net.game_running and not Net.is_host():
 		var chosen: bool = _me().get("ship", "") != "" or _me().get("crew_of", 0) != 0
-		join_game_button.text = "JOIN THE GAME" if chosen else "JOIN (random ship)"
-		status_label.text = "The game is running. Pick a ship (or a crew) and jump in whenever you like."
+		join_game_button.text = tr("JOIN THE GAME") if chosen else tr("JOIN (random ship)")
+		status_label.text = tr("The game is running. Pick a ship (or a crew) and jump in whenever you like.")
 		return
 	if not Net.is_host():
-		status_label.text = "Waiting for the host to start. Lock in your ship (or join a crew) before the timer ends."
+		status_label.text = tr("Waiting for the host to start. Lock in your ship (or join a crew) before the timer ends.")
 		return
 	var waiting := 0
 	for id in Net.players:
@@ -206,14 +206,14 @@ func _update_start_button() -> void:
 			waiting += 1
 	start_button.disabled = not Net.can_start()
 	if Net.all_locked():
-		start_button.text = "START GAME"
-		status_label.text = "Everyone is locked in."
+		start_button.text = tr("START GAME")
+		status_label.text = tr("Everyone is locked in.")
 	elif Net.lobby_seconds_left <= 0.0:
-		start_button.text = "FORCE LAUNCH"
-		status_label.text = "%d player(s) not locked in. Players with no ship get a random premade one." % waiting
+		start_button.text = tr("FORCE LAUNCH")
+		status_label.text = tr("%d player(s) not locked in. Players with no ship get a random premade one.") % waiting
 	else:
-		start_button.text = "Waiting for %d player(s)..." % waiting
-		status_label.text = "Force launch unlocks when the timer reaches zero."
+		start_button.text = tr("Waiting for %d player(s)...") % waiting
+		status_label.text = tr("Force launch unlocks when the timer reaches zero.")
 	status_label.text += "\n" + Net.nat.message   # internet status (UPnP / public address) so the host can see why a friend cannot join
 
 

@@ -321,7 +321,7 @@ func refresh_all() -> void:
 ## Mode menu text, tool buttons of the chosen selection type, shading / view menus.
 func _refresh_toolbar() -> void:
 	var m: Dictionary = BuilderTools.MODES[builder.mode]
-	mode_menu.text = "%s mode" % m["label"]
+	mode_menu.text = tr("%s mode") % m["label"]
 	mode_menu.icon = BuilderIcons.get_icon(m["icon"], 24)
 	if _built_mode != builder.mode:
 		_rebuild_context_tools()
@@ -329,12 +329,12 @@ func _refresh_toolbar() -> void:
 	if builder.has_selection():
 		mode_info_label.text = builder.selection_summary()
 	else:
-		mode_info_label.text = ["Click a module (Shift = add, drag = box).", "Click a vertex (Shift = add, drag = box).",
+		mode_info_label.text = [tr("Click a module (Shift = add, drag = box)."), tr("Click a vertex (Shift = add, drag = box)."),
 			"Click an edge (Shift = add, drag = box).", "Click a face (Shift = add, drag = box)."][builder.mode]
 	var ps := shading_menu.get_popup()
 	for i in 3:
 		ps.set_item_checked(i, i == builder.shading)
-	shading_menu.text = ["Solid", "X-ray", "Wireframe"][builder.shading]
+	shading_menu.text = [tr("Solid"), tr("X-ray"), tr("Wireframe")][builder.shading]
 	shading_menu.icon = BuilderIcons.get_icon(["shading_solid", "shading_xray", "shading_wire"][builder.shading])
 	if builder.camera_rig == null:
 		return                                   # first refresh can run before the camera exists
@@ -361,19 +361,19 @@ func _refresh_selection_tab() -> void:
 	if not active_module_section.visible:
 		return
 	var m: Dictionary = d.modules[am]
-	active_module_label.text = "Active module: #%d (%s)" % [am, m["type"]]
+	active_module_label.text = tr("Active module: #%d (%s)") % [am, m["type"]]
 	active_type_picker.select(ModuleCatalog.TYPES.find(m["type"]))
 	active_type_help.text = ModuleCatalog.TYPE_HELP[m["type"]]
 	var mat_id := d.material_of(am)
 	var mat := MaterialCatalog.info(mat_id)
 	material_picker.select(MaterialCatalog.IDS.find(mat_id))
-	material_help.text = "Hardness %.0f, dents above %.0f m/s, density x%.2f" % [mat["hardness"], mat["yield_speed"], mat["density_mult"]]
+	material_help.text = tr("Hardness %.0f, dents above %.0f m/s, density x%.2f") % [mat["hardness"], mat["yield_speed"], mat["density_mult"]]
 	_refresh_stats(am)
 	commander_section.visible = m["type"] == ModuleCatalog.COMMANDER
 	if commander_section.visible:
 		pilot_check.set_pressed_no_signal(d.can_pilot(am))
 		var ls := d.linked_turrets(am)
-		commander_link_label.text = "Controls turrets: %s" % str(ls) if not ls.is_empty() else "No turret linked (select this commander + a turret base, press T)."
+		commander_link_label.text = tr("Controls turrets: %s") % str(ls) if not ls.is_empty() else tr("No turret linked (select this commander + a turret base, press T).")
 	turret_section.visible = m["type"] == ModuleCatalog.TURRET
 	if turret_section.visible:
 		var axis: Vector3 = m["dir"]
@@ -385,7 +385,7 @@ func _refresh_selection_tab() -> void:
 		turret_pitch_min_spin.set_value_no_signal(d.extra(am, "pitch_min"))
 		turret_pitch_max_spin.set_value_no_signal(d.extra(am, "pitch_max"))
 		var bars := d.barrels_of(am)
-		turret_link_label.text = "Barrels: %s" % str(bars) if not bars.is_empty() else "No barrel linked yet (select base + barrel(s), press T)."
+		turret_link_label.text = tr("Barrels: %s") % str(bars) if not bars.is_empty() else tr("No barrel linked yet (select base + barrel(s), press T).")
 	thruster_section.visible = m["type"] == ModuleCatalog.THRUSTER
 	if thruster_section.visible:
 		var dir: Vector3 = m["dir"]
@@ -527,9 +527,9 @@ func _refresh_ship_tab() -> void:
 	var parts: Array[String] = []
 	for t in ModuleCatalog.TYPES:
 		parts.append("%s x%d" % [t, int(counts.get(t, 0))])
-	ship_stats_label.text = "Mass: %.0f kg\nVertices: %d%s\nModules: %s" % [props["mass"], d.vertices.size(), "  (large ship mode: no vertex editing)" if d.vertices.size() > ShipBuilder.DETAIL_LIMIT else "", ", ".join(parts)]
+	ship_stats_label.text = tr("Mass: %.0f kg\nVertices: %d%s\nModules: %s") % [props["mass"], d.vertices.size(), tr("  (large ship mode: no vertex editing)") if d.vertices.size() > ShipBuilder.DETAIL_LIMIT else "", ", ".join(parts)]
 	var problems := d.validate()
-	ship_problems_label.text = "Ready to save." if problems.is_empty() else "\n".join(problems)
+	ship_problems_label.text = tr("Ready to save.") if problems.is_empty() else "\n".join(problems)
 	ship_problems_label.modulate = Color(0.5, 1, 0.6) if problems.is_empty() else Color(1, 0.6, 0.5)
 	reactor_slider.set_value_no_signal(d.reactor_scale)
 	gyro_slider.set_value_no_signal(d.gyro_scale)
@@ -541,7 +541,7 @@ func refresh_ship_list() -> void:
 	load_picker.clear()
 	_ship_paths.clear()
 	for s in ShipDesign.list_ships():
-		load_picker.add_item(s["name"] + ("  (premade)" if s["premade"] else ""))
+		load_picker.add_item(s["name"] + (tr("  (premade)") if s["premade"] else ""))
 		_ship_paths.append(s["path"])
 
 
@@ -678,7 +678,7 @@ func _on_add_module_on_selection_pressed() -> void:
 ## Warns when the shape would be welded to several selected parts at once.
 func _refresh_selection_warning() -> void:
 	var n: int = builder.sel_faces.size() + builder.sel_edges.size() + builder.sel_verts.size()
-	new_selection_warning.text = "%d parts are selected: \"Add on the selected part\" will place the shape on all of them and try to link them in the best way it can. The result may be a strange form." % n if n > 1 else ""
+	new_selection_warning.text = tr("%d parts are selected: \"Add on the selected part\" will place the shape on all of them and try to link them in the best way it can. The result may be a strange form.") % n if n > 1 else ""
 
 
 # =====================================================================

@@ -31,9 +31,9 @@ var _joining: Dictionary = {}    # the lobby we are trying to enter
 func _ready() -> void:
 	Net.leave() # always start from a clean offline state
 	pilot_name_edit.text = Data.player_name
-	lobby_tree.set_column_title(0, "Lobby")
-	lobby_tree.set_column_title(1, "Host")
-	lobby_tree.set_column_title(2, "Players")
+	lobby_tree.set_column_title(0, tr("Lobby"))
+	lobby_tree.set_column_title(1, tr("Host"))
+	lobby_tree.set_column_title(2, tr("Players"))
 	lobby_tree.set_column_expand(1, true)
 	lobby_tree.set_column_custom_minimum_width(0, 220)
 	lobby_tree.set_column_custom_minimum_width(2, 80)
@@ -44,13 +44,13 @@ func _ready() -> void:
 	Net.connection_failed.connect(_on_connection_failed)
 	var err := Net.directory.listen()
 	if err != OK:
-		browse_status_label.text = "Cannot search for lobbies (UDP port %d busy, error %d). You can still host." % [Data.DISCOVERY_PORT, err]
+		browse_status_label.text = tr("Cannot search for lobbies (UDP port %d busy, error %d). You can still host.") % [Data.DISCOVERY_PORT, err]
 	Net.board.refresh()
 	Net.nat.detect_own_ip()   # lets us notice lobbies on our own network (they must be joined by their LAN address)
-	host_status_label.text = Data.notice
+	host_status_label.text = tr(Data.notice)
 	Data.notice = ""
 	if Net.steam_active():
-		host_status_label.text += "Steam: %s (lobbies are hosted through Steam)" % Net.steam.persona_name
+		host_status_label.text += tr("Steam: %s (lobbies are hosted through Steam)") % Net.steam.persona_name
 	if Net.steam_active():
 		Net.steam.invite_accepted.connect(_on_invite_accepted)
 
@@ -87,15 +87,15 @@ func _rebuild_list() -> void:
 		if l["private"]:
 			item.set_icon(0, LOCK_ICON)
 			item.set_tooltip_text(0, "Private: needs a password")
-		item.set_text(1, l["host"] + {"internet": "  (internet)", "steam": "  (Steam)"}.get(l.get("source", ""), "  (LAN)"))
-		item.set_text(2, "%d / %d%s" % [l["players"], l["max"], "  (in progress)" if l.get("running", false) else ""])
+		item.set_text(1, l["host"] + {"internet": tr("  (internet)"), "steam": tr("  (Steam)")}.get(l.get("source", ""), tr("  (LAN)")))
+		item.set_text(2, "%d / %d%s" % [l["players"], l["max"], tr("  (in progress)") if l.get("running", false) else ""])
 		item.set_metadata(0, l["id"])
 		if l["id"] == _selected_id:
 			item.select(0)
 	if lobbies.is_empty():
-		browse_status_label.text = "No open lobbies found. Host your own, or press Refresh. " + Net.board.status
+		browse_status_label.text = tr("No open lobbies found. Host your own, or press Refresh. ") + Net.board.status
 	else:
-		browse_status_label.text = "%d open lobb%s. Double-click to join." % [lobbies.size(), "y" if lobbies.size() == 1 else "ies"]
+		browse_status_label.text = (tr("1 open lobby. Double-click to join.") if lobbies.size() == 1 else tr("%d open lobbies. Double-click to join.") % lobbies.size())
 	if _find(_selected_id).is_empty():
 		_selected_id = -1
 		join_button.disabled = true
@@ -120,16 +120,16 @@ func _on_visibility_selected(index: int) -> void:
 func _on_create_pressed() -> void:
 	var is_private := visibility_picker.selected == 1
 	if is_private and password_edit.text == "":
-		host_status_label.text = "A private lobby needs a password."
+		host_status_label.text = tr("A private lobby needs a password.")
 		return
 	if Net.steam_active():                      # Steam: no port forwarding, friends can join through Steam
-		host_status_label.text = "Creating the Steam lobby ..."
+		host_status_label.text = tr("Creating the Steam lobby ...")
 		Net.steam_host_result.connect(_on_steam_host_result, CONNECT_ONE_SHOT)
 		Net.host_steam(lobby_name_edit.text, is_private, password_edit.text)
 		return
 	var err := Net.host_lobby(lobby_name_edit.text, is_private, password_edit.text)
 	if err != OK:
-		host_status_label.text = "Could not create the lobby (error %d)." % err
+		host_status_label.text = tr("Could not create the lobby (error %d).") % err
 		return
 	Game.go_to(Game.LOBBY_SCENE)
 
@@ -149,7 +149,7 @@ func _on_refresh_pressed() -> void:
 	if Net.steam_active():
 		Net.steam.list_lobbies()
 	_signature = ""
-	browse_status_label.text = "Searching..."
+	browse_status_label.text = tr("Searching...")
 
 
 ## A Steam friend invited us ("Join game"): join that lobby (a private one asks for its password as usual).
@@ -166,7 +166,7 @@ func _on_steam_host_result(ok: bool, reason: String) -> void:
 	if ok:
 		Game.go_to(Game.LOBBY_SCENE)
 	else:
-		host_status_label.text = "Steam lobby failed: " + reason
+		host_status_label.text = tr("Steam lobby failed: ") + tr(reason)
 
 
 func _on_join_pressed() -> void:
@@ -188,7 +188,7 @@ func _on_password_confirmed() -> void:
 
 func _connect(password: String) -> void:
 	if _joining.get("source", "") == "steam":
-		browse_status_label.text = "Joining '%s' through Steam ..." % _joining["name"]
+		browse_status_label.text = tr("Joining '%s' through Steam ...") % _joining["name"]
 		_tried = "Steam"
 		join_button.disabled = true
 		Net.join_steam(_joining, password)
@@ -218,9 +218,9 @@ func _try_next_address() -> bool:
 	_tried_list.append(_tried)
 	var err := Net.join_lobby(address, _joining["port"], _password, _joining["name"])
 	if err != OK:
-		browse_status_label.text = "Could not connect (error %d)." % err
+		browse_status_label.text = tr("Could not connect (error %d).") % err
 		return false
-	browse_status_label.text = "Joining '%s' via %s ..." % [_joining["name"], _tried]
+	browse_status_label.text = tr("Joining '%s' via %s ...") % [_joining["name"], _tried]
 	join_button.disabled = true
 	return true
 
@@ -238,9 +238,9 @@ func _on_joined() -> void:
 
 
 func _on_join_rejected(reason: String) -> void:
-	browse_status_label.text = "Could not join (%s): %s" % [_tried, reason]
+	browse_status_label.text = tr("Could not join (%s): %s") % [_tried, tr(reason)]
 	if reason.begins_with("Could not reach"):
-		browse_status_label.text += "\nThe host's router probably blocks the connection (UPnP off / port 24565 UDP not forwarded / firewall)."
+		browse_status_label.text += tr("\nThe host's router probably blocks the connection (UPnP off / port 24565 UDP not forwarded / firewall).")
 	join_button.disabled = _selected_id < 0
 	# Net.leave() ran: listening continues, nothing else to reset
 

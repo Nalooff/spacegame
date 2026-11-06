@@ -34,9 +34,9 @@ func open(captain_id: int, choose_own: bool = false) -> void:
 	captain = captain_id
 	own_seat = choose_own
 	var entry: Dictionary = Net.players.get(captain, {})
-	seat_title_label.text = "Choose your seat on %s's %s" % [entry.get("name", "?"), entry.get("ship_name", "ship")]
+	seat_title_label.text = tr("Choose your seat on %s's %s") % [entry.get("name", "?"), entry.get("ship_name", "ship")]
 	if own_seat:
-		seat_title_label.text = "Choose your bridge on %s" % entry.get("ship_name", "your ship")
+		seat_title_label.text = tr("Choose your bridge on %s") % entry.get("ship_name", tr("your ship"))
 	var h: String = entry.get("ship", "")
 	if Net.blobs.has(h):
 		_show(Net.blobs[h])
@@ -114,7 +114,7 @@ func _refresh_buttons() -> void:
 		var taken := int(occupied.get(mi, 0))
 		b.text = "%d/%d" % [taken, cap]
 		b.disabled = taken >= cap and not (own_seat and Net.seat_of(captain) == mi)
-		b.tooltip_text = "Commander %d: %d of %d seats taken" % [mi, taken, cap]
+		b.tooltip_text = tr("Commander %d: %d of %d seats taken") % [mi, taken, cap]
 		b.modulate = Color(0.5, 1, 0.6) if taken < cap else Color(1, 0.5, 0.5)
 
 

@@ -50,7 +50,7 @@ func _rebuild() -> void:
 	_shown_op = builder.op_name
 	var def: Dictionary = BuilderTools.OPERATORS[_shown_op]
 	title_label.text = str(def["title"]).to_upper()
-	hint_label.text = "Change a number and press Enter. Apply keeps it, Cancel (Esc) undoes it."
+	hint_label.text = tr("Change a number and press Enter. Apply keeps it, Cancel (Esc) undoes it.")
 	for c in params_box.get_children():
 		c.queue_free()
 	for p in def["params"]:

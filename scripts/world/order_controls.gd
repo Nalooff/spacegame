@@ -182,7 +182,7 @@ func _circle_input(event: InputEvent, ship: Ship) -> void:
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			ship.autopilot.go_to(point, true)
 			order_given.emit("Flying to (%.0f, %.0f, %.0f)" % [point.x, point.y, point.z])
-			BusEvent.notify.emit("Flying to (%.0f, %.0f, %.0f)" % [point.x, point.y, point.z])
+			BusEvent.notify.emit(tr("Flying to (%.0f, %.0f, %.0f)") % [point.x, point.y, point.z])
 			_close()
 		elif mb.button_index == MOUSE_BUTTON_RIGHT:
 			_close()
@@ -195,11 +195,11 @@ func _circle_input(event: InputEvent, ship: Ship) -> void:
 func _eve_input(event: InputEvent, ship: Ship) -> void:
 	if event.is_action_pressed("range_more"):
 		Prefs.order_range = clampf(Prefs.order_range * 1.25, 10.0, 5000.0)
-		BusEvent.notify.emit("Orbit / range: %.0f m" % Prefs.order_range)
+		BusEvent.notify.emit(tr("Orbit / range: %.0f m") % Prefs.order_range)
 		return
 	if event.is_action_pressed("range_less"):
 		Prefs.order_range = clampf(Prefs.order_range * 0.8, 10.0, 5000.0)
-		BusEvent.notify.emit("Orbit / range: %.0f m" % Prefs.order_range)
+		BusEvent.notify.emit(tr("Orbit / range: %.0f m") % Prefs.order_range)
 		return
 	if event.is_action_pressed("order_approach") or event.is_action_pressed("order_orbit") or event.is_action_pressed("order_keep_range"):
 		var target := ship.detection.locked
@@ -209,19 +209,19 @@ func _eve_input(event: InputEvent, ship: Ship) -> void:
 				target = list[0]["ship"]
 				ship.detection.locked = target
 		if target == null:
-			BusEvent.notify.emit("No target: press R to lock an enemy")
+			BusEvent.notify.emit(tr("No target: press R to lock an enemy"))
 			return
 		if event.is_action_pressed("order_approach"):
 			ship.autopilot.follow_distance = 15.0
 			ship.autopilot.go_follow(target)
-			BusEvent.notify.emit("Approaching %s" % target.pilot_name)
+			BusEvent.notify.emit(tr("Approaching %s") % target.pilot_name)
 		elif event.is_action_pressed("order_orbit"):
 			ship.autopilot.go_orbit(target, Prefs.order_range)
-			BusEvent.notify.emit("Orbiting %s at %.0f m" % [target.pilot_name, Prefs.order_range])
+			BusEvent.notify.emit(tr("Orbiting %s at %.0f m") % [target.pilot_name, Prefs.order_range])
 		else:
 			ship.autopilot.follow_distance = Prefs.order_range
 			ship.autopilot.go_follow(target)
-			BusEvent.notify.emit("Keeping %s at %.0f m" % [target.pilot_name, Prefs.order_range])
+			BusEvent.notify.emit(tr("Keeping %s at %.0f m") % [target.pilot_name, Prefs.order_range])
 		return
 	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed and (event as InputEventMouseButton).double_click \
 			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and get_viewport().gui_get_hovered_control() == null:
@@ -236,7 +236,7 @@ func _eve_input(event: InputEvent, ship: Ship) -> void:
 			ship.detection.locked = hit
 			ship.autopilot.follow_distance = 15.0
 			ship.autopilot.go_follow(hit)
-			BusEvent.notify.emit("Approaching %s" % hit.pilot_name)
+			BusEvent.notify.emit(tr("Approaching %s") % hit.pilot_name)
 		else:
 			ship.autopilot.drive_heading(d, 1.0)
-			BusEvent.notify.emit("Aligned and accelerating that way (X to stop)")
+			BusEvent.notify.emit(tr("Aligned and accelerating that way (X to stop)"))

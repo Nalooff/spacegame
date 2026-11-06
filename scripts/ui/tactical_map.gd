@@ -170,7 +170,7 @@ func _on_chase_pressed() -> void:
 		drive_button.set_pressed_no_signal(true)
 		go_button.set_pressed_no_signal(false)
 	elif is_instance_valid(ship):
-		BusEvent.notify.emit("Lock an enemy first (R, or click it on the map)")
+		BusEvent.notify.emit(tr("Lock an enemy first (R, or click it on the map)"))
 
 
 # ----------------------------------------------------------------------------- projection
@@ -318,7 +318,7 @@ func _click(p: Vector2) -> void:
 		ship.autopilot.face_turrets = face_check.button_pressed
 		if drive_button.button_pressed:
 			if hit["friendly"]:
-				BusEvent.notify.emit("DRIVE would ram a friend: use GO TO to follow it")
+				BusEvent.notify.emit(tr("DRIVE would ram a friend: use GO TO to follow it"))
 			else:
 				ship.autopilot.drive_to(other.global_position, thrust_slider.value / 100.0, other)
 		else:
@@ -382,7 +382,7 @@ func _draw_map() -> void:
 	while z < f.z + reach:
 		canvas.draw_line(_proj(Vector3(f.x - reach, gy, z)), _proj(Vector3(f.x + reach, gy, z)), GRID, 1.0)
 		z += step
-	canvas.draw_string(font, Vector2(10, sz.y - 10), "grid %s m   (%s)" % [str(step), "ground = your height, drag right button to turn" if _view3d else "north = -Z, up"], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(INK, 0.6))
+	canvas.draw_string(font, Vector2(10, sz.y - 10), tr("grid %s m   (%s)") % [str(step), tr("ground = your height, drag right button to turn") if _view3d else tr("north = -Z, up")], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(INK, 0.6))
 	var me3 := ship.global_position
 	var me := _proj(me3)
 	# range rings around the ship (on the ground plane)
@@ -403,7 +403,7 @@ func _draw_map() -> void:
 		canvas.draw_line(me, ss, Color(1.0, 1.0, 0.4, 0.5), 1.5)
 		canvas.draw_circle(ss, 4.0, Color(1.0, 1.0, 0.4, 0.8))
 		_stilt(stop, Color(1.0, 1.0, 0.4))
-		canvas.draw_string(font, ss + Vector2(6, 4), "stop here if braking", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 1.0, 0.4, 0.8))
+		canvas.draw_string(font, ss + Vector2(6, 4), tr("stop here if braking"), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 1.0, 0.4, 0.8))
 	_draw_objects(font)
 	_draw_order(font)
 	# own ship: a triangle lying in its own plane, and its velocity arrow
@@ -416,7 +416,7 @@ func _draw_map() -> void:
 	if not _view3d:
 		_draw_ruler(font)
 	else:
-		canvas.draw_string(font, Vector2(sz.x - 330, 18), "Click sets the order at height %.0f m   (Ctrl + wheel: height)" % altitude_spin.value, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.4, 0.9, 1.0, 0.9))
+		canvas.draw_string(font, Vector2(sz.x - 330, 18), tr("Click sets the order at height %.0f m   (Ctrl + wheel: height)") % altitude_spin.value, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.4, 0.9, 1.0, 0.9))
 	# cursor read-out: the point of the plane at the chosen height
 	if _hover.x < sz.x - (0.0 if _view3d else RULER_W):
 		var w := _unproject(_hover, altitude_spin.value if _view3d else gy)
@@ -427,7 +427,7 @@ func _draw_map() -> void:
 		canvas.draw_circle(Vector2(16, ly), 4.0, item[1])
 		canvas.draw_string(font, Vector2(26, ly + 4), item[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(INK, 0.7))
 		ly += 16.0
-	canvas.draw_string(font, Vector2(10, ly + 4), "arrows = where they are heading (%d s)" % int(VEL_SECONDS), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(INK, 0.5))
+	canvas.draw_string(font, Vector2(10, ly + 4), tr("arrows = where they are heading (%d s)") % int(VEL_SECONDS), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(INK, 0.5))
 
 
 ## Ships, shots and landmarks, each with the arrow of its movement.
@@ -502,7 +502,7 @@ func _draw_order(font: Font) -> void:
 		canvas.draw_circle(ts2, 2.5, col)
 		_stilt(tgt, col)
 		var what := "FOLLOW %s" % ap.track_ship.pilot_name if tracked else "GO TO"
-		canvas.draw_string(font, ts2 + Vector2(14, -6), "%s  %.0f m   %+.0f m high" % [what, ap.distance, tgt.y - me3.y], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, col)
+		canvas.draw_string(font, ts2 + Vector2(14, -6), tr("%s  %.0f m   %+.0f m high") % [what, ap.distance, tgt.y - me3.y], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, col)
 
 
 ## Direction on the screen of a world direction (unit vector).
@@ -518,10 +518,10 @@ func _draw_ruler(font: Font) -> void:
 	var rx := sz.x - RULER_W
 	canvas.draw_rect(Rect2(rx, 0, RULER_W, sz.y), Color(0.05, 0.07, 0.12, 0.9))
 	canvas.draw_line(Vector2(rx, 0), Vector2(rx, sz.y), Color(INK, 0.3), 1.0)
-	canvas.draw_string(font, Vector2(rx + 6, 16), "HEIGHT", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(INK, 0.6))
+	canvas.draw_string(font, Vector2(rx + 6, 16), tr("HEIGHT"), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(INK, 0.6))
 	var ry := _world_y_to_ruler(ship.global_position.y)
 	canvas.draw_line(Vector2(rx, ry), Vector2(sz.x, ry), INK, 2.0)
-	canvas.draw_string(font, Vector2(rx + 6, ry - 4), "you %.0f" % ship.global_position.y, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, INK)
+	canvas.draw_string(font, Vector2(rx + 6, ry - 4), tr("you %.0f") % ship.global_position.y, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, INK)
 	var wy := _world_y_to_ruler(altitude_spin.value)
 	canvas.draw_line(Vector2(rx, wy), Vector2(sz.x, wy), Color(0.4, 0.9, 1.0), 2.0)
 	canvas.draw_string(font, Vector2(rx + 6, wy - 4), "go %.0f" % altitude_spin.value, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.4, 0.9, 1.0))

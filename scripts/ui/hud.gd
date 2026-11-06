@@ -29,22 +29,22 @@ func _on_local_ship_changed(new_ship: Ship) -> void:
 	if panel != null:
 		panel.visible = piloting
 	if ship != null and not piloting:
-		show_banner("You are CREW: aim with the mouse, hold left click to fire the turrets")
+		show_banner(tr("You are CREW: aim with the mouse, hold left click to fire the turrets"))
 
 
 func _on_autopilot_arrived(arrived_ship: Ship) -> void:
 	if arrived_ship == ship:
-		show_banner("Arrived on target")
+		show_banner(tr("Arrived on target"))
 
 
 func _on_module_destroyed(hit_ship: Ship, module_index: int) -> void:
 	if hit_ship == ship:
-		show_banner("Module lost: %s" % str(hit_ship.design.modules[module_index]["type"]))
+		show_banner(tr("Module lost: %s") % str(hit_ship.design.modules[module_index]["type"]))
 
 
 func _on_ship_died(dead_ship: Ship) -> void:
 	if dead_ship == ship:
-		show_banner("SHIP DESTROYED — respawning...")
+		show_banner(tr("SHIP DESTROYED — respawning..."))
 
 
 # ------------------------------------------------------------------- helpers
@@ -68,31 +68,31 @@ func _process(dt: float) -> void:
 			_show_feed()
 	%RespawnButton.visible = is_instance_valid(ship) and ship.alive and ship.is_multiplayer_authority()
 	if not is_instance_valid(ship):
-		%FlightLabel.text = "No ship yet..."
+		%FlightLabel.text = tr("No ship yet...")
 		return
 	if not ship.alive:
 		return
 	var ap := ship.autopilot
 	var v := ship.linear_velocity
 	var p := ship.global_position
-	var ap_text := "OFF (manual)"
+	var ap_text := tr("OFF (manual)")
 	if ap.is_active():
-		ap_text = "ON TARGET" if ap.on_target else "%s  dist %.1f m" % [ap.phase, ap.distance]
-	%FlightLabel.text = "Speed  %7.2f m/s\nVel    (%.1f, %.1f, %.1f)\nPos    (%.1f, %.1f, %.1f)\nAutopilot: %s\nFlight assist: %s" % [
-		v.length(), v.x, v.y, v.z, p.x, p.y, p.z, ap_text, "ON" if ship.flight_assist else "OFF (T)"]
-	%FireStateLabel.text = ("WEAPONS FREE" if ship.weapons_free else "WEAPONS HOLD (hold LMB to fire)") if ship.stations.is_commander_mode() else ""
+		ap_text = tr("ON TARGET") if ap.on_target else tr("%s  dist %.1f m") % [ap.phase, ap.distance]
+	%FlightLabel.text = tr("Speed  %7.2f m/s\nVel    (%.1f, %.1f, %.1f)\nPos    (%.1f, %.1f, %.1f)\nAutopilot: %s\nFlight assist: %s") % [
+		v.length(), v.x, v.y, v.z, p.x, p.y, p.z, ap_text, tr("ON") if ship.flight_assist else tr("OFF (T)")]
+	%FireStateLabel.text = (tr("WEAPONS FREE") if ship.weapons_free else tr("WEAPONS HOLD (hold LMB to fire)")) if ship.stations.is_commander_mode() else ""
 	%CommanderBar.value = ship.commander_ratio() * 100.0
 	%PowerBar.value = clampf(100.0 * ship.electricity.supply_w / maxf(ship.electricity.demand_w, 1.0), 0.0, 100.0)
-	%PowerLabel.text = "Electricity  %.0f / %.0f kW%s" % [ship.electricity.demand_w / 1000.0, ship.electricity.supply_w / 1000.0,
-		"  BROWN-OUT" if ship.electricity.factor < 0.99 else ""]
-	%RcsLabel.text = "RCS max %.0f N (5%% of %.0f N best-axis thrust)" % [ship.rcs.force_max, ship.alloc.f_best]
+	%PowerLabel.text = tr("Electricity  %.0f / %.0f kW%s") % [ship.electricity.demand_w / 1000.0, ship.electricity.supply_w / 1000.0,
+		tr("  BROWN-OUT") if ship.electricity.factor < 0.99 else ""]
+	%RcsLabel.text = tr("RCS max %.0f N (5%% of %.0f N best-axis thrust)") % [ship.rcs.force_max, ship.alloc.f_best]
 
 
 func _players_text() -> String:
-	var t := "PLAYERS\n"
+	var t := tr("PLAYERS") + "\n"
 	for id in Net.players:
 		var p: Dictionary = Net.players[id]
-		t += "%s%s\n" % [p["name"], "  (crew)" if p["crew_of"] != 0 else ""]
+		t += "%s%s\n" % [p["name"], tr("  (crew)") if p["crew_of"] != 0 else ""]
 	return t
 
 
@@ -123,13 +123,13 @@ func _on_settings_pressed() -> void:
 ## The key help at the bottom follows the movement scheme chosen in the settings.
 func _refresh_help() -> void:
 	var lines := {
-		0: "W/S forward/back  A/D strafe  Space/C up/down  Arrows pitch/yaw  Q/E roll",
-		1: "MOUSE steers (move the cursor away from the centre)  W/S thrust  A/D strafe  Space/C up/down  Q/E roll  RMB free look",
-		2: "MOUSE steers  W/S move the throttle lever  X lever to zero  A/D strafe  Space/C up/down  Q/E roll  RMB free look",
-		3: "G move circle: cursor = x,z   hold ALT = height   click = fly there   Esc cancel     (keys WASD / arrows still fly)",
-		4: "Double click space = fly that way   R lock   Z approach   O orbit   K keep at range   [ ] range     (keys still fly)",
+		0: tr("W/S forward/back  A/D strafe  Space/C up/down  Arrows pitch/yaw  Q/E roll"),
+		1: tr("MOUSE steers (move the cursor away from the centre)  W/S thrust  A/D strafe  Space/C up/down  Q/E roll  RMB free look"),
+		2: tr("MOUSE steers  W/S move the throttle lever  X lever to zero  A/D strafe  Space/C up/down  Q/E roll  RMB free look"),
+		3: tr("G move circle: cursor = x,z   hold ALT = height   click = fly there   Esc cancel     (keys WASD / arrows still fly)"),
+		4: tr("Double click space = fly that way   R lock   Z approach   O orbit   K keep at range   [ ] range     (keys still fly)"),
 	}
-	%ControlsHelpLabel.text = "%s\nLMB fire (commander mode: hold LMB to fire at the lock)   R lock next enemy   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P exploded 3D plan   X brake   T flight-assist   M tactical map   H weapons free   Tab scoreboard" % lines.get(Prefs.scheme, "")
+	%ControlsHelpLabel.text = tr("%s\nLMB fire (commander mode: hold LMB to fire at the lock)   R lock next enemy   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P exploded 3D plan   X brake   T flight-assist   M tactical map   H weapons free   Tab scoreboard") % lines.get(Prefs.scheme, "")
 
 
 func _on_scoreboard_pressed() -> void:

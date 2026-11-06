@@ -1,0 +1,18 @@
+T = {
+"  (LAN)": ("  (LAN)", "  (LAN)", "  (LAN)", "  (LAN)", "  （局域网）", "  （LAN）"),
+"  (Steam)": ("  (Steam)", "  (Steam)", "  (Steam)", "  (Steam)", "  （Steam）", "  （Steam）"),
+"  (host)": ("  (hôte)", "  (Host)", "  (anfitrión)", "  (хост)", "  （主机）", "  （ホスト）"),
+"  (in progress)": ("  (en cours)", "  (läuft)", "  (en curso)", "  (идёт игра)", "  （进行中）", "  （進行中）"),
+"  (internet)": ("  (internet)", "  (Internet)", "  (internet)", "  (интернет)", "  （互联网）", "  （インターネット）"),
+"  (you)": ("  (vous)", "  (du)", "  (tú)", "  (вы)", "  （你）", "  （あなた）"),
+"- not chosen -": ("- pas choisi -", "- nicht gewählt -", "- sin elegir -", "- не выбран -", "- 未选择 -", "- 未選択 -"),
+"CREW": ("ÉQUIPAGE", "CREW", "TRIPULACIÓN", "ЭКИПАЖ", "船员", "クルー"),
+"Host": ("Hôte", "Host", "Anfitrión", "Хост", "主机", "ホスト"),
+"LOCKED": ("PRÊT", "BEREIT", "LISTO", "ГОТОВ", "已锁定", "確定済み"),
+"Lobby": ("Salon", "Lobby", "Sala", "Лобби", "大厅", "ロビー"),
+"Private (password)": ("Privé (mot de passe)", "Privat (Passwort)", "Privada (contraseña)", "Закрытое (пароль)", "私人（需密码）", "非公開（パスワード）"),
+"Public (anyone can join)": ("Public (tout le monde peut rejoindre)", "Öffentlich (jeder kann beitreten)", "Pública (cualquiera puede unirse)", "Открытое (может войти любой)", "公开（任何人都可加入）", "公開（誰でも参加可）"),
+"Seats": ("Sièges", "Plätze", "Asientos", "Места", "座位", "席"),
+"Status": ("État", "Status", "Estado", "Состояние", "状态", "状態"),
+"choosing": ("choisit", "wählt", "eligiendo", "выбирает", "选择中", "選択中"),
+}

@@ -199,11 +199,11 @@ func apply_filter(t: ShipTurrets, crew_aboard: bool) -> void:
 
 func status_text() -> String:
 	if mode == "commander":
-		return "COMMANDER  (autopilot, radar and guns are automatic)   V: switch to crew"
+		return tr("COMMANDER  (autopilot, radar and guns are automatic)   V: switch to crew")
 	if walking:
-		return "CREW  walking to %s ... %.1f s" % [stations[_target]["label"], _dur * (1.0 - walk_progress())]
+		return tr("CREW  walking to %s ... %.1f s") % [stations[_target]["label"], _dur * (1.0 - walk_progress())]
 	var s := current_station()
 	var extra := ""
 	if stations.size() > 1:
-		extra = "   F: next station (%.1f s walk)" % travel_time((current + 1) % stations.size())
-	return "CREW  %s%s   V: commander mode" % [s.get("label", "no station"), extra]
+		extra = tr("   F: next station (%.1f s walk)") % travel_time((current + 1) % stations.size())
+	return tr("CREW  %s%s   V: commander mode") % [tr(s.get("label", "no station")), extra]
