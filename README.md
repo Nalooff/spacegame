@@ -49,6 +49,9 @@ Without, someone has to walk the report along the corridors (seconds shown on th
 **"?" sphere** ("something happened around here"), and rooms with no open corridor to the bridge are marked **NO LINK** - they cannot be ordered and their
 reports wait until comms or a corridor is back. Thrusters and external antennas work without a corridor.
 
+## Bullet types and aiming
+A projectile barrel's preset (**Preset creator**, or the preset list in the builder) now has: bullets per shot (the shot damage is shared between the pellets), bullet size, lifetime (range = speed x lifetime), spread, burst length and gap, explosion radius (flak: hurts the modules around the impact), muzzle speed variation, recoil and tracer colour. Built-in: Cannon, Autocannon (bursts), Scatter gun, Flak cannon, Railgun. **Aiming**: at a gun station the turret follows YOUR mouse; a locked target (R) only gets a **lead circle** (War Thunder style, red when out of the bullets' reach): put the crosshair in the circle. Automatic gunnery (commander mode) works out the lead for every barrel with its own bullet speed, from the radar's position, velocity AND acceleration of the target. Test: `tests/test_bullets.tscn`.
+
 ## Barrels: direction, muzzle tube, aiming circles
 A barrel has its own **direction** (Properties tab, like a thruster) that is where it fires when the turret is at rest (older ships keep "base to barrel"). In front of the muzzle a **tube the size of the barrel's bullet** (`Data.BARREL_TUBE_LENGTH`, red in the builder) must stay free: a ship with a module in it cannot be saved. The builder draws two circles through the barrel (horizontal = yaw around the mount axis, vertical = pitch); the bright part is the allowed arc, a full bright circle means 360 degrees. Turning the turret turns the vertical circle around the horizontal one. Test: `tests/test_barrel_dir.tscn`.
 

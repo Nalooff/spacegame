@@ -25,3 +25,23 @@ static func intercept(shooter_pos: Vector3, shooter_vel: Vector3, target_pos: Ve
 	if t <= 0.0 or t > 30.0:
 		return target_pos
 	return target_pos + v * t        # where the target is, as seen from the (moving) shooter, after t seconds
+
+
+## Like `intercept`, but the target also ACCELERATES (thrust, turning): its position after t is p + v t + a t^2 / 2.
+## Fixed-point iteration on the flight time t = |target(t) - shooter - shooter_vel t| / speed, started from the
+## constant-velocity answer. Returns the same kind of point as `intercept` (in the shooter's frame of motion).
+static func intercept_acc(shooter_pos: Vector3, shooter_vel: Vector3, target_pos: Vector3, target_vel: Vector3, target_acc: Vector3, speed: float) -> Vector3:
+	var aim := intercept(shooter_pos, shooter_vel, target_pos, target_vel, speed)
+	if target_acc.length_squared() < 0.0001 or speed < 1.0:
+		return aim
+	var v := target_vel - shooter_vel
+	var t := (aim - shooter_pos).length() / speed
+	for _i in 6:
+		var rel := (target_pos - shooter_pos) + v * t + target_acc * (0.5 * t * t)
+		var nt := rel.length() / speed
+		if absf(nt - t) < 0.001:
+			t = nt
+			break
+		t = nt
+	t = minf(t, 30.0)
+	return target_pos + v * t + target_acc * (0.5 * t * t)

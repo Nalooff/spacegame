@@ -61,6 +61,7 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 	var speeds := PackedFloat32Array()
 	var damages := PackedFloat32Array()
 	var kinds := PackedInt32Array()
+	var extras := PackedFloat32Array()     # per bullet: size, lifetime, splash radius, tracer hue
 	var b_origins := PackedVector3Array()
 	var b_dirs := PackedVector3Array()
 	var b_dmg := PackedFloat32Array()
@@ -88,12 +89,25 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 			b_range.append(r.beam_range)
 			b_kinds.append(r.damage_type)
 		else:
-			r.cool = r.cooldown * slow
-			origins.append(shot["origin"])
-			dirs.append(shot["dir"])
-			speeds.append(r.muzzle_speed)
-			damages.append(r.damage)
-			kinds.append(r.damage_type)
+			if r.burst > 1:                    # a burst: short gaps, then the full cooldown
+				r.burst_count += 1
+				if r.burst_count >= r.burst:
+					r.burst_count = 0
+					r.cool = r.cooldown * slow
+				else:
+					r.cool = r.burst_gap * slow
+			else:
+				r.cool = r.cooldown * slow
+			for pi in r.pellets:               # the shot damage is shared by the pellets
+				origins.append(shot["origin"])
+				dirs.append(shot["dir"] if pi == 0 else ShipTurrets.spread_dir(shot["base"], r.spread_deg, _rng))
+				speeds.append(r.muzzle_speed * (1.0 + r.speed_jitter * _rng.randf_range(-1.0, 1.0)))
+				damages.append(r.damage / r.pellets)
+				kinds.append(r.damage_type)
+				extras.append_array(PackedFloat32Array([r.bullet_size, r.lifetime, r.splash, r.tracer_hue]))
+			if r.recoil > 0.0 and ship.has_method("apply_impulse"):
+				var o: Vector3 = shot["origin"]
+				ship.apply_impulse(-(shot["base"] as Vector3) * r.recoil, o - ship.global_position)
 		elec += r.elec_w
 		heat += r.heat_w
 	if origins.is_empty() and b_origins.is_empty():
@@ -102,7 +116,7 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 	_glow_elec = elec
 	_glow_heat = heat
 	if not origins.is_empty():
-		fire.rpc(origins, dirs, speeds, damages, ship.linear_velocity, kinds)
+		fire.rpc(origins, dirs, speeds, damages, ship.linear_velocity, kinds, extras)
 	if not b_origins.is_empty():
 		_beam_timer = Data.BEAM_TICK
 		beam.rpc(b_origins, b_dirs, b_dmg, b_pen, b_range, b_kinds)
@@ -136,12 +150,16 @@ func request_aim(aim_point: Vector3) -> void:
 
 @rpc("authority", "call_local", "unreliable")
 func fire(origins: PackedVector3Array, dirs: PackedVector3Array, speeds: PackedFloat32Array,
-		damages: PackedFloat32Array, ship_vel: Vector3, kinds: PackedInt32Array = PackedInt32Array()) -> void:
+		damages: PackedFloat32Array, ship_vel: Vector3, kinds: PackedInt32Array = PackedInt32Array(),
+		extras: PackedFloat32Array = PackedFloat32Array()) -> void:
 	var pool := get_tree().get_first_node_in_group("projectile_pool") as ProjectilePool
 	if pool == null:
 		return
 	for i in mini(origins.size(), mini(speeds.size(), damages.size())):
-		pool.spawn_shot(origins[i], dirs[i] * speeds[i] + ship_vel, ship, damages[i], DamageRegistry.weapon_type_id(kinds[i] if i < kinds.size() else 0))
+		var e := i * 4
+		var has_e := extras.size() >= e + 4
+		pool.spawn_shot(origins[i], dirs[i] * speeds[i] + ship_vel, ship, damages[i], DamageRegistry.weapon_type_id(kinds[i] if i < kinds.size() else 0),
+			extras[e] if has_e else 0.3, extras[e + 1] if has_e else 4.0, extras[e + 2] if has_e else 0.0, extras[e + 3] if has_e else 0.1)
 
 
 @rpc("authority", "call_local", "unreliable")

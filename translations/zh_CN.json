@@ -456,5 +456,7 @@
  "changes apply and save at once": "更改会立即生效并保存",
  "click a key, then press the new one; Esc cancels": "点击按键，然后按下新的按键；Esc 取消",
  "BARREL DIRECTION": "炮管方向",
- "Direction the barrel FIRES when the turret is at rest. The red tube in front of it (the size of its bullet) must stay free.": "炮塔静止时炮管开火的方向。前方的红色管道（与炮弹同大）必须保持畅通。"
+ "Direction the barrel FIRES when the turret is at rest. The red tube in front of it (the size of its bullet) must stay free.": "炮塔静止时炮管开火的方向。前方的红色管道（与炮弹同大）必须保持畅通。",
+ "LEAD": "提前量",
+ "out of range": "超出射程"
 }

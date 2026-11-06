@@ -1158,7 +1158,7 @@ func _delayed_throttles(thr: PackedFloat32Array, dt: float) -> PackedFloat32Arra
 ## Aiming and firing for the player who flies this ship (authority). What happens depends on the control mode:
 ##   commander mode: automatic gunnery on the nearest enemy (+ the autopilot flies to a firing position)
 ##   crew mode:      the mouse (screen centre in first person) aims the guns of the CURRENT station only;
-##                   a locked target (R) is aimed at with lead instead of the mouse.
+##                   a locked target (R) only shows a lead circle on the HUD; the turret goes where the mouse points.
 func _gunnery(k: float, gui_typing: bool) -> void:
 	# crew members aboard (lobby seats) work all the turrets as before; alone, only the current station's guns fire
 	stations.apply_filter(turrets, Net.crew_count(get_multiplayer_authority()) > 0)
@@ -1166,6 +1166,7 @@ func _gunnery(k: float, gui_typing: bool) -> void:
 		return
 	if Input.is_action_just_pressed("lock_target"):
 		detection.cycle_lock()
+	turrets.has_lead = false
 	if stations.is_commander_mode():
 		_auto_gunnery(k)
 		return
@@ -1178,11 +1179,9 @@ func _gunnery(k: float, gui_typing: bool) -> void:
 	var m := get_viewport().get_mouse_position()
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		m = get_viewport().get_visible_rect().size * 0.5
+	# the turret follows YOUR aim. A locked target only gets a LEAD CIRCLE on the screen (where to shoot to hit it),
+	# like in War Thunder: the player puts the crosshair in the circle.
 	var aim := cam.project_ray_origin(m) + cam.project_ray_normal(m) * 400.0
-	if detection.locked != null:     # a locked target: aim at where it WILL be (lead), not at the mouse
-		var lead := detection.lead_point(turrets.average_muzzle_speed())
-		if lead != Vector3.ZERO:
-			aim = lead
 	_take_aim(aim)
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not Data.cursor_busy:
 		weapons.try_fire(aim, k, PackedInt32Array(), true)       # crew mode: the trigger fires the turret you control, aimed or not
@@ -1210,6 +1209,8 @@ func _auto_gunnery(k: float) -> void:
 	if c.is_empty() or lead == Vector3.ZERO:
 		return
 	_take_aim(lead)
+	var fr := detection.fresh(c)
+	turrets.set_lead(fr[0], fr[1], fr[2])          # every barrel leads with its own bullet speed
 	var dist: float = c["dist"]
 	# HALF AUTOMATIC: radar locks and the turrets keep aiming, but the guns only fire when the player says so
 	# (hold the left mouse button over the 3D view, or switch WEAPONS FREE on with H).

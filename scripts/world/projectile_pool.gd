@@ -29,6 +29,7 @@ func _ready() -> void:
 		var visual := MeshInstance3D.new()
 		visual.name = "Bolt"
 		visual.mesh = tracer
+		visual.material_override = _glow_material(TRACER_COLOR)     # one each: the colour is set per bullet type
 		visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		visual.rotation_degrees.x = 90.0          # a capsule is long along Y; the bullet flies along -Z
 		shot.add_child(visual)
@@ -81,7 +82,8 @@ func _process(dt: float) -> void:
 
 
 ## Wakes up the next free bullet (round robin). Recycles the oldest if all are in flight.
-func spawn_shot(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: StringName = &"kinetic") -> void:
+func spawn_shot(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: StringName = &"kinetic",
+		size: float = TRACER_RADIUS, life: float = 4.0, splash: float = 0.0, hue: float = 0.1) -> void:
 	var count := get_child_count() - BEAM_POOL_SIZE
 	if count <= 0:
 		return
@@ -89,11 +91,11 @@ func spawn_shot(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: 
 		var p := get_child((_next + i) % count) as Projectile
 		if p != null and not p.active:
 			_next = (_next + i + 1) % count
-			p.activate(pos, vel, from_ship, dmg, dtype)
+			p.activate(pos, vel, from_ship, dmg, dtype, size, life, splash, hue)
 			return
 	var oldest := get_child(_next % count) as Projectile
 	_next = (_next + 1) % count
-	oldest.activate(pos, vel, from_ship, dmg, dtype)
+	oldest.activate(pos, vel, from_ship, dmg, dtype, size, life, splash, hue)
 
 
 ## One beam tick. The ray goes through modules: every module it crosses takes damage, which falls off with the

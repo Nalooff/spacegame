@@ -98,7 +98,7 @@ func _build_stat_rows(kind: String, values: Dictionary) -> void:
 		sp.step = 0.001
 		sp.allow_greater = true
 		sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		sp.value = float(values.get(d["key"], 0.0))
+		sp.value = float(values.get(d["key"], d.get("default", 0.0)))
 		sp.value_changed.connect(func(_v: float) -> void: _update_summary())
 		row.add_child(l)
 		row.add_child(sp)

@@ -139,7 +139,8 @@ func is_room(mi: int) -> bool:
 
 
 func stat(mi: int, key: String) -> float:
-	return float((modules[mi]["cfg"].get("stats", {}) as Dictionary).get(key, 0.0))
+	var st: Dictionary = modules[mi]["cfg"].get("stats", {})
+	return float(st[key]) if st.has(key) else ModulePresets.stat_default(key)
 
 
 ## A stat of the module, or `fallback` when its preset does not have it (old ships, other types).

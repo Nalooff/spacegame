@@ -11,13 +11,26 @@ var damage: float = 0.0
 var damage_type: StringName = &"kinetic"
 var shooter: Ship
 var _age: float = 0.0
+var life: float = LIFETIME
+var splash: float = 0.0          ## explosion radius (m): the modules around the impact take damage too
 
 
 func _ready() -> void:
 	deactivate()
 
 
-func activate(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: StringName = &"kinetic") -> void:
+func activate(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: StringName = &"kinetic",
+		size: float = 0.3, lifetime: float = LIFETIME, splash_radius: float = 0.0, hue: float = 0.1) -> void:
+	life = lifetime
+	splash = splash_radius
+	var bolt := get_node_or_null("Bolt") as MeshInstance3D
+	if bolt != null:
+		bolt.scale = Vector3(size / 0.3, 1.0, size / 0.3)         # the tracer is 0.3 m thick by default
+		var mat := bolt.material_override as StandardMaterial3D
+		if mat != null:
+			var c := Color.from_hsv(hue, 0.8, 1.0)
+			mat.albedo_color = c
+			mat.emission = c
 	global_position = pos
 	if vel.length() > 0.1:
 		look_at(pos + vel, Vector3.UP if absf(vel.normalized().y) < 0.95 else Vector3.RIGHT)   # the tracer lies along -Z
@@ -39,7 +52,7 @@ func deactivate() -> void:
 
 func _physics_process(dt: float) -> void:
 	_age += dt
-	if _age > LIFETIME:
+	if _age > life:
 		deactivate()
 		return
 	var from := global_position
@@ -57,5 +70,20 @@ func _physics_process(dt: float) -> void:
 		var owner_id: int = body.shape_find_owner(hit["shape"])
 		var shape_node := body.shape_owner_get_owner(owner_id) as CollisionShape3D
 		if shape_node != null and shape_node.has_meta("module"):
-			body.apply_hit(DamageHit.weapon(damage_type, int(shape_node.get_meta("module")), damage, hit["position"], shooter, velocity.normalized()))
+			var mi := int(shape_node.get_meta("module"))
+			body.apply_hit(DamageHit.weapon(damage_type, mi, damage, hit["position"], shooter, velocity.normalized()))
+			if splash > 0.0:
+				_explode(body, mi, hit["position"])
 	deactivate()
+
+
+## Explosion: every other module of the hit ship whose centre is within `splash` metres takes damage that falls off with distance.
+func _explode(body: Ship, hit_module: int, at: Vector3) -> void:
+	for mi in body.design.modules.size():
+		if mi == hit_module or mi >= body.module_hp.size() or body.module_hp[mi] < 0.0:
+			continue
+		if body.design.modules[mi]["type"] == ModuleCatalog.LOOSE:
+			continue
+		var d := at.distance_to(body.global_transform * body.design.module_centroid(mi))
+		if d < splash:
+			body.apply_hit(DamageHit.weapon(&"explosive", mi, damage * (1.0 - d / splash) * 0.6, at, shooter, (at - body.global_position).normalized()))

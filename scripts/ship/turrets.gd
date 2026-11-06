@@ -58,6 +58,17 @@ class Rig:
 	var spread_deg: float = 1.0
 	var penetration: float = 0.0   # beam: metres of module it can go through
 	var beam_range: float = 0.0
+	# ---- bullet type (see ModulePresets: pellets, bullet_size, lifetime, burst ...)
+	var pellets: int = 1
+	var bullet_size: float = 0.3
+	var lifetime: float = 4.0
+	var burst: int = 1
+	var burst_gap: float = 0.08
+	var burst_count: int = 0       # shots fired in the current burst
+	var splash: float = 0.0
+	var speed_jitter: float = 0.0  # fraction
+	var recoil: float = 0.0
+	var tracer_hue: float = 0.1
 	var elec_w: float = 0.0        # electricity while firing
 	var heat_w: float = 0.0        # heat while firing
 	var cool: float = 0.0          # seconds until it can fire again
@@ -140,6 +151,15 @@ func _make_rig(d: ShipDesign, bi: int, bar: int) -> Rig:
 	r.spread_deg = d.stat(bar, "spread_deg") + (1.0 - r.precision) * Data.TURRET_SPREAD_DEG
 	r.penetration = d.stat(bar, "penetration")
 	r.beam_range = d.stat(bar, "range")
+	r.pellets = clampi(int(round(d.stat(bar, "pellets"))), 1, 32)
+	r.bullet_size = clampf(d.stat(bar, "bullet_size"), 0.05, 2.0)
+	r.lifetime = clampf(d.stat(bar, "lifetime"), 0.2, 30.0)
+	r.burst = clampi(int(round(d.stat(bar, "burst"))), 1, 12)
+	r.burst_gap = clampf(d.stat(bar, "burst_gap"), 0.02, 2.0)
+	r.splash = clampf(d.stat(bar, "splash_radius"), 0.0, 40.0)
+	r.speed_jitter = clampf(d.stat(bar, "speed_jitter"), 0.0, 50.0) * 0.01
+	r.recoil = maxf(d.stat(bar, "recoil"), 0.0)
+	r.tracer_hue = clampf(d.stat(bar, "tracer_hue"), 0.0, 1.0)
 	var dmg_rate := r.dps if r.beam else r.damage / r.cooldown
 	r.elec_w = d.stat(bar, "elec_per_dmg") * dmg_rate + d.stat(bi, "servo_w") * 0.2
 	r.heat_w = d.stat(bar, "heat_per_dmg") * dmg_rate
@@ -195,10 +215,36 @@ func average_muzzle_speed() -> float:
 	var sum := 0.0
 	var n := 0
 	for r in rigs:
-		if not r.beam and is_usable(r):
+		if not r.beam and is_usable(r) and in_use(r):
 			sum += r.muzzle_speed
 			n += 1
 	return sum / n if n > 0 else 1.0e6
+
+
+## AUTOMATIC GUNNERY: the target (position, velocity, acceleration, as the radar knows them). While set, every barrel
+## works out its OWN lead for its own muzzle speed (a beam just points at the target).
+var lead_pos: Vector3 = Vector3.ZERO
+var lead_vel: Vector3 = Vector3.ZERO
+var lead_acc: Vector3 = Vector3.ZERO
+var has_lead: bool = false
+
+
+func set_lead(pos: Vector3, vel: Vector3, acc: Vector3) -> void:
+	lead_pos = pos
+	lead_vel = vel
+	lead_acc = acc
+	has_lead = true
+
+
+## Mean reach (speed x lifetime) of the bullets of the guns in use; 0 when there are none.
+func average_bullet_range() -> float:
+	var sum := 0.0
+	var n := 0
+	for r in rigs:
+		if not r.beam and is_usable(r) and in_use(r):
+			sum += r.muzzle_speed * r.lifetime
+			n += 1
+	return sum / n if n > 0 else 0.0
 
 
 func in_use(r: Rig) -> bool:
@@ -234,12 +280,15 @@ func track(dt: float) -> void:
 	if not has_aim:
 		return
 	var inv := ship.global_transform.affine_inverse()
-	var local_aim := inv * aim_point
 	for r in rigs:
 		var own := base_aim.has(r.base)
 		if not is_usable(r) or not (in_use(r) or own):
 			continue
-		var t := ((inv * (base_aim[r.base] as Vector3)) if own else local_aim) - r.pivot
+		var rig_aim := aim_point
+		if has_lead and not own:
+			var wp := ship.global_transform * r.pivot
+			rig_aim = lead_pos if r.beam else Ballistics.intercept_acc(wp, ship.linear_velocity, lead_pos, lead_vel, lead_acc, r.muzzle_speed)
+		var t := ((inv * (base_aim[r.base] as Vector3)) if own else (inv * rig_aim)) - r.pivot
 		if t.length() < 0.5:
 			continue
 		t = t.normalized()
@@ -437,7 +486,7 @@ func firing_solution(rng: RandomNumberGenerator, only: PackedInt32Array = Packed
 		if line_of_fire_blocked(r):
 			continue
 		var m := muzzle(r)
-		out.append({"rig": r, "origin": m[0], "dir": spread_dir(m[1], r.spread_deg, rng)})
+		out.append({"rig": r, "origin": m[0], "dir": spread_dir(m[1], r.spread_deg, rng), "base": m[1]})
 	return out
 
 

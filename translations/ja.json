@@ -456,5 +456,7 @@
  "changes apply and save at once": "変更はすぐに適用・保存されます",
  "click a key, then press the new one; Esc cancels": "キーをクリックして新しいキーを押す。Esc でキャンセル",
  "BARREL DIRECTION": "砲身の向き",
- "Direction the barrel FIRES when the turret is at rest. The red tube in front of it (the size of its bullet) must stay free.": "砲塔が静止しているときに砲身が撃つ方向。前方の赤いチューブ（弾と同じ大きさ）は空けておく必要があります。"
+ "Direction the barrel FIRES when the turret is at rest. The red tube in front of it (the size of its bullet) must stay free.": "砲塔が静止しているときに砲身が撃つ方向。前方の赤いチューブ（弾と同じ大きさ）は空けておく必要があります。",
+ "LEAD": "リード",
+ "out of range": "射程外"
 }

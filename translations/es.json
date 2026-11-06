@@ -456,5 +456,7 @@
  "changes apply and save at once": "los cambios se aplican y guardan al instante",
  "click a key, then press the new one; Esc cancels": "haz clic en una tecla y pulsa la nueva; Esc cancela",
  "BARREL DIRECTION": "DIRECCIÓN DEL CAÑÓN",
- "Direction the barrel FIRES when the turret is at rest. The red tube in front of it (the size of its bullet) must stay free.": "Dirección en la que DISPARA el cañón con la torreta en reposo. El tubo rojo delante (del tamaño de su proyectil) debe quedar libre."
+ "Direction the barrel FIRES when the turret is at rest. The red tube in front of it (the size of its bullet) must stay free.": "Dirección en la que DISPARA el cañón con la torreta en reposo. El tubo rojo delante (del tamaño de su proyectil) debe quedar libre.",
+ "LEAD": "PUNTERÍA",
+ "out of range": "fuera de alcance"
 }

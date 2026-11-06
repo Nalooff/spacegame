@@ -61,10 +61,14 @@ func _draw() -> void:
 		if is_locked:
 			var lead := det.lead_point(ship.turrets.average_muzzle_speed())
 			if lead != Vector3.ZERO and not cam.is_position_behind(lead):
+				# LEAD CIRCLE (War Thunder style): put the crosshair inside it to hit the target. Red = out of the bullets' reach.
 				var lp := cam.unproject_position(lead)
-				draw_arc(lp, 7.0, 0.0, TAU, 20, LOCKED, 2.0)
-				draw_line(lp + Vector2(-12, 0), lp + Vector2(12, 0), LOCKED, 1.0)
-				draw_line(lp + Vector2(0, -12), lp + Vector2(0, 12), LOCKED, 1.0)
+				var reach := ship.turrets.average_bullet_range()
+				var lc := Color(1.0, 0.25, 0.2) if reach > 0.0 and float(c["dist"]) > reach else LOCKED
+				draw_arc(lp, 9.0, 0.0, TAU, 24, lc, 2.0)
+				draw_circle(lp, 1.8, lc)
+				draw_dashed_line(p, lp, Color(lc, 0.5), 1.0, 5.0)
+				draw_string(font, lp + Vector2(12, 14), tr("LEAD") + ("  " + tr("out of range") if lc != LOCKED else ""), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, lc)
 
 
 func _bracket(p: Vector2, col: Color, filled: bool) -> void:

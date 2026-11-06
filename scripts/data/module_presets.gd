@@ -46,6 +46,15 @@ const DEFS := {
 		{"key": "penetration", "label": "Penetration", "unit": "m", "derived": true, "kind": "beam"},
 		{"key": "range", "label": "Range", "unit": "m", "derived": true, "kind": "beam"},
 		{"key": "spread_deg", "label": "Spread", "unit": "deg", "derived": true},
+		{"key": "pellets", "label": "Bullets per shot (the shot damage is shared between them)", "unit": "", "derived": true, "kind": "projectile", "default": 1.0},
+		{"key": "bullet_size", "label": "Bullet size (radius)", "unit": "m", "derived": true, "kind": "projectile", "default": 0.3},
+		{"key": "lifetime", "label": "Bullet lifetime (range = speed x lifetime)", "unit": "s", "derived": true, "kind": "projectile", "default": 4.0},
+		{"key": "burst", "label": "Shots per burst", "unit": "", "derived": true, "kind": "projectile", "default": 1.0},
+		{"key": "burst_gap", "label": "Time between shots of a burst", "unit": "s", "derived": true, "kind": "projectile", "default": 0.08},
+		{"key": "splash_radius", "label": "Explosion radius (damages nearby modules)", "unit": "m", "derived": true, "kind": "projectile", "default": 0.0},
+		{"key": "speed_jitter", "label": "Muzzle speed variation", "unit": "%", "derived": true, "kind": "projectile", "default": 0.0},
+		{"key": "recoil", "label": "Recoil (pushes the ship back)", "unit": "N s", "derived": true, "kind": "projectile", "default": 0.0},
+		{"key": "tracer_hue", "label": "Tracer colour (0 red, 0.1 orange, 0.33 green, 0.6 blue)", "unit": "", "derived": true, "kind": "projectile", "default": 0.1},
 		{"key": "elec_per_dmg", "label": "Electricity", "unit": "W per damage/s", "derived": true},
 		{"key": "heat_per_dmg", "label": "Heat", "unit": "W per damage/s", "derived": true},
 	],
@@ -67,6 +76,14 @@ const DEFS := {
 		{"key": "elec_w_per_m3", "label": "Electricity", "unit": "W per m3", "derived": true},
 	],
 }
+
+## What a stat is when a preset / an older ship does not have it (the bullet stats were added later).
+static func stat_default(key: String) -> float:
+	for d in DEFS[ModuleCatalog.BARREL]:
+		if d["key"] == key and d.has("default"):
+			return float(d["default"])
+	return 0.0
+
 
 ## Built-in presets: type -> id -> {label, kind (optional), stats, help}
 const PRESETS := {
@@ -93,8 +110,17 @@ const PRESETS := {
 	ModuleCatalog.BARREL: {
 		"cannon": {"label": "Cannon", "kind": "projectile", "damage_type": "kinetic", "stats": {"damage_per_m3": 180.0, "cooldown": 0.25, "muzzle_speed": 260.0,
 			"spread_deg": 1.0, "elec_per_dmg": 30.0, "heat_per_dmg": 20.0}, "help": "Shoots bullets. Good all-round damage."},
+		"autocannon": {"label": "Autocannon (3-round burst)", "kind": "projectile", "damage_type": "kinetic", "stats": {"damage_per_m3": 150.0, "cooldown": 0.9, "muzzle_speed": 300.0,
+			"spread_deg": 1.6, "elec_per_dmg": 32.0, "heat_per_dmg": 22.0, "burst": 3.0, "burst_gap": 0.07, "bullet_size": 0.2, "lifetime": 3.5, "recoil": 150.0, "tracer_hue": 0.12},
+			"help": "Fires bursts of three small bullets."},
+		"shotgun": {"label": "Scatter gun", "kind": "projectile", "damage_type": "kinetic", "stats": {"damage_per_m3": 160.0, "cooldown": 0.9, "muzzle_speed": 210.0,
+			"spread_deg": 5.0, "elec_per_dmg": 30.0, "heat_per_dmg": 20.0, "pellets": 8.0, "bullet_size": 0.12, "lifetime": 1.6, "speed_jitter": 8.0, "recoil": 400.0, "tracer_hue": 0.16},
+			"help": "A cloud of eight pellets. Deadly up close, useless far away (short lifetime)."},
+		"flak": {"label": "Flak cannon", "kind": "projectile", "damage_type": "explosive", "stats": {"damage_per_m3": 130.0, "cooldown": 0.8, "muzzle_speed": 190.0,
+			"spread_deg": 1.2, "elec_per_dmg": 34.0, "heat_per_dmg": 26.0, "bullet_size": 0.45, "lifetime": 4.5, "splash_radius": 7.0, "recoil": 300.0, "tracer_hue": 0.02},
+			"help": "A big slow shell that explodes on impact and hurts every module around it."},
 		"railgun": {"label": "Railgun", "kind": "projectile", "damage_type": "piercing", "stats": {"damage_per_m3": 900.0, "cooldown": 1.2, "muzzle_speed": 700.0,
-			"spread_deg": 0.2, "elec_per_dmg": 90.0, "heat_per_dmg": 30.0}, "help": "Slow rate of fire, very fast, precise shell."},
+			"spread_deg": 0.2, "elec_per_dmg": 90.0, "heat_per_dmg": 30.0, "bullet_size": 0.18, "lifetime": 6.0, "recoil": 900.0, "tracer_hue": 0.55}, "help": "Slow rate of fire, very fast, precise shell."},
 		"beam": {"label": "Beam laser", "kind": "beam", "damage_type": "energy", "stats": {"dps_per_m3": 420.0, "penetration": 9.0, "range": 450.0,
 			"spread_deg": 0.05, "elec_per_dmg": 80.0, "heat_per_dmg": 40.0},
 			"help": "A continuous ray: less damage than a cannon but it goes THROUGH several modules."},
@@ -339,7 +365,10 @@ static func summary(type: String, kind: String, stats: Dictionary) -> String:
 			if kind == "beam":
 				return "%.0f damage/s per m3 of barrel" % float(stats.get("dps_per_m3", 0.0))
 			var cd := maxf(float(stats.get("cooldown", 1.0)), 0.01)
-			return "%.1f shots/s, %.0f damage/s per m3 of barrel" % [1.0 / cd, float(stats.get("damage_per_m3", 0.0)) / cd]
+			var burst := maxf(float(stats.get("burst", 1.0)), 1.0)
+			var per_s := burst / (cd + (burst - 1.0) * float(stats.get("burst_gap", 0.08)))
+			return "%.1f shots/s, %.0f damage/s per m3 of barrel, %d bullet(s) per shot, range %.0f m" % [per_s, float(stats.get("damage_per_m3", 0.0)) * per_s,
+				int(maxf(float(stats.get("pellets", 1.0)), 1.0)), float(stats.get("muzzle_speed", 0.0)) * float(stats.get("lifetime", 4.0))]
 		ModuleCatalog.THRUSTER:
 			return "%.0f N per m3 of thruster" % float(stats.get("thrust_per_m3", 0.0))
 		ModuleCatalog.ARMOR, ModuleCatalog.HULL:

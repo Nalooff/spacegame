@@ -27,6 +27,7 @@ var ship: Ship
 var contacts: Array[Dictionary] = []
 var locked: Ship = null
 
+var _prev: Dictionary = {}                 # ship instance id -> {vel, t, acc}: to estimate how a target accelerates
 var _radars: Array[Dictionary] = []        # {module, kind, range, precision}
 var _timer: float = 0.0
 
@@ -93,7 +94,9 @@ func scan() -> void:
 					best_how = r["kind"]
 		if best_how == "":
 			continue
+		var acc := _acceleration(other)
 		contacts.append({
+			"stamp": Time.get_ticks_msec(), "est_acc": acc * (best_prec * 0.8),
 			"ship": other, "dist": dist, "how": best_how, "precision": best_prec,
 			"friendly": Net.are_friends(my_owner, other.get_multiplayer_authority()) if not Net.players.is_empty() else false,
 			"est_pos": other.global_position + _noise(other, 1, (1.0 - best_prec) * dist * 0.03),
@@ -103,6 +106,29 @@ func scan() -> void:
 	if locked != null and (not is_instance_valid(locked) or find_contact(locked).is_empty()):
 		locked = null
 	contacts_changed.emit()
+
+
+## Smoothed acceleration of `other` from its velocity at the last two scans.
+func _acceleration(other: Ship) -> Vector3:
+	var id := other.get_instance_id()
+	var now := Time.get_ticks_msec() * 0.001
+	var rec: Dictionary = _prev.get(id, {})
+	var acc := Vector3.ZERO
+	if not rec.is_empty() and now - float(rec["t"]) > 0.05:
+		var raw: Vector3 = (other.linear_velocity - (rec["vel"] as Vector3)) / (now - float(rec["t"]))
+		acc = (rec["acc"] as Vector3).lerp(raw, 0.4)
+		if acc.length() > 40.0:
+			acc = acc.normalized() * 40.0
+	_prev[id] = {"vel": other.linear_velocity, "t": now, "acc": acc}
+	return acc
+
+
+## The contact's position / velocity NOW: the scan is a few hundred ms old, the target did not stand still meanwhile.
+func fresh(c: Dictionary) -> Array:
+	var age := clampf((Time.get_ticks_msec() - int(c.get("stamp", Time.get_ticks_msec()))) * 0.001, 0.0, 1.0)
+	var v: Vector3 = c["est_vel"]
+	var a: Vector3 = c.get("est_acc", Vector3.ZERO)
+	return [(c["est_pos"] as Vector3) + v * age + a * (0.5 * age * age), v + a * age, a]
 
 
 ## How far radar `r` sees `target`, given what the target gives off.
@@ -154,4 +180,5 @@ func lead_point(muzzle_speed: float) -> Vector3:
 	var c := find_contact(locked)
 	if c.is_empty():
 		return Vector3.ZERO
-	return Ballistics.intercept(ship.global_position, ship.linear_velocity, c["est_pos"], c["est_vel"], muzzle_speed)
+	var f := fresh(c)
+	return Ballistics.intercept_acc(ship.global_position, ship.linear_velocity, f[0], f[1], f[2], muzzle_speed)
