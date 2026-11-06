@@ -8,9 +8,9 @@ func check(c: bool, what: String) -> void:
 
 
 func _ready() -> void:
-	for name in ["Brick", "Dart", "Scrap Hauler", "Twin Hull"]:
+	for ship_name in ["Brick", "Dart", "Scrap Hauler", "Twin Hull"]:
 		var ship: Ship = load("res://scenes/ship.tscn").instantiate()
-		ship.design_blob = ShipDesign.read_blob("res://ships/%s.json" % name)
+		ship.design_blob = ShipDesign.read_blob("res://ships/%s.json" % ship_name)
 		add_child(ship)
 		await get_tree().physics_frame
 		var d := ship.design
@@ -33,7 +33,7 @@ func _ready() -> void:
 				var naive := ship.stations._eye_above(d, mi, flip)
 				var got := ShipStations.eye_blockage(d, mi, eye, (eye - d.module_centroid(mi)).normalized())
 				var bad := ShipStations.eye_blockage(d, mi, naive, flip.normalized())
-				check(got <= bad, "%s turret %d dir %s: eye blockage %.0f <= naive %.0f" % [name, mi, str(flip), got, bad])
+				check(got <= bad, "%s turret %d dir %s: eye blockage %.0f <= naive %.0f" % [ship_name, mi, str(flip), got, bad])
 		ship.queue_free()
 	print("FAILS: %d" % fails)
 	get_tree().quit(1 if fails > 0 else 0)
