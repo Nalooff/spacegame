@@ -26,6 +26,7 @@ var comms_ok: bool = false
 var engine_rooms: PackedInt32Array = PackedInt32Array()   ## modules of type ENGINE_ROOM (alive or not)
 var engine_ok: bool = true                                 ## false when the ship HAS engine rooms and none works
 var is_room: PackedByteArray = PackedByteArray()          ## per module: 1 = a room (needs a corridor)
+var ok_edges: PackedByteArray = PackedByteArray()          ## corridor pieces that can be walked right now (1 = open)
 var node_dist: PackedFloat32Array = PackedFloat32Array()   ## per plan node: walking metres from the nearest working commander (INF = none)
 
 
@@ -49,6 +50,7 @@ func update(types: PackedStringArray, hp: PackedFloat32Array, comms: bool) -> vo
 		var m: int = plan.edges[ei]["module"]
 		var open := ei < edge_hp.size() and edge_hp[ei] > 0.0
 		ok[ei] = 1 if open and (m < 0 or (m < n and hp[m] > 0.0)) else 0
+	ok_edges = ok
 	var sources := PackedInt32Array()
 	for r in plan.rooms:
 		if types[r] == ModuleCatalog.COMMANDER and r < hp.size() and hp[r] > 0.0:
@@ -77,6 +79,11 @@ func update(types: PackedStringArray, hp: PackedFloat32Array, comms: bool) -> vo
 	for er in engine_rooms:
 		if work[er] != 0:
 			engine_ok = true
+
+
+## Walking metres from plan node `from` to every node over the corridors that are open now.
+func walk_from(from: int) -> PackedFloat32Array:
+	return plan.distances(ok_edges, PackedInt32Array([from]))
 
 
 ## True when the ship has engine rooms and none of them works any more: the thrusters get no orders.

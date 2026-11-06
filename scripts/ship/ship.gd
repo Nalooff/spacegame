@@ -67,6 +67,7 @@ var corridor_hp: PackedFloat32Array = PackedFloat32Array():
 	set(v):
 		corridor_hp = v
 		_function_dirty = true
+var crew: ShipCrew = ShipCrew.new()          ## the people on board (authority peer only, see ShipCrew)
 var reports: ShipReports = ShipReports.new()   ## what the commander has been told so far (own ship, see ShipReports)
 var _held_dents: Array[Dictionary] = []     # visible dents waiting for their report: {due, changed}
 var _report_clock: float = 0.0
@@ -90,6 +91,12 @@ var _thr_elec: PackedFloat32Array = PackedFloat32Array()   # per thruster: watts
 var _thr_heat: PackedFloat32Array = PackedFloat32Array()   # per thruster: watts of heat per newton
 var _net_timer: float = 0.0
 var _thrust_full_w: float = 0.0
+## WHERE the signature comes from (ship space): the heat-weighted / electricity-weighted centre of what is running. A radar
+## that cannot see the ship itself only knows this average point (see ShipDetection), so the guns aim there.
+var sig_heat_pt: Vector3 = Vector3.ZERO
+var sig_elec_pt: Vector3 = Vector3.ZERO
+var _sig_heat_pt_f: Vector3 = Vector3.ZERO
+var _sig_elec_pt_f: Vector3 = Vector3.ZERO
 var _sig_elec_f: float = 0.0
 var _sig_heat_f: float = 0.0
 var _dead_modules: Dictionary = {} # module index -> true once it was destroyed (for BusEvent)
@@ -430,6 +437,7 @@ func apply_hit(hit: DamageHit) -> void:
 	if result.dent_depth > 0.005 and alive and design.modules[hit.module]["type"] != ModuleCatalog.BARREL:
 		_dent(hit.module, hit.point, result.dent_direction, result.dent_depth, result.dent_radius)
 	_damage_corridors(hit, result)
+	crew.on_hit(self, hit.module, result.hp_damage)
 	BusEvent.ship_hit.emit(self, hit, result)
 
 
@@ -541,6 +549,8 @@ func _build_plan() -> void:
 	elif is_multiplayer_authority():
 		corridor_hp = plan_state.edge_hp.duplicate()
 	comms.configure(self)
+	if is_multiplayer_authority():
+		crew.plan_ready(self)
 	_function_dirty = true
 	_refresh_props()
 	_mesh_dirty = true
@@ -965,6 +975,8 @@ func _update_report_spheres() -> void:
 
 
 func _process(dt: float) -> void:
+	if alive and plan_state != null and is_multiplayer_authority() and crew.tick(self, dt):
+		_die()                      # the last person on board is dead: the ship is lost
 	if plan_state != null and is_flown_by_me():
 		_report_clock += dt
 		reports.tick(self, dt)
@@ -1036,6 +1048,45 @@ func _physics_process(dt: float) -> void:
 
 
 ## Smooth what the ship gives off (so it fades instead of flickering) and round it so the network rarely resends it.
+## Heat comes out where thrusters burn and where barrels fire; electricity is used by the same, plus the bridge and radars.
+func _update_signature_points(thr: PackedFloat32Array, dt: float) -> void:
+	var hp := _com * Data.HEAT_BASE_W
+	var hsum := Data.HEAT_BASE_W
+	var ep := _com * 1000.0
+	var esum := 1000.0
+	for i in alloc.n:
+		var newtons: float = alloc.power[i] * thr[i]
+		if newtons <= 0.0:
+			continue
+		var at: Vector3 = alloc.pos[i] + _com
+		hp += at * (newtons * _thr_heat[i])
+		hsum += newtons * _thr_heat[i]
+		ep += at * (newtons * _thr_elec[i])
+		esum += newtons * _thr_elec[i]
+	var wh := weapons.firing_heat()
+	if wh > 0.0:
+		hp += weapons.glow_local * wh
+		hsum += wh
+	var we := weapons.firing_power()
+	if we > 0.0:
+		ep += weapons.glow_local * we
+		esum += we
+	for mi in design.modules.size():          # the bridge and the radars draw power all the time
+		var t: String = design.modules[mi]["type"]
+		if t == ModuleCatalog.COMMANDER or t == ModuleCatalog.RADAR:
+			ep += design.module_centroid(mi) * 3000.0
+			esum += 3000.0
+	var a := clampf(dt * 2.0, 0.0, 1.0)
+	_sig_heat_pt_f = _sig_heat_pt_f.lerp(hp / hsum, a)
+	_sig_elec_pt_f = _sig_elec_pt_f.lerp(ep / esum, a)
+	var h := _sig_heat_pt_f.snappedf(0.25)
+	var e := _sig_elec_pt_f.snappedf(0.25)
+	if h != sig_heat_pt:
+		sig_heat_pt = h
+	if e != sig_elec_pt:
+		sig_elec_pt = e
+
+
 func _update_signatures(dt: float, elec_w: float, heat_w: float) -> void:
 	var a := clampf(dt * 2.0, 0.0, 1.0)
 	_sig_elec_f = lerpf(_sig_elec_f, elec_w, a)
@@ -1099,6 +1150,7 @@ func _authority_step(dt: float) -> void:
 	var k := electricity.consume(thrust_w, f_rcs.length(), absf(tau.x) + absf(tau.y) + absf(tau.z),
 		weapons.firing_power())
 	_update_signatures(dt, electricity.demand_w, heat_w * k)
+	_update_signature_points(thr, dt)
 
 	# main thrusters: force applied AT each thruster's position (makes torque)
 	for i in alloc.n:
@@ -1166,6 +1218,8 @@ func _gunnery(k: float, gui_typing: bool) -> void:
 		return
 	if Input.is_action_just_pressed("lock_target"):
 		detection.cycle_lock()
+	if Input.is_action_just_pressed("target_module"):
+		detection.cycle_module()
 	turrets.has_lead = false
 	if stations.is_commander_mode():
 		_auto_gunnery(k)

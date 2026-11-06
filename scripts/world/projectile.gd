@@ -12,6 +12,8 @@ var damage_type: StringName = &"kinetic"
 var shooter: Ship
 var _age: float = 0.0
 var life: float = LIFETIME
+var pierce: float = 0.0          ## metres of modules it can still go through (0 = stops at the first one)
+var _pierce0: float = 0.0
 var splash: float = 0.0          ## explosion radius (m): the modules around the impact take damage too
 
 
@@ -20,7 +22,9 @@ func _ready() -> void:
 
 
 func activate(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: StringName = &"kinetic",
-		size: float = 0.3, lifetime: float = LIFETIME, splash_radius: float = 0.0, hue: float = 0.1) -> void:
+		size: float = 0.3, lifetime: float = LIFETIME, splash_radius: float = 0.0, hue: float = 0.1, pierce_m: float = 0.0) -> void:
+	pierce = pierce_m
+	_pierce0 = pierce_m
 	life = lifetime
 	splash = splash_radius
 	var bolt := get_node_or_null("Bolt") as MeshInstance3D
@@ -66,15 +70,29 @@ func _physics_process(dt: float) -> void:
 		return
 	global_position = hit["position"]
 	var body := hit["collider"] as Ship
-	if body != null and body.is_multiplayer_authority():
+	var through := false
+	if body != null:
 		var owner_id: int = body.shape_find_owner(hit["shape"])
 		var shape_node := body.shape_owner_get_owner(owner_id) as CollisionShape3D
 		if shape_node != null and shape_node.has_meta("module"):
 			var mi := int(shape_node.get_meta("module"))
-			body.apply_hit(DamageHit.weapon(damage_type, mi, damage, hit["position"], shooter, velocity.normalized()))
-			if splash > 0.0:
-				_explode(body, mi, hit["position"])
-	deactivate()
+			var dir := velocity.normalized()
+			var frac := clampf(pierce / maxf(_pierce0, 0.1), 0.0, 1.0) if _pierce0 > 0.0 else 1.0
+			if body.is_multiplayer_authority():
+				body.apply_hit(DamageHit.weapon(damage_type, mi, damage * (0.35 + 0.65 * frac), hit["position"], shooter, dir, maxf(pierce, 0.5)))
+				if splash > 0.0:
+					_explode(body, mi, hit["position"])
+			# PENETRATION: a bullet with penetration left goes on through the module (hard ones stop it sooner) and hurts
+			# the next one behind it too
+			if pierce > 0.0:
+				var hardness := float(MaterialCatalog.info(body.design.material_of(mi))["hardness"])
+				pierce -= Data.BEAM_MODULE_COST * (1.0 + hardness / 100.0)
+				if pierce > 0.0:
+					global_position = (hit["position"] as Vector3) + dir * 0.4
+					velocity *= 0.9
+					through = true
+	if not through:
+		deactivate()
 
 
 ## Explosion: every other module of the hit ship whose centre is within `splash` metres takes damage that falls off with distance.

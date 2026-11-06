@@ -12,7 +12,7 @@ const REBINDABLE: Array = [
 	["thrust_up", "Thrust up"], ["thrust_down", "Thrust down"],
 	["pitch_up", "Pitch up"], ["pitch_down", "Pitch down"], ["yaw_left", "Yaw left"], ["yaw_right", "Yaw right"],
 	["roll_left", "Roll left"], ["roll_right", "Roll right"],
-	["brake", "Brake"], ["hold_attitude", "Flight assist"], ["lock_target", "Lock next enemy"], ["toggle_control_mode", "Commander / crew mode"],
+	["brake", "Brake"], ["hold_attitude", "Flight assist"], ["lock_target", "Lock next enemy"], ["target_module", "Aim at next module of the target"], ["toggle_crew", "Crew panel"], ["toggle_control_mode", "Commander / crew mode"],
 	["next_station", "Next station"], ["toggle_plan", "Exploded 3D plan"], ["scoreboard", "Scoreboard (hold)"],
 	["move_gizmo", "Move circle (point and click)"], ["order_approach", "Approach target"], ["order_orbit", "Orbit target"],
 	["order_keep_range", "Keep target at range"], ["range_less", "Orbit / range smaller"], ["range_more", "Orbit / range bigger"],

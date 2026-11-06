@@ -64,6 +64,15 @@ func tick(ship: Ship, dt: float) -> void:
 	var i := 0
 	while i < pending.size():
 		var r: Dictionary = pending[i]
+		if not r.get("found", true):                  # nobody has been near it yet
+			var fd := ship.crew.finder_delay(ship, r["center"]) if ship.crew.active() else 0.0
+			if fd >= 0.0:
+				r["found"] = true
+				r["due"] = _clock + fd if fd != INF else INF
+				r["nolink"] = fd == INF
+				ship.crew._log("Damage report from module %d is on its way to the bridge" % int(r["index"]) if r["kind"] == "m" else "A corridor damage report is on its way to the bridge")
+			i += 1
+			continue
 		if r.get("nolink", false) or float(r["due"]) == INF:      # a way (or the radio) may have come back
 			var dl := ship.plan_state.delay_at(r["center"])
 			if dl != INF:
@@ -81,10 +90,20 @@ func tick(ship: Ship, dt: float) -> void:
 
 func _report(kind: String, index: int, value: float, at: Vector3, ship: Ship) -> Dictionary:
 	var delay := ship.plan_state.delay_at(at)
+	var unfound := false
+	if delay > 0.05 and ship.crew.active():
+		# no communications: the damage is only KNOWN once somebody has been near it and walked the news to the bridge
+		var f := ship.crew.finder_delay(ship, at)
+		if f < 0.0:
+			unfound = true
+		else:
+			delay = f
 	# delay == INF: no open corridor leads from there to a working commander. The report WAITS (no link) until
 	# communications come back or a corridor opens; it is NOT silently delivered after some fixed time.
 	var r := {"due": _clock + delay if delay != INF else INF, "kind": kind, "index": index, "value": value, "center": at,
-		"radius": Data.REPORT_UNCERTAINTY, "sphere": false, "nolink": delay == INF}
+		"radius": Data.REPORT_UNCERTAINTY, "sphere": false, "nolink": delay == INF and not unfound, "found": not unfound}
+	if unfound:
+		r["due"] = INF
 	if delay <= 0.05:
 		_apply(r)
 		return {}

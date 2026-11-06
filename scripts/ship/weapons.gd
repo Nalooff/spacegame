@@ -16,6 +16,7 @@ var _beam_timer: float = 0.0
 var _glow: float = 0.0              ## > 0 shortly after a shot: counts as electrical load and heat
 var _glow_elec: float = 0.0
 var _glow_heat: float = 0.0
+var glow_local: Vector3 = Vector3.ZERO   ## ship-space centre of the barrels that fired last (where the weapon heat comes from)
 var _rng := RandomNumberGenerator.new()
 
 
@@ -61,7 +62,7 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 	var speeds := PackedFloat32Array()
 	var damages := PackedFloat32Array()
 	var kinds := PackedInt32Array()
-	var extras := PackedFloat32Array()     # per bullet: size, lifetime, splash radius, tracer hue
+	var extras := PackedFloat32Array()     # per bullet: size, lifetime, splash radius, tracer hue, penetration
 	var b_origins := PackedVector3Array()
 	var b_dirs := PackedVector3Array()
 	var b_dmg := PackedFloat32Array()
@@ -70,6 +71,8 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 	var b_kinds := PackedInt32Array()
 	var elec := 0.0
 	var heat := 0.0
+	var fired_pos := Vector3.ZERO
+	var fired_n := 0
 	var now := Time.get_ticks_msec()
 	if now - _last_call_ms > 300:
 		_hold = 0.0            # a new burst of fire: the order starts walking to the gun stations now
@@ -104,14 +107,18 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 				speeds.append(r.muzzle_speed * (1.0 + r.speed_jitter * _rng.randf_range(-1.0, 1.0)))
 				damages.append(r.damage / r.pellets)
 				kinds.append(r.damage_type)
-				extras.append_array(PackedFloat32Array([r.bullet_size, r.lifetime, r.splash, r.tracer_hue]))
+				extras.append_array(PackedFloat32Array([r.bullet_size, r.lifetime, r.splash, r.tracer_hue, r.pierce]))
 			if r.recoil > 0.0 and ship.has_method("apply_impulse"):
 				var o: Vector3 = shot["origin"]
 				ship.apply_impulse(-(shot["base"] as Vector3) * r.recoil, o - ship.global_position)
 		elec += r.elec_w
 		heat += r.heat_w
+		fired_pos += r.pivot
+		fired_n += 1
 	if origins.is_empty() and b_origins.is_empty():
 		return
+	if fired_n > 0:
+		glow_local = fired_pos / fired_n
 	_glow = 0.15
 	_glow_elec = elec
 	_glow_heat = heat
@@ -156,10 +163,10 @@ func fire(origins: PackedVector3Array, dirs: PackedVector3Array, speeds: PackedF
 	if pool == null:
 		return
 	for i in mini(origins.size(), mini(speeds.size(), damages.size())):
-		var e := i * 4
-		var has_e := extras.size() >= e + 4
+		var e := i * 5
+		var has_e := extras.size() >= e + 5
 		pool.spawn_shot(origins[i], dirs[i] * speeds[i] + ship_vel, ship, damages[i], DamageRegistry.weapon_type_id(kinds[i] if i < kinds.size() else 0),
-			extras[e] if has_e else 0.3, extras[e + 1] if has_e else 4.0, extras[e + 2] if has_e else 0.0, extras[e + 3] if has_e else 0.1)
+			extras[e] if has_e else 0.3, extras[e + 1] if has_e else 4.0, extras[e + 2] if has_e else 0.0, extras[e + 3] if has_e else 0.1, extras[e + 4] if has_e else 0.0)
 
 
 @rpc("authority", "call_local", "unreliable")

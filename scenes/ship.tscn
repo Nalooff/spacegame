@@ -87,6 +87,12 @@ properties/4/replication_mode = 2
 properties/5/path = NodePath(".:corridor_hp")
 properties/5/spawn = true
 properties/5/replication_mode = 2
+properties/6/path = NodePath(".:sig_heat_pt")
+properties/6/spawn = false
+properties/6/replication_mode = 2
+properties/7/path = NodePath(".:sig_elec_pt")
+properties/7/spawn = false
+properties/7/replication_mode = 2
 
 [node name="Ship" type="RigidBody3D" groups=["ships"]]
 collision_layer = 1

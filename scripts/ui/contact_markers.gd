@@ -59,6 +59,12 @@ func _draw() -> void:
 		_bracket(p, col, is_locked)
 		draw_string(font, p + Vector2(SIZE + 4, 4), "%s  %.0f m" % [other.pilot_name, c["dist"]], HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col)
 		if is_locked:
+			var what := tr("aiming at: whole ship")
+			if not bool(c.get("visible", false)):
+				what = tr("aiming at: the ship's %s centre (too far to see parts)") % (tr("heat") if c["how"] == "thermal" else tr("electric"))
+			elif det.target_module >= 0:
+				what = tr("aiming at: %s") % det.target_module_name()
+			draw_string(font, p + Vector2(SIZE + 4, 20), what, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, LOCKED)
 			var lead := det.lead_point(ship.turrets.average_muzzle_speed())
 			if lead != Vector3.ZERO and not cam.is_position_behind(lead):
 				# LEAD CIRCLE (War Thunder style): put the crosshair inside it to hit the target. Red = out of the bullets' reach.

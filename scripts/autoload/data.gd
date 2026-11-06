@@ -48,6 +48,15 @@ const EXHAUST_MAX_LENGTH := 40.0
 const EXHAUST_MARGIN := 0.15          # metres added around the nozzle outline
 const EXHAUST_NOZZLE_SLICE_M := 0.2   # the nozzle = the last slice of the thruster along the exhaust: at least this thick ...
 const EXHAUST_NOZZLE_SLICE_FRACTION := 0.08   # ... or this fraction of its length
+const CREW_M3_PER_PERSON := 18.0     # one crew member per this much room volume (commander, turret bases, radars, engine rooms ...)
+const CREW_MAX := 24
+const CREW_HP := 100.0
+const CREW_WALK_SPEED := 2.5         # metres per second over open corridors
+const CREW_REPAIR_PER_S := 0.012     # fraction of a module's maximum health one person repairs per second
+const CREW_MAX_WORKERS := 3          # people that work on one module at once
+const CREW_NOTICE_RADIUS := 6.0      # a person this close to damage (ship space) notices it
+const CREW_HIT_DAMAGE := 160.0       # crew hit points lost per 1.0 (= the module's whole health) of damage dealt to the room they stand in
+const CREW_PATROL_MIN := 12.0        # an idle person walks to another room after this many seconds (at least)
 const BARREL_TUBE_LENGTH := 4.0      # the tube in front of a barrel's muzzle (the size of its bullet) that nothing may block, metres
 const BARREL_TUBE_MARGIN := 0.05
 const EXHAUST_BURN_DPS := 40.0        # burn damage per second at full throttle for a module inside the cone

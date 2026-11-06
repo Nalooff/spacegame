@@ -69,6 +69,7 @@ class Rig:
 	var speed_jitter: float = 0.0  # fraction
 	var recoil: float = 0.0
 	var tracer_hue: float = 0.1
+	var pierce: float = 0.0
 	var elec_w: float = 0.0        # electricity while firing
 	var heat_w: float = 0.0        # heat while firing
 	var cool: float = 0.0          # seconds until it can fire again
@@ -160,6 +161,7 @@ func _make_rig(d: ShipDesign, bi: int, bar: int) -> Rig:
 	r.speed_jitter = clampf(d.stat(bar, "speed_jitter"), 0.0, 50.0) * 0.01
 	r.recoil = maxf(d.stat(bar, "recoil"), 0.0)
 	r.tracer_hue = clampf(d.stat(bar, "tracer_hue"), 0.0, 1.0)
+	r.pierce = clampf(d.stat(bar, "pierce"), 0.0, 20.0)
 	var dmg_rate := r.dps if r.beam else r.damage / r.cooldown
 	r.elec_w = d.stat(bar, "elec_per_dmg") * dmg_rate + d.stat(bi, "servo_w") * 0.2
 	r.heat_w = d.stat(bar, "heat_per_dmg") * dmg_rate

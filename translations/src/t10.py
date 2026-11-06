@@ -1,0 +1,15 @@
+T = {
+"%s\nLMB fire (commander mode: hold LMB to fire at the lock)   R lock next enemy   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P exploded 3D plan   X brake   T flight-assist   M tactical map   H weapons free   Tab scoreboard   J aim at next module   Y crew": ("   J module suivant   Y équipage", "   J nächstes Modul   Y Besatzung", "   J siguiente módulo   Y tripulación", "   J следующий модуль   Y экипаж", "   J 下一个模块   Y 船员", "   J 次のモジュール   Y 乗組員"),
+"Auto": ("Auto", "Auto", "Auto", "Авто", "自动", "自動"),
+"Crew panel": ("Équipage", "Besatzung", "Tripulación", "Экипаж", "船员面板", "乗組員パネル"),
+"Nobody can bring the order to that person (no way to them, no communications)": ("Personne ne peut transmettre l'ordre à cette personne (pas de chemin, pas de communications)", "Niemand kann der Person den Befehl überbringen (kein Weg, keine Kommunikation)", "Nadie puede llevar la orden a esa persona (sin camino ni comunicaciones)", "Никто не может передать приказ этому человеку (нет пути и связи)", "没有人能把命令传给他（没有通路，也没有通讯）", "その人に命令を届けられません（道も通信もありません）"),
+"Repair": ("Réparer", "Reparieren", "Reparar", "Чинить", "修理", "修理"),
+"The order needs %.0f s to reach them (no communications)": ("L'ordre met %.0f s à leur parvenir (pas de communications)", "Der Befehl braucht %.0f s, bis er sie erreicht (keine Kommunikation)", "La orden tarda %.0f s en llegar (sin comunicaciones)", "Приказ дойдёт за %.0f с (нет связи)", "命令需要 %.0f 秒才能传达（无通讯）", "命令が届くまで %.0f 秒（通信なし）"),
+"dead": ("mort", "tot", "muerto", "мёртв", "死亡", "死亡"),
+"idle": ("inactif", "untätig", "libre", "свободен", "空闲", "待機"),
+"in": ("dans", "in", "en", "в", "在", "場所:"),
+"nobody on board": ("personne à bord", "niemand an Bord", "nadie a bordo", "на борту никого нет", "船上无人", "乗員なし"),
+"ordered": ("ordre donné", "befohlen", "ordenado", "приказ", "已下令", "命令済み"),
+"repairing": ("répare", "repariert", "reparando", "чинит", "修理中", "修理中"),
+"walking": ("marche", "geht", "caminando", "идёт", "行走中", "移動中"),
+}

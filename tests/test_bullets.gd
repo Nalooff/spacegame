@@ -78,5 +78,54 @@ func _ready() -> void:
 		var bolt := p.get_node("Bolt") as MeshInstance3D
 		check(absf(bolt.scale.x - 0.5 / 0.3) < 0.01, "the tracer is drawn at the bullet size")
 	check(rig.cool < rig.cooldown * 0.5, "inside a burst the next shot comes after the short gap (%.2f s)" % rig.cool)
+	# ---- penetration: a piercing bullet damages every module on its way
+	var tgt: Ship = load("res://scenes/ship.tscn").instantiate()
+	tgt.design_blob = ShipDesign.read_blob("res://ships/Brick.json")
+	tgt.position = Vector3(500, 0, 0)
+	add_child(tgt)
+	for i in 6: await get_tree().physics_frame
+	var hp0 := tgt.module_hp.duplicate()
+	for pierce in [0.0, 30.0]:
+		for i in tgt.module_hp.size():
+			tgt.module_hp[i] = hp0[i]
+		pool.spawn_shot(tgt.global_position + Vector3(0, 0, 60), Vector3(0, 0, -300), ship, 50.0, &"piercing", 0.2, 4.0, 0.0, 0.5, pierce)
+		for i in 40: await get_tree().physics_frame
+		var hurt := 0
+		for i in tgt.module_hp.size():
+			if tgt.module_hp[i] < hp0[i]:
+				hurt += 1
+		print("pierce %.0f: %d module(s) damaged" % [pierce, hurt])
+		if pierce == 0.0:
+			check(hurt <= 1, "a bullet without penetration stops in the first module")
+		else:
+			check(hurt >= 2, "a piercing bullet damages several modules")
+	# ---- what the guns aim at: a visible target -> the chosen module, a radar-only contact -> the heat / electric centre
+	var det: ShipDetection = ship.detection
+	det.scan()
+	check(not det.contacts.is_empty(), "the shooter sees the target ship")
+	if not det.contacts.is_empty():
+		var cc: Dictionary = det.contacts[0]
+		check(bool(cc["visible"]) and (cc["aim_off"] as Vector3).length() < 0.01, "visible, no module chosen: aim at the ship as a whole")
+		det.locked = tgt
+		det.cycle_module()
+		check(det.target_module >= 0, "J cycles to a module (%s)" % det.target_module_name())
+		det.scan()
+		var c2: Dictionary = det.find_contact(tgt)
+		var want: Vector3 = tgt.global_transform.basis * (tgt.design.module_centroid(det.target_module) - tgt._com)
+		check((c2["aim_off"] as Vector3).distance_to(want) < 0.01, "the aim point moves to that module")
+		det.locked = null
+		check(det.target_module == -1, "unlocking forgets the module")
+	# far away (radar only): the heat centre, and the module choice is ignored
+	tgt.sig_heat_pt = Vector3(0, 0, 8)
+	tgt.global_position = ship.global_position + Vector3(0, 0, -Data.VIEW_RANGE - 300)
+	det._radars.clear()
+	det._radars.append({"module": 0, "kind": "thermal", "range": 1.0e6, "precision": 0.8})
+	tgt.sig_heat = 1.0e7
+	det.scan()
+	var c3: Dictionary = det.find_contact(tgt)
+	check(not c3.is_empty() and not bool(c3["visible"]), "far target seen by radar only")
+	if not c3.is_empty():
+		var off: Vector3 = c3["aim_off"]
+		check(off.distance_to(tgt.global_transform.basis * (Vector3(0, 0, 8) - tgt._com)) < 0.01, "radar only: the guns aim at the average heat point")
 	print("FAILS: %d" % fails)
 	get_tree().quit(1 if fails > 0 else 0)

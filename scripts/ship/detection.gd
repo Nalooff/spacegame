@@ -25,7 +25,15 @@ signal contacts_changed
 
 var ship: Ship
 var contacts: Array[Dictionary] = []
-var locked: Ship = null
+var locked: Ship = null:
+	set(v):
+		if v != locked:
+			target_module = -1
+		locked = v
+## AIMING AT A PART: the module of the locked ship the guns try to hit (-1 = the ship as a whole). Only taken into
+## account while the target is close enough to be SEEN (Data.VIEW_RANGE); a radar alone only knows the average point of
+## the heat / electricity the ship produces (Ship.sig_heat_pt / sig_elec_pt), so that is where the guns aim.
+var target_module: int = -1
 
 var _prev: Dictionary = {}                 # ship instance id -> {vel, t, acc}: to estimate how a target accelerates
 var _radars: Array[Dictionary] = []        # {module, kind, range, precision}
@@ -95,8 +103,16 @@ func scan() -> void:
 		if best_how == "":
 			continue
 		var acc := _acceleration(other)
+		var seen := dist <= Data.VIEW_RANGE
+		var aim_off := Vector3.ZERO                 # from the ship's centre to the point the guns aim at (world frame)
+		if seen:
+			if other == locked and target_module >= 0 and target_module < other.design.modules.size() and other.module_hp.size() > target_module and other.module_hp[target_module] >= 0.0:
+				aim_off = other.global_transform.basis * (other.design.module_centroid(target_module) - other._com)
+		else:
+			var pt: Vector3 = other.sig_heat_pt if best_how == "thermal" else (other.sig_elec_pt if best_how == "electronic" else other._com)
+			aim_off = other.global_transform.basis * (pt - other._com)
 		contacts.append({
-			"stamp": Time.get_ticks_msec(), "est_acc": acc * (best_prec * 0.8),
+			"visible": seen, "aim_off": aim_off, "stamp": Time.get_ticks_msec(), "est_acc": acc * (best_prec * 0.8),
 			"ship": other, "dist": dist, "how": best_how, "precision": best_prec,
 			"friendly": Net.are_friends(my_owner, other.get_multiplayer_authority()) if not Net.players.is_empty() else false,
 			"est_pos": other.global_position + _noise(other, 1, (1.0 - best_prec) * dist * 0.03),
@@ -128,7 +144,7 @@ func fresh(c: Dictionary) -> Array:
 	var age := clampf((Time.get_ticks_msec() - int(c.get("stamp", Time.get_ticks_msec()))) * 0.001, 0.0, 1.0)
 	var v: Vector3 = c["est_vel"]
 	var a: Vector3 = c.get("est_acc", Vector3.ZERO)
-	return [(c["est_pos"] as Vector3) + v * age + a * (0.5 * age * age), v + a * age, a]
+	return [(c["est_pos"] as Vector3) + (c.get("aim_off", Vector3.ZERO) as Vector3) + v * age + a * (0.5 * age * age), v + a * age, a]
 
 
 ## How far radar `r` sees `target`, given what the target gives off.
@@ -157,6 +173,33 @@ func enemies() -> Array[Dictionary]:
 		if not c["friendly"] and is_instance_valid(c["ship"]):   # a contact may have been freed since the last scan
 			out.append(c)
 	return out
+
+
+## Aim at the next module of the locked ship (none -> first -> ... -> the whole ship again). Only works while it is visible.
+func cycle_module() -> void:
+	if locked == null or not is_instance_valid(locked):
+		return
+	var c := find_contact(locked)
+	if c.is_empty() or not bool(c.get("visible", false)):
+		target_module = -1
+		return
+	var n := locked.design.modules.size()
+	var i := target_module
+	for _k in n + 1:
+		i += 1
+		if i >= n:
+			target_module = -1
+			return
+		if i < locked.module_hp.size() and locked.module_hp[i] >= 0.0 and locked.design.modules[i]["type"] != ModuleCatalog.LOOSE:
+			target_module = i
+			return
+	target_module = -1
+
+
+func target_module_name() -> String:
+	if locked == null or target_module < 0 or target_module >= locked.design.modules.size():
+		return ""
+	return "%s %d" % [str(locked.design.modules[target_module]["type"]), target_module]
 
 
 ## Lock the next enemy (closest first); after the last one the lock is released.
