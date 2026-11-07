@@ -39,7 +39,7 @@ const DARK_PAPER := Color(0.07, 0.10, 0.15)
 const DARK_INK := Color(0.93, 0.96, 1.0)
 const LIGHT_PAPER := Color(0.97, 0.97, 0.95)
 const LIGHT_INK := Color(0.07, 0.10, 0.18)
-const ROOM_CODES := {"commander": "CMD", "turret": "GUN", "thruster": "ENG", "radar": "RDR", "antenna": "ANT", "engine_room": "ENR"}
+const ROOM_CODES := {"commander": "CMD", "turret": "GUN", "thruster": "ENG", "radar": "RDR", "antenna": "ANT", "engine_room": "ENR", "airlock": "AIR", "pod_bay": "POD"}
 
 var design: ShipDesign
 var plan: ShipPlan
@@ -875,6 +875,14 @@ func _room_icon(type: String, c: Vector2, col: Color) -> void:
 			for k in 6:
 				var a := TAU * k / 6.0
 				draw_line(c + Vector2(cos(a), sin(a)) * 4.0, c + Vector2(cos(a), sin(a)) * 7.0, col, 2.0)
+		ModuleCatalog.AIRLOCK:                        # a door with a handle
+			draw_rect(Rect2(c + Vector2(-4, -7), Vector2(8, 14)), col, false, 1.4)
+			draw_circle(c + Vector2(2, 0), 1.2, col)
+		ModuleCatalog.POD_BAY:                        # a capsule and an arrow
+			draw_arc(c + Vector2(-2, 0), 4.0, 0.0, TAU, 10, col, 1.4)
+			draw_line(c + Vector2(3, 0), c + Vector2(9, 0), col, 1.6)
+			draw_line(c + Vector2(6, -3), c + Vector2(9, 0), col, 1.4)
+			draw_line(c + Vector2(6, 3), c + Vector2(9, 0), col, 1.4)
 		ModuleCatalog.ANTENNA:                        # waves
 			draw_circle(c, 1.8, col)
 			draw_arc(c, 5.0, -0.9, 0.9, 6, col, 1.2)
@@ -1161,6 +1169,17 @@ func _draw_iso(font: Font) -> void:
 		if room2 and r2 > 0.0:
 			_room_icon(t2, cs + Vector2(0, -10), Color(col2, 0.9))
 		draw_string(font, cs + Vector2(-13, 10), ROOM_CODES.get(t2, "???"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col2 if r2 > 0.0 else Color(0.8, 0.8, 0.85))
+	# BOARDERS: red dots
+	if show_rooms and ship != null and is_instance_valid(ship) and ship.crew != null:
+		for f in ship.crew.foes:
+			if f["hp"] <= 0.0:
+				continue
+			var fm := ship.crew.module_of(ship, f)
+			if fm < 0 or fm >= offs.size() or not order.has(fm):
+				continue
+			var fq := _iso((f["pos"] as Vector3) + offs[fm] + _iso_push.get(fm, Vector3.ZERO)) * sc + org
+			draw_circle(fq, 4.5, Color(1.0, 0.2, 0.2))
+			draw_arc(fq, 6.0, 0.0, TAU, 10, Color(1.0, 0.5, 0.4, 0.8), 1.2)
 	# the CREW: one dot per living person (green = idle, yellow = walking, blue = repairing), moving through the corridors
 	if show_rooms and ship != null and is_instance_valid(ship) and ship.crew.active():
 		for m in ship.crew.members:

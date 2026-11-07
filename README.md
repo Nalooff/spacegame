@@ -228,3 +228,10 @@ Damage inside the ship is not only lost health:
 
 ## License
 MIT, see `LICENSE`.
+
+## Ramming, breaches and boarding
+- A ram hard enough to dent a hull **lodges** the two ships in each other: a damped grip keeps them together (no bounce) and weakens for about 14 s until it tears - thrusting away tears it sooner. It also opens a **hole** in the hit modules: air leaks out until somebody stands in the room and seals it.
+- **Airlock** (new room type): while lodged, your crew can walk out of an airlock within 10 m of the contact and board through a hole (or an airlock) of the enemy near the same spot.
+- **Pod bay** (new room type): launches boarding pods (2 people each, a pod per ~10 m3) at the ship you have locked; a pod punches a hole where it lands.
+- Both are used from the crew panel (Y): BOARD row, choose how many people go.
+- **Boarders** (red dots in the plan) wreck every room nobody defends, may start fires and shorts, and go for the bridge. Defenders in the room fight them. Boarders holding the bridge for 12 s, or killing every defender, take the ship (a kill for them). **Locked doors** stop boarders too - lock them in.

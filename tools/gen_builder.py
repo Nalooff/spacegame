@@ -33,7 +33,7 @@ def panel(name, preset_props, kids):
         "layout_mode": 2, "theme_override_constants/margin_left": 10, "theme_override_constants/margin_right": 10,
         "theme_override_constants/margin_top": 8, "theme_override_constants/margin_bottom": 8}, kids)])
 
-TYPES = ["hull", "armor", "thruster", "turret", "turret_barrel", "commander", "radar", "antenna", "engine_room"]   # = ModuleCatalog.TYPES
+TYPES = ["hull", "armor", "thruster", "turret", "turret_barrel", "commander", "radar", "antenna", "engine_room", "airlock", "pod_bay"]   # = ModuleCatalog.TYPES
 SHAPES = ["box", "wedge", "pyramid", "tetra", "cylinder", "cone", "sphere", "dome"]                # = Primitives.NAMES
 
 def build():

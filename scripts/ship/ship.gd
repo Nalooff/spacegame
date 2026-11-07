@@ -127,6 +127,8 @@ var _cmd_throttle: PackedFloat32Array = PackedFloat32Array()
 var _hist_frame: Array[int] = [-1, -1, -1, -1]       # physics frame of each history slot
 var _hist_vel: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO]
 var _hist_ang: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO]
+var _boardings: Array[Dictionary] = []                ## people on their way out / over: {t, target, module, count, hole}
+var _pods: Array[Dictionary] = []                    ## boarding pods in flight: {pos, vel, target, count, node}
 var lodges: Array[Dictionary] = []                   ## rammed-in ships: {other: Ship, a: anchor in my space, b: anchor in their space, age}
 var _ram_times: Dictionary = {}                      # other ship instance id -> last time it hurt us
 var _pending_remote_hits: Array[Dictionary] = []     # collisions with ships of other players, sent to them
@@ -1061,6 +1063,168 @@ func _update_report_spheres() -> void:
 			m.transparency = pulse
 
 
+## The boarders of peer `home` took this ship: the host counts it as a kill for them.
+func credit_capture(home: int) -> void:
+	if home > 0:
+		_dmg_in[home] = float(_dmg_in.get(home, 0.0)) + 1.0e6
+
+
+## BOARDING (authority). Both return "" when it started, otherwise the reason it could not.
+## A) through an AIRLOCK of ours near the contact point of a ram (we must be lodged in `target`), entering where they have a hole
+##    (or an airlock) near the same spot.
+func board_by_airlock(target: Ship, count: int) -> String:
+	if not is_multiplayer_authority() or not alive or plan_state == null:
+		return "no ship"
+	if target == null or not is_instance_valid(target) or not target.alive:
+		return "no target"
+	var lodge := {}
+	for l in lodges:
+		if l["other"] == target:
+			lodge = l
+	if lodge.is_empty():
+		return "Not lodged in that ship: ram it first."
+	var exit_mod := -1
+	var best := INF
+	for mi in design.modules.size():
+		if design.modules[mi]["type"] != ModuleCatalog.AIRLOCK or not is_working(mi):
+			continue
+		var d := design.module_centroid(mi).distance_to(lodge["a"])
+		if d < best and d <= Data.AIRLOCK_REACH:
+			best = d
+			exit_mod = mi
+	if exit_mod < 0:
+		return "No working airlock near the contact."
+	var entry := target.entry_near(lodge["b"])
+	if entry < 0:
+		return "No breach or airlock on their side of the contact."
+	var n := crew.take_boarders(self, count, exit_mod)
+	if n <= 0:
+		return "Nobody free to go."
+	_boardings.append({"t": crew.boarding_walk + Data.BOARD_RUN_SECONDS, "target": target, "module": entry, "count": n, "hole": 0.0})
+	crew.log_event("%d people leave through the airlock to board %s" % [n, str(target.name)])
+	return ""
+
+
+## B) a boarding POD from a pod bay: needs a locked target in range.
+func board_by_pod(target: Ship, count: int) -> String:
+	if not is_multiplayer_authority() or not alive or plan_state == null:
+		return "no ship"
+	if target == null or not is_instance_valid(target) or not target.alive:
+		return "no target"
+	if global_position.distance_to(target.global_position) > Data.POD_RANGE:
+		return "Target too far for a pod."
+	var bay := -1
+	for mi in design.modules.size():
+		if design.modules[mi]["type"] == ModuleCatalog.POD_BAY and is_working(mi):
+			if not crew.pods.has(mi):
+				crew.pods[mi] = maxi(int(design.module_volume(mi) / maxf(design.stat(mi, "m3_per_pod"), 1.0)), 1)
+			if int(crew.pods[mi]) > 0:
+				bay = mi
+				break
+	if bay < 0:
+		return "No working pod bay with pods left."
+	var n := crew.take_boarders(self, mini(count, Data.POD_CREW), bay)
+	if n <= 0:
+		return "Nobody free to go."
+	crew.pods[bay] = int(crew.pods[bay]) - 1
+	var from := global_transform * design.module_centroid(bay)
+	var dir := (target.global_position - from).normalized()
+	_pods.append({"pos": from, "vel": dir * Data.POD_SPEED + linear_velocity, "target": target, "count": n})
+	crew.log_event("Boarding pod launched at %s (%d people)" % [str(target.name), n])
+	return ""
+
+
+## The module of this ship where boarders can get in near ship-space point `p`: a module with a hole, or an airlock. -1 = none.
+func entry_near(p: Vector3) -> int:
+	var best := -1
+	var best_d := Data.ENTRY_REACH
+	for mi in design.modules.size():
+		if mi >= module_hp.size() or module_hp[mi] < 0.0:
+			continue
+		var open_hole := mi < haz_hole.size() and haz_hole[mi] > 0.1
+		var lock: bool = design.modules[mi]["type"] == ModuleCatalog.AIRLOCK
+		if not open_hole and not lock:
+			continue
+		var d := design.module_centroid(mi).distance_to(p)
+		if d < best_d:
+			best_d = d
+			best = mi
+	return best
+
+
+func _deliver_boarders(target: Ship, module: int, count: int, hole: float) -> void:
+	if not is_instance_valid(target):
+		return
+	var home := get_multiplayer_authority()
+	if target.is_multiplayer_authority():
+		target._receive_boarders_local(module, count, home, hole)
+	elif multiplayer.has_multiplayer_peer():
+		target.receive_boarders.rpc_id(target.get_multiplayer_authority(), module, count, home, hole)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func receive_boarders(module: int, count: int, home: int, hole: float) -> void:
+	if not is_multiplayer_authority() or not is_finite(hole):
+		return
+	_receive_boarders_local(module, clampi(count, 1, 12), home, clampf(hole, 0.0, 1.0))
+
+
+func _receive_boarders_local(module: int, count: int, home: int, hole: float) -> void:
+	if not alive or module < 0 or module >= design.modules.size() or plan_state == null:
+		return
+	if hole > 0.0:
+		hazards.make_breach(self, module, hole)
+	crew.add_foes(self, module, count, home)
+
+
+## Boardings on their way and pods in flight (authority, every frame).
+func _board_step(dt: float) -> void:
+	var i := 0
+	while i < _boardings.size():
+		var b: Dictionary = _boardings[i]
+		b["t"] = float(b["t"]) - dt
+		if float(b["t"]) <= 0.0:
+			_deliver_boarders(b["target"] as Ship, int(b["module"]), int(b["count"]), float(b["hole"]))
+			_boardings.remove_at(i)
+		else:
+			i += 1
+	i = 0
+	while i < _pods.size():
+		var p: Dictionary = _pods[i]
+		var t := p["target"] as Ship
+		if not is_instance_valid(t) or not t.alive:
+			_pods.remove_at(i)
+			continue
+		var to := t.global_position - (p["pos"] as Vector3)
+		var vel: Vector3 = (p["vel"] as Vector3).lerp(to.normalized() * Data.POD_SPEED + t.linear_velocity, clampf(dt * 3.0, 0.0, 1.0))
+		p["vel"] = vel
+		p["pos"] = (p["pos"] as Vector3) + vel * dt
+		var local := t.global_transform.affine_inverse() * (p["pos"] as Vector3)
+		var hit_mod := -1
+		var hit_d := INF
+		for mi in t.design.modules.size():
+			if mi >= t.module_hp.size() or t.module_hp[mi] < 0.0 or t.design.modules[mi]["type"] == ModuleCatalog.LOOSE:
+				continue
+			var d := t.design.module_centroid(mi).distance_to(local) - t.design.module_extent(mi).length() * 0.5
+			if d < hit_d:
+				hit_d = d
+				hit_mod = mi
+		if hit_mod >= 0 and hit_d < 1.5:
+			var entry := hit_mod
+			if not (t.hazards.is_built() and t.hazards.holds[entry] != 0):     # an outside part (thruster, barrel): go for the nearest compartment
+				var bd := INF
+				for mj in t.hazards.n:
+					if t.hazards.holds[mj] != 0 and t.module_hp[mj] >= 0.0:
+						var dd := t.design.module_centroid(mj).distance_to(local)
+						if dd < bd:
+							bd = dd
+							entry = mj
+			_deliver_boarders(t, entry, int(p["count"]), Data.POD_HOLE)
+			_pods.remove_at(i)
+		else:
+			i += 1
+
+
 ## The bridge sets door `i` (ShipHazards.OPEN / CLOSED / LOCKED). Needs working communications. Returns true when it was done.
 func set_door(i: int, state: int) -> bool:
 	if not is_multiplayer_authority() or plan_state == null or not plan_state.comms_ok or i < 0 or i >= haz_doors.size():
@@ -1086,6 +1250,7 @@ func role_bonus(mi: int) -> float:
 func _process(dt: float) -> void:
 	if alive and plan_state != null and is_multiplayer_authority():
 		hazards.tick(self, dt)
+		_board_step(dt)
 	if alive and plan_state != null and is_multiplayer_authority() and crew.tick(self, dt):
 		_die()                      # the last person on board is dead: the ship is lost
 	if plan_state != null and is_flown_by_me():

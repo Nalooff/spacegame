@@ -10,6 +10,8 @@ var _title: Label
 var _log: Label
 var _timer: float = 0.0
 var _sig: String = ""
+var _count: SpinBox
+var _board_info: Label
 
 
 func _ready() -> void:
@@ -37,6 +39,34 @@ func _ready() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list.add_theme_constant_override("separation", 6)
 	scroll.add_child(_list)
+	var board := HBoxContainer.new()
+	board.name = "Board"
+	col.add_child(board)
+	var bl := Label.new()
+	bl.text = tr("BOARD")
+	board.add_child(bl)
+	_count = SpinBox.new()
+	_count.name = "Count"
+	_count.min_value = 1
+	_count.max_value = 12
+	_count.value = 2
+	board.add_child(_count)
+	var air := Button.new()
+	air.name = "ByAirlock"
+	air.text = tr("Airlock (lodged ship)")
+	air.pressed.connect(func(): _board(true))
+	board.add_child(air)
+	var pod := Button.new()
+	pod.name = "ByPod"
+	pod.text = tr("Pod (locked ship)")
+	pod.pressed.connect(func(): _board(false))
+	board.add_child(pod)
+	_board_info = Label.new()
+	_board_info.name = "BoardInfo"
+	_board_info.add_theme_font_size_override("font_size", 12)
+	_board_info.add_theme_color_override("font_color", SettingsScreen.INK_DIM)
+	_board_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(_board_info)
 	_log = Label.new()
 	_log.name = "Log"
 	_log.add_theme_font_size_override("font_size", 12)
@@ -90,6 +120,16 @@ func _refresh() -> void:
 		return
 	var crew := ship.crew
 	_title.text = "%s  %d / %d" % [tr("CREW"), crew.alive_count(), crew.members.size()]
+	if crew.foe_count() > 0:
+		_title.text += "   " + tr("BOARDERS") + " %d" % crew.foe_count()
+	var pods := 0
+	for k in crew.pods:
+		pods += int(crew.pods[k])
+	var lodged := ""
+	for l in ship.lodges:
+		if is_instance_valid(l["other"]):
+			lodged = tr("stuck in") + " " + str(l["other"].name)
+	_board_info.text = tr("Pods left") + ": %d   %s" % [pods, lodged]
 	var sig := "%d" % crew.members.size()
 	for m in crew.members:
 		sig += "|%d%d" % [m["id"], 1 if m["hp"] > 0.0 else 0]
@@ -156,6 +196,25 @@ func _make_row(m: Dictionary) -> Control:
 	auto.pressed.connect(func(): if is_instance_valid(ship): ship.crew.release(int(m["id"])))
 	h.add_child(auto)
 	return box
+
+
+## Board the ship we are lodged in (airlock) or the one we have locked (pod).
+func _board(airlock: bool) -> void:
+	if ship == null or not is_instance_valid(ship):
+		return
+	var target: Ship = null
+	if airlock:
+		for l in ship.lodges:
+			if is_instance_valid(l["other"]):
+				target = l["other"]
+	else:
+		target = ship.detection.locked
+	var why := "No target: " + ("ram a ship first." if airlock else "lock a ship first (R).")
+	if target != null:
+		why = ship.board_by_airlock(target, int(_count.value)) if airlock else ship.board_by_pod(target, int(_count.value))
+	if why != "":
+		BusEvent.notify.emit(tr(why))
+	_refresh()
 
 
 func _chosen(pick: OptionButton) -> int:

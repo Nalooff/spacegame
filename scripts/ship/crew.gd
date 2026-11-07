@@ -22,6 +22,10 @@ var _next_id: int = 1
 var _acc: float = 0.0
 var _ready_done: bool = false
 var log_lines: Array[String] = []
+## BOARDERS: enemy people on this ship. {id, hp, node, pos, from, to, t_total, t_left, dest_node, task: "idle"|"walk"|"sabotage",
+## module, home (peer id of the ship they come from), left (seconds of work in this room), hold (seconds on the bridge)}
+var foes: Array[Dictionary] = []
+var pods: Dictionary = {}               ## pod bay module -> pods left (filled when first needed)
 
 
 func active() -> bool:
@@ -56,6 +60,14 @@ func plan_ready(ship: Ship) -> void:
 			_log("%s was lost with a part of the ship" % _name(m))
 		else:
 			m["node"] = ni
+	for f in foes:
+		if f["hp"] <= 0.0:
+			continue
+		var fi := _nearest_node(ps.plan, f["pos"])
+		if fi < 0 or (ps.plan.nodes[fi]["pos"] as Vector3).distance_to(f["pos"]) > 3.0:
+			f["hp"] = 0.0
+		else:
+			f["node"] = fi
 
 
 func _populate(ship: Ship) -> void:
@@ -130,6 +142,9 @@ func on_hit(ship: Ship, module: int, hp_damage: float) -> void:
 			m["hp"] -= Data.CREW_HIT_DAMAGE * frac
 			if m["hp"] <= 0.0:
 				_log("%s was killed" % _name(m))
+	for f in foes:
+		if f["hp"] > 0.0 and module_of(ship, f) == module:
+			f["hp"] -= Data.CREW_HIT_DAMAGE * frac
 
 
 ## Physics-rate tick, but the logic runs 10 times a second. Returns true when the last person has died.
@@ -151,6 +166,10 @@ func tick(ship: Ship, dt: float) -> bool:
 				m["hp"] = 0.0
 				_log("%s died when their room was destroyed" % _name(m))
 	if alive_count() == 0:
+		for f in foes:
+			if f["hp"] > 0.0:
+				ship.credit_capture(int(f["home"]))     # the boarders killed everybody: the ship is theirs
+				break
 		return true
 	# noticing damage
 	for mi in ship.module_hp.size():
@@ -170,6 +189,9 @@ func tick(ship: Ship, dt: float) -> bool:
 			if (ship.design.module_centroid(mi) as Vector3).distance_to(m["pos"]) < maxf(Data.CREW_NOTICE_RADIUS, ship.design.module_extent(mi).length() * 0.5):
 				noticed[mi] = true
 				_log("%s noticed damage on module %d" % [_name(m), mi])
+	# boarders
+	if not foes.is_empty() and _step_foes(ship, step):
+		return true
 	# every person: walk, work, choose a job
 	var workers: Dictionary = {}
 	for m in members:
@@ -181,6 +203,8 @@ func tick(ship: Ship, dt: float) -> bool:
 
 func _step_member(ship: Ship, m: Dictionary, dt: float, workers: Dictionary) -> void:
 	var ps := ship.plan_state
+	if m["task"] != "walk" and foe_in(module_of(ship, m)):
+		return                                         # an enemy in the room: stand and fight (see _step_foes)
 	if m["task"] == "walk":
 		m["t_left"] = maxf(float(m["t_left"]) - dt, 0.0)
 		var k := 1.0 - float(m["t_left"]) / maxf(float(m["t_total"]), 0.001)
@@ -245,6 +269,8 @@ func _find_job(ship: Ship, m: Dictionary, workers: Dictionary) -> int:
 
 
 static func _hazard_at(ship: Ship, mi: int) -> bool:
+	if ship.crew.foe_in(mi):
+		return true
 	return (mi < ship.haz_fire.size() and ship.haz_fire[mi] > 0.03) or (mi < ship.haz_elec.size() and ship.haz_elec[mi] > 0.0)
 
 
@@ -333,3 +359,173 @@ func finder_delay(ship: Ship, p: Vector3) -> float:
 			if best < 0.0 or t < best:
 				best = t
 	return best
+
+
+# ---------------------------------------------------------------- boarders
+func foe_in(mi: int) -> bool:
+	if foes.is_empty() or mi < 0:
+		return false
+	for f in foes:
+		if f["hp"] > 0.0 and int(f.get("module", -1)) == mi:
+			return true
+	return false
+
+
+func foe_count() -> int:
+	var n := 0
+	for f in foes:
+		if f["hp"] > 0.0:
+			n += 1
+	return n
+
+
+## Enemy people arrive in module `mi` (a breach, an airlock, a pod). `home` = peer id of their ship.
+func add_foes(ship: Ship, mi: int, count: int, home: int) -> void:
+	var ni := node_for_module(ship, mi)
+	if ni < 0 or ship.plan_state == null:
+		return
+	var p: Vector3 = ship.plan_state.plan.nodes[ni]["pos"]
+	for i in count:
+		foes.append({"id": 9000 + _next_id, "hp": Data.CREW_HP, "node": ni, "pos": p, "from": p, "to": p, "t_total": 0.0, "t_left": 0.0,
+			"dest_node": ni, "task": "idle", "module": mi, "home": home, "left": Data.FOE_SABOTAGE_SECONDS, "hold": 0.0})
+		_next_id += 1
+	_log("BOARDERS in module %d (%d)!" % [mi, count])
+
+
+## Take up to `count` free, living people out of the crew (they leave to board somewhere). Nearest to module `near` first.
+func take_boarders(ship: Ship, count: int, near: int) -> int:
+	var ni := node_for_module(ship, near)
+	var dist := ship.plan_state.walk_from(ni) if ni >= 0 else PackedFloat32Array()
+	var taken := 0
+	var worst := 0.0
+	count = mini(count, alive_count() - 1)           # somebody always stays aboard
+	while taken < count:
+		var best := -1
+		var best_d := INF
+		for i in members.size():
+			var m: Dictionary = members[i]
+			if m["hp"] <= 0.0 or m["ordered"]:
+				continue
+			var d: float = dist[m["node"]] if m["node"] < dist.size() else INF
+			if d < best_d:
+				best_d = d
+				best = i
+		if best < 0 or best_d == INF:
+			break
+		worst = maxf(worst, best_d)
+		members.remove_at(best)
+		taken += 1
+	boarding_walk = worst / Data.CREW_WALK_SPEED
+	return taken
+
+
+var boarding_walk: float = 0.0           ## seconds the last group of boarders needed to reach the exit
+
+
+## Returns true when the ship is taken.
+func _step_foes(ship: Ship, s: float) -> bool:
+	var rng := _rng
+	for f in foes:
+		if f["hp"] <= 0.0:
+			continue
+		var mi := module_of(ship, f)
+		f["module"] = mi
+		if mi >= 0 and mi < ship.module_hp.size() and ship.module_hp[mi] <= 0.0:
+			f["hp"] = 0.0
+			continue
+		if f["task"] == "walk":
+			f["t_left"] = maxf(float(f["t_left"]) - s, 0.0)
+			var k := 1.0 - float(f["t_left"]) / maxf(float(f["t_total"]), 0.001)
+			f["pos"] = (f["from"] as Vector3).lerp(f["to"], k)
+			if f["t_left"] <= 0.0:
+				f["node"] = f["dest_node"]
+				f["pos"] = f["to"]
+				f["task"] = "idle"
+				f["left"] = Data.FOE_SABOTAGE_SECONDS
+			continue
+		# a fight: every defender in the room hits one boarder and every boarder hits one defender
+		var defenders: Array[Dictionary] = []
+		for m in members:
+			if m["hp"] > 0.0 and module_of(ship, m) == mi:
+				defenders.append(m)
+		if not defenders.is_empty():
+			var target: Dictionary = defenders[rng.randi() % defenders.size()]
+			target["hp"] -= Data.FOE_FIGHT_DPS * s
+			if target["hp"] <= 0.0:
+				_log("%s was killed by boarders" % _name(target))
+			f["hp"] -= Data.FOE_FIGHT_DPS * 0.8 * s * defenders.size()      # the defenders hit back (a little worse: they came prepared)
+			if f["hp"] <= 0.0:
+				_log("A boarder was killed")
+			f["hold"] = 0.0
+			continue
+		# nobody defends this room
+		var t: String = ship.design.modules[mi]["type"] if mi >= 0 else ""
+		if t == ModuleCatalog.COMMANDER:
+			f["hold"] = float(f["hold"]) + s
+			if float(f["hold"]) >= Data.FOE_CAPTURE_SECONDS and _all_foes_in(mi):
+				_log("The bridge has fallen: the ship is taken")
+				ship.credit_capture(int(f["home"]))
+				return true
+		if mi >= 0 and ship.module_hp[mi] > 0.0 and float(f["left"]) > 0.0:
+			f["left"] = float(f["left"]) - s
+			ship._remove_module_hp(mi, ship.module_max_hp[mi] * Data.FOE_SABOTAGE_RATE * s)
+			if rng.randf() < 0.02:
+				ship.hazards.short_out(ship, mi)
+			if rng.randf() < 0.01:
+				ship.hazards.ignite(ship, mi, 0.2)
+			continue
+		var goal := _foe_goal(ship, f)
+		if goal >= 0:
+			_foe_walk(ship, f, goal)
+		else:
+			f["left"] = Data.FOE_SABOTAGE_SECONDS
+	return false
+
+
+func _all_foes_in(mi: int) -> bool:
+	var n := 0
+	for f in foes:
+		if f["hp"] > 0.0:
+			if int(f.get("module", -1)) != mi:
+				return false
+			n += 1
+	return n > 0
+
+
+## Where boarders go next: the bridge first, then engine rooms, turrets, radars, anything else reachable (not the room they stand in).
+func _foe_goal(ship: Ship, f: Dictionary) -> int:
+	var ps := ship.plan_state
+	var dist := ps.walk_from(f["node"])
+	var here := module_of(ship, f)
+	var best := -1
+	var best_score := INF
+	for r in ps.plan.rooms:
+		if r == here or ship.module_hp[r] <= 0.0:
+			continue
+		var ni := ps.plan.door_of(r)
+		if ni < 0 or ni >= dist.size() or dist[ni] == INF:
+			continue
+		var t: String = ship.design.modules[r]["type"]
+		var bonus := 0.0
+		match t:
+			ModuleCatalog.COMMANDER: bonus = 400.0
+			ModuleCatalog.ENGINE_ROOM: bonus = 200.0
+			ModuleCatalog.TURRET: bonus = 100.0
+			ModuleCatalog.RADAR: bonus = 50.0
+		var score: float = dist[ni] - bonus
+		if score < best_score:
+			best_score = score
+			best = ni
+	return best
+
+
+func _foe_walk(ship: Ship, f: Dictionary, ni: int) -> void:
+	var dist := ship.plan_state.walk_from(f["node"])
+	if ni >= dist.size() or dist[ni] == INF:
+		return
+	f["dest_node"] = ni
+	f["from"] = f["pos"]
+	f["to"] = ship.plan_state.plan.nodes[ni]["pos"]
+	f["t_total"] = maxf(dist[ni] / Data.CREW_WALK_SPEED, 0.05)
+	f["t_left"] = f["t_total"]
+	f["task"] = "walk"

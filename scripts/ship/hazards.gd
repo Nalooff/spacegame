@@ -337,6 +337,18 @@ func _people(ship: Ship) -> Dictionary:
 
 
 func _hurt_people(ship: Ship, fire: PackedFloat32Array, air: PackedFloat32Array, s: float) -> void:
+	for f in ship.crew.foes:            # fire and thin air do not care whose side you are on
+		if f["hp"] <= 0.0:
+			continue
+		var fm := ship.crew.module_of(ship, f)
+		if fm < 0 or fm >= n or holds[fm] == 0:
+			continue
+		var fd := 0.0
+		if air[fm] < Data.HAZ_SUFFOCATE_AIR:
+			fd += Data.HAZ_SUFFOCATE_DPS * (1.0 - air[fm] / Data.HAZ_SUFFOCATE_AIR) * s
+		if fire[fm] > 0.1:
+			fd += Data.HAZ_FIRE_CREW_DPS * fire[fm] * s
+		f["hp"] -= fd
 	for m in ship.crew.members:
 		if m["hp"] <= 0.0:
 			continue

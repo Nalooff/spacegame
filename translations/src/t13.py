@@ -1,0 +1,18 @@
+T = {
+"BOARD": ("ABORDAGE", "ENTERN", "ABORDAR", "АБОРДАЖ", "登舰", "接舷"),
+"BOARDERS": ("ABORDEURS", "ENTERER", "ABORDADORES", "АБОРДАЖНИКИ", "登舰者", "乗り込み部隊"),
+"Airlock (lodged ship)": ("Sas (vaisseau encastré)", "Schleuse (verkeiltes Schiff)", "Esclusa (nave empotrada)", "Шлюз (застрявший корабль)", "气闸（卡住的飞船）", "エアロック（食い込んだ船）"),
+"Pod (locked ship)": ("Capsule (vaisseau verrouillé)", "Kapsel (anvisiertes Schiff)", "Cápsula (nave fijada)", "Капсула (захваченная цель)", "登陆舱（锁定的飞船）", "ポッド（ロックした船）"),
+"Pods left": ("Capsules restantes", "Kapseln übrig", "Cápsulas restantes", "Капсул осталось", "剩余登陆舱", "残りポッド"),
+"stuck in": ("encastré dans", "verkeilt in", "empotrada en", "застрял в", "卡在", "食い込み先"),
+"Not lodged in that ship: ram it first.": ("Pas encastré dans ce vaisseau : éperonnez-le d'abord.", "Nicht in diesem Schiff verkeilt: rammen Sie es zuerst.", "No estás empotrado en esa nave: embístela primero.", "Вы не застряли в этом корабле: сначала протаранить его.", "没有卡在该飞船中：请先撞击它。", "その船に食い込んでいません：先に衝突してください。"),
+"No working airlock near the contact.": ("Aucun sas fonctionnel près du contact.", "Keine funktionierende Schleuse nahe dem Kontakt.", "No hay esclusa operativa cerca del contacto.", "Рядом с точкой контакта нет работающего шлюза.", "接触点附近没有可用的气闸。", "接触点の近くに使えるエアロックがありません。"),
+"No breach or airlock on their side of the contact.": ("Ni brèche ni sas de leur côté du contact.", "Weder Leck noch Schleuse auf ihrer Seite des Kontakts.", "No hay brecha ni esclusa de su lado del contacto.", "С их стороны контакта нет ни пробоины, ни шлюза.", "对方接触点一侧没有破口或气闸。", "相手側の接触点に破孔もエアロックもありません。"),
+"Nobody free to go.": ("Personne de libre pour y aller.", "Niemand frei, der gehen könnte.", "Nadie libre para ir.", "Некому идти.", "没有空闲的人可去。", "行ける手が空いた人がいません。"),
+"Target too far for a pod.": ("Cible trop loin pour une capsule.", "Ziel zu weit für eine Kapsel.", "Objetivo demasiado lejos para una cápsula.", "Цель слишком далеко для капсулы.", "目标太远，无法发射登陆舱。", "ポッドには遠すぎます。"),
+"No working pod bay with pods left.": ("Aucune baie de capsules fonctionnelle avec des capsules restantes.", "Keine funktionierende Kapselbucht mit Kapseln.", "No hay bahía de cápsulas operativa con cápsulas.", "Нет рабочего отсека с капсулами.", "没有可用且有剩余登陆舱的舱室。", "ポッドが残っている稼働中のポッドベイがありません。"),
+"No target: ram a ship first.": ("Pas de cible : éperonnez d'abord un vaisseau.", "Kein Ziel: rammen Sie zuerst ein Schiff.", "Sin objetivo: embiste una nave primero.", "Нет цели: сначала протараньте корабль.", "没有目标：请先撞击一艘飞船。", "対象なし：先に船に衝突してください。"),
+"No target: lock a ship first (R).": ("Pas de cible : verrouillez d'abord un vaisseau (R).", "Kein Ziel: zuerst ein Schiff anvisieren (R).", "Sin objetivo: fija primero una nave (R).", "Нет цели: сначала захватите корабль (R).", "没有目标：请先锁定一艘飞船 (R)。", "対象なし：先にロックしてください (R)。"),
+"Airlock": ("Sas", "Schleuse", "Esclusa", "Шлюз", "气闸", "エアロック"),
+"Pod bay": ("Baie de capsules", "Kapselbucht", "Bahía de cápsulas", "Отсек капсул", "登陆舱舱室", "ポッドベイ"),
+}

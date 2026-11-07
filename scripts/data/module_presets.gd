@@ -71,6 +71,13 @@ const DEFS := {
 	ModuleCatalog.ENGINE_ROOM: [
 		{"key": "elec_w_per_m3", "label": "Controls / crew life support", "unit": "W per m3", "min": 50.0, "max": 3000.0, "main": true},
 	],
+	ModuleCatalog.AIRLOCK: [
+		{"key": "elec_w_per_m3", "label": "Seals / pumps", "unit": "W per m3", "min": 50.0, "max": 3000.0, "main": true},
+	],
+	ModuleCatalog.POD_BAY: [
+		{"key": "m3_per_pod", "label": "Volume per pod", "unit": "m3", "min": 3.0, "max": 40.0, "main": true},
+		{"key": "elec_w_per_m3", "label": "Launch rails / pumps", "unit": "W per m3", "derived": true},
+	],
 	ModuleCatalog.RADAR: [
 		{"key": "range_per_m", "label": "Range per metre of size", "unit": "m", "min": 300.0, "max": 6000.0, "main": true},
 		{"key": "precision", "label": "Precision", "unit": "0..1", "derived": true},
@@ -145,6 +152,12 @@ const PRESETS := {
 	ModuleCatalog.ENGINE_ROOM: {
 		"control": {"label": "Engine control room", "stats": {"elec_w_per_m3": 350.0}, "help": "Controls every thruster of the ship."},
 		"automated": {"label": "Automated engine bay", "stats": {"elec_w_per_m3": 900.0}, "help": "Computers do the work: more electricity per m3."},
+	},
+	ModuleCatalog.AIRLOCK: {
+		"standard": {"label": "Airlock", "stats": {"elec_w_per_m3": 250.0}, "help": "A door to the outside for boarding after a ram."},
+	},
+	ModuleCatalog.POD_BAY: {
+		"standard": {"label": "Pod bay", "stats": {"m3_per_pod": 10.0, "elec_w_per_m3": 400.0}, "help": "Launches boarding pods at a locked enemy ship."},
 	},
 	ModuleCatalog.RADAR: {
 		"electronic": {"label": "Electronic radar", "kind": "electronic", "stats": {"range_per_m": 2200.0, "precision": 0.65, "elec_w_per_m3": 2500.0},

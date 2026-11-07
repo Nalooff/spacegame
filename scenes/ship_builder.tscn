@@ -588,6 +588,26 @@ size_flags_horizontal = 3
 tooltip_text = "Engine_room"
 expand_icon = true
 
+[node name="TypeButton_airlock" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid"]
+layout_mode = 2
+text = ""
+toggle_mode = true
+button_group = SubResource("ButtonGroup_types")
+custom_minimum_size = Vector2(0, 44)
+size_flags_horizontal = 3
+tooltip_text = "Airlock"
+expand_icon = true
+
+[node name="TypeButton_pod_bay" type="Button" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid"]
+layout_mode = 2
+text = ""
+toggle_mode = true
+button_group = SubResource("ButtonGroup_types")
+custom_minimum_size = Vector2(0, 44)
+size_flags_horizontal = 3
+tooltip_text = "Pod_bay"
+expand_icon = true
+
 [node name="NewTypeLabel" type="Label" parent="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -1460,6 +1480,8 @@ unique_name_in_owner = true
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid/TypeButton_radar" to="UI/BuilderUI" method="_on_type_button_pressed" binds= ["radar"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid/TypeButton_antenna" to="UI/BuilderUI" method="_on_type_button_pressed" binds= ["antenna"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid/TypeButton_engine_room" to="UI/BuilderUI" method="_on_type_button_pressed" binds= ["engine_room"]]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid/TypeButton_airlock" to="UI/BuilderUI" method="_on_type_button_pressed" binds= ["airlock"]]
+[connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/TypeGrid/TypeButton_pod_bay" to="UI/BuilderUI" method="_on_type_button_pressed" binds= ["pod_bay"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/ShapeGrid/ShapeButton_box" to="UI/BuilderUI" method="_on_shape_button_pressed" binds= ["box"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/ShapeGrid/ShapeButton_wedge" to="UI/BuilderUI" method="_on_shape_button_pressed" binds= ["wedge"]]
 [connection signal="pressed" from="UI/BuilderUI/SidePanel/SidePanelMargin/SideTabs/Create/CreateList/ModuleCreationSection/ShapeGrid/ShapeButton_pyramid" to="UI/BuilderUI" method="_on_shape_button_pressed" binds= ["pyramid"]]
