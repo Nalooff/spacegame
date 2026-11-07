@@ -78,6 +78,7 @@ var haz_doors: PackedByteArray = PackedByteArray():
 	set(v):
 		haz_doors = v
 		_function_dirty = true
+var haz_hole: PackedFloat32Array = PackedFloat32Array()      ## size 0..1 of the hole each module has to space (rams, boarding pods)
 var hazards: ShipHazards = ShipHazards.new()
 var crew: ShipCrew = ShipCrew.new()          ## the people on board (authority peer only, see ShipCrew)
 var reports: ShipReports = ShipReports.new()   ## what the commander has been told so far (own ship, see ShipReports)
@@ -126,6 +127,7 @@ var _cmd_throttle: PackedFloat32Array = PackedFloat32Array()
 var _hist_frame: Array[int] = [-1, -1, -1, -1]       # physics frame of each history slot
 var _hist_vel: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO]
 var _hist_ang: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO]
+var lodges: Array[Dictionary] = []                   ## rammed-in ships: {other: Ship, a: anchor in my space, b: anchor in their space, age}
 var _ram_times: Dictionary = {}                      # other ship instance id -> last time it hurt us
 var _pending_remote_hits: Array[Dictionary] = []     # collisions with ships of other players, sent to them
 var _pending_hits: Array[DamageHit] = []             # hits found in _integrate_forces, applied next frame
@@ -451,6 +453,8 @@ func apply_hit(hit: DamageHit) -> void:
 	_damage_corridors(hit, result)
 	crew.on_hit(self, hit.module, result.hp_damage)
 	hazards.on_hit(self, hit.module, result.hp_damage)
+	if hit.type_id == &"ramming" and (result.hp_damage > 0.0 or result.dent_depth > 0.0):
+		hazards.make_breach(self, hit.module, clampf(0.25 + result.dent_depth / maxf(Data.DENT_MAX_DEPTH, 0.1) * 0.75, 0.25, 1.0))
 	BusEvent.ship_hit.emit(self, hit, result)
 
 
@@ -573,6 +577,7 @@ func _build_plan() -> void:
 			haz_air = full
 			haz_fire = zero.duplicate()
 			haz_elec = zero.duplicate()
+			haz_hole = zero.duplicate()
 	if haz_doors.size() != hazards.doors.size() and (is_multiplayer_authority() or haz_doors.is_empty()):
 		haz_doors = hazards.fresh_doors()
 	if is_multiplayer_authority():
@@ -819,6 +824,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_hist_ang[slot] = state.angular_velocity
 	if not is_multiplayer_authority() or not alive:
 		return
+	_lodge_forces(state)
 	var now := Time.get_ticks_msec() * 0.001
 	for i in state.get_contact_count():
 		var other := state.get_contact_collider_object(i) as Ship
@@ -846,6 +852,11 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		_ram_times[key] = now
 		var other_mod := int(their_shape.get_meta("module"))
 		var hardness := float(MaterialCatalog.info(other.design.material_of(other_mod))["hardness"])
+		# A hit hard enough to dent either hull LODGES the ships in each other instead of bouncing them apart.
+		var my_hard := float(MaterialCatalog.info(design.material_of(int(my_shape.get_meta("module"))))["hardness"])
+		if closing > RammingDamage.threshold_speed(MaterialCatalog.info(design.material_of(int(my_shape.get_meta("module")))), hardness) \
+				or closing > RammingDamage.threshold_speed(MaterialCatalog.info(other.design.material_of(other_mod)), my_hard):
+			_lodge_into(other, point)
 		var reduced := mass * other.mass / (mass + other.mass)
 		_pending_hits.append(DamageHit.ramming(int(my_shape.get_meta("module")), closing, point, n_out, v_rel, reduced, hardness, other))
 		# The other ship is simulated by ANOTHER player. On their PC our ship is only a copy that has already been
@@ -854,6 +865,51 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 			var my_hardness := float(MaterialCatalog.info(design.material_of(int(my_shape.get_meta("module"))))["hardness"])
 			_pending_remote_hits.append({"other": other, "module": other_mod, "point": point, "normal": -n_out,
 				"closing": closing, "mass": reduced, "hardness": my_hardness})
+
+
+## Stick to `other` at world point `p` (a hard ram). Each ship's owner glues ITS OWN body to the other's copy, so no force
+## has to travel over the network; with both ships on one peer each applies half the grip.
+func _lodge_into(other: Ship, p: Vector3) -> void:
+	for l in lodges:
+		if l["other"] == other:
+			l["age"] = 0.0
+			return
+	lodges.append({"other": other, "a": global_transform.affine_inverse() * p, "b": other.global_transform.affine_inverse() * p, "age": 0.0})
+	crew.log_event("Our hull is lodged in %s" % str(other.name))
+
+
+func is_lodged_with(other: Ship) -> bool:
+	for l in lodges:
+		if l["other"] == other:
+			return true
+	return false
+
+
+## The grip: a damped spring between the two anchor points. It weakens with time until it tears (or thrust tears it earlier).
+func _lodge_forces(state: PhysicsDirectBodyState3D) -> void:
+	var i := 0
+	while i < lodges.size():
+		var l: Dictionary = lodges[i]
+		var other := l["other"] as Ship
+		l["age"] = float(l["age"]) + state.step
+		var strength := 1.0 - float(l["age"]) / Data.LODGE_SECONDS
+		if not is_instance_valid(other) or not other.alive or strength <= 0.0:
+			lodges.remove_at(i)
+			continue
+		var mine: Vector3 = global_transform * (l["a"] as Vector3)
+		var theirs: Vector3 = other.global_transform * (l["b"] as Vector3)
+		var err := theirs - mine
+		if err.length() > Data.LODGE_BREAK_DIST:
+			lodges.remove_at(i)
+			crew.log_event("The grip on %s tore" % str(other.name))
+			continue
+		var v_me := state.linear_velocity + state.angular_velocity.cross(mine - global_position)
+		var v_other := other.velocity_at(Engine.get_physics_frames(), theirs)
+		var reduced := mass * other.mass / (mass + other.mass)
+		var share := 0.5 if other.is_multiplayer_authority() else 1.0
+		var f := (err * Data.LODGE_STIFF * strength + (v_other - v_me) * Data.LODGE_DAMP) * reduced * share
+		state.apply_force(f, mine - global_position)
+		i += 1
 
 
 ## Velocity of the body's material point at world position `p`, as it was in physics frame `frame`.

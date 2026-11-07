@@ -20,6 +20,11 @@ const PROJECTILE_POOL_SIZE := 256    # bullets that can be in flight at once
 
 # ------------------------------------------------------------------ damage / ramming
 const RAM_ENERGY_TO_DAMAGE := 0.0012  # hit points per joule of collision energy above the dent threshold
+const LODGE_SECONDS := 14.0          # a rammed-in ship stays stuck this long at most (the grip weakens all the time)
+const LODGE_STIFF := 20.0            # spring strength of the grip (1/s^2, per kg of reduced mass)
+const LODGE_DAMP := 9.0              # damping of the grip (1/s): the ships stop moving against each other instead of bouncing
+const LODGE_BREAK_DIST := 3.0        # the grip tears when the two anchor points are this far apart (m)
+const HOLE_SEAL_PER_S := 0.03        # hole size one person in the room closes per second
 const RAM_COOLDOWN := 0.3             # seconds before the same collider can hurt the same ship again
 const DENT_PER_MS := 0.05             # metres of dent per m/s above the threshold (for hardness 50)
 const DENT_MAX_DEPTH := 5.0          # a single collision never dents deeper than this (m)

@@ -26,7 +26,7 @@ var n: int = 0
 var holds: PackedByteArray = PackedByteArray()          ## per module: 1 = holds air (room or space)
 var fuel: PackedFloat32Array = PackedFloat32Array()
 var alert: PackedFloat32Array = PackedFloat32Array()
-var breach: PackedFloat32Array = PackedFloat32Array()   ## per module 0..1 hole to space
+var breach: PackedFloat32Array = PackedFloat32Array()   ## per module 0..1 hole to space (from damage; closes when the module is repaired)
 var links: Array[Dictionary] = []                      ## {a, b, doors: [door index]}
 var doors: Array[Dictionary] = []                      ## {pos: Vector3, edges: [edge index], a, b (modules), joint: bool}
 var neighbours: Array = []                             ## per module: Array of link indices
@@ -163,10 +163,14 @@ func on_hit(ship: Ship, mi: int, hp_damage: float) -> void:
 
 
 ## Open a hole in module `mi` (ramming, boarding) of size 0..1.
-func make_breach(mi: int, size: float) -> void:
-	if mi >= 0 and mi < n and holds[mi] != 0:
-		breach[mi] = maxf(breach[mi], clampf(size, 0.0, 1.0))
+## A HOLE stays open however healthy the module is: people have to seal it (stand in the room) or it stays.
+func make_breach(ship: Ship, mi: int, size: float) -> void:
+	if mi >= 0 and mi < n and holds[mi] != 0 and ship.haz_hole.size() == n:
+		var h := ship.haz_hole
+		h[mi] = maxf(h[mi], clampf(size, 0.0, 1.0))
+		ship.haz_hole = h
 		alert[mi] = Data.HAZ_ALERT_SECONDS
+		ship.crew.log_event("Hull breach in module %d" % mi)
 
 
 func ignite(ship: Ship, mi: int, amount: float) -> void:
@@ -215,6 +219,8 @@ func tick(ship: Ship, dt: float) -> void:
 	var elec := ship.haz_elec
 	var hp := ship.module_hp
 	var people := _people(ship)
+	var holes := ship.haz_hole
+	var holes_before := holes.duplicate()
 	for i in n:
 		if hp[i] < 0.0:                               # gone: vacuum, nothing burns
 			air[i] = 0.0
@@ -227,6 +233,11 @@ func tick(ship: Ship, dt: float) -> void:
 		breach[i] = minf(breach[i], maxf(1.0 - hf, 0.0) * 1.5 + (0.0 if hp[i] > 0.0 else 0.8))
 		if hp[i] <= 0.0:
 			breach[i] = maxf(breach[i], 0.8)
+		if holes[i] > 0.0:
+			breach[i] = maxf(breach[i], holes[i])
+			var sealers: int = people.get(i, 0)
+			if sealers > 0 and air[i] > Data.HAZ_SUFFOCATE_AIR:
+				holes[i] = maxf(holes[i] - sealers * Data.HOLE_SEAL_PER_S * s, 0.0)
 	# air flows through open doors
 	for li in links.size():
 		var l: Dictionary = links[li]
@@ -300,6 +311,8 @@ func tick(ship: Ship, dt: float) -> void:
 		ship.haz_air = air
 	if elec != ship.haz_elec:
 		ship.haz_elec = elec
+	if holes != holes_before:
+		ship.haz_hole = holes
 
 
 func _door_danger(di: int, fire: PackedFloat32Array, air: PackedFloat32Array) -> bool:
