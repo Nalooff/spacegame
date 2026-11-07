@@ -15,4 +15,5 @@ T = {
 "No target: lock a ship first (R).": ("Pas de cible : verrouillez d'abord un vaisseau (R).", "Kein Ziel: zuerst ein Schiff anvisieren (R).", "Sin objetivo: fija primero una nave (R).", "Нет цели: сначала захватите корабль (R).", "没有目标：请先锁定一艘飞船 (R)。", "対象なし：先にロックしてください (R)。"),
 "Airlock": ("Sas", "Schleuse", "Esclusa", "Шлюз", "气闸", "エアロック"),
 "Pod bay": ("Baie de capsules", "Kapselbucht", "Bahía de cápsulas", "Отсек капсул", "登陆舱舱室", "ポッドベイ"),
+"Pod_bay": ("Baie de capsules", "Kapselbucht", "Bahía de cápsulas", "Отсек капсул", "登陆舱舱室", "ポッドベイ"),
 }

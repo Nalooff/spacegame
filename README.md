@@ -235,3 +235,6 @@ MIT, see `LICENSE`.
 - **Pod bay** (new room type): launches boarding pods (2 people each, a pod per ~10 m3) at the ship you have locked; a pod punches a hole where it lands.
 - Both are used from the crew panel (Y): BOARD row, choose how many people go.
 - **Boarders** (red dots in the plan) wreck every room nobody defends, may start fires and shorts, and go for the bridge. Defenders in the room fight them. Boarders holding the bridge for 12 s, or killing every defender, take the ship (a kill for them). **Locked doors** stop boarders too - lock them in.
+
+## Game mode: free for all or team deathmatch
+The host picks the **game mode** in the lobby (under the team picker): *Free for all* (everyone chooses their own team, or none) or *Team deathmatch* with **2 to 8 teams**. In team deathmatch players are put in the smallest team when they join and can switch. Kills count for the killer's team (killing a friend scores nothing); the scoreboard (Tab) shows team totals on top. A **kill limit** (0 = none) ends the round when a team (or a pilot in free for all) reaches it: the winner is announced and the scores restart.

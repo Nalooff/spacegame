@@ -40,9 +40,11 @@ func _ready() -> void:
 	for e in ShipDesign.list_ships():
 		ship_list.add_item((tr("[premade] ") if e["premade"] else tr("[custom] ")) + e["name"])
 		_ship_paths.append(e["path"])
-	team_picker.add_item(tr("No team: everybody else is an enemy"))
-	for t in range(1, 5):
-		team_picker.add_item(tr("Team %d") % t)
+	_build_game_options()
+	_rebuild_teams()
+	Net.game_changed.connect(func():
+		_rebuild_teams()
+		_sync_game_options())
 	Net.roster_changed.connect(_refresh_all)
 	start_button.visible = Net.is_host()
 	late_join_check.visible = Net.is_host()
@@ -80,7 +82,78 @@ func _on_ship_selected(index: int) -> void:
 
 
 func _on_team_selected(index: int) -> void:
-	Net.submit_team(index)
+	Net.submit_team(index + 1 if Net.game_mode == "teams" else index)
+
+
+var _mode_pick: OptionButton
+var _teams_spin: SpinBox
+var _limit_spin: SpinBox
+var _options_row: Control
+
+
+## HOST ONLY: game mode (free for all / team deathmatch), number of teams and kill limit. Built in code under the team picker.
+func _build_game_options() -> void:
+	var box := VBoxContainer.new()
+	box.name = "GameOptions"
+	box.visible = Net.is_host()
+	_options_row = box
+	var title := Label.new()
+	title.text = tr("Game mode")
+	box.add_child(title)
+	_mode_pick = OptionButton.new()
+	_mode_pick.name = "ModePicker"
+	_mode_pick.add_item(tr("Free for all (choose your own team)"))
+	_mode_pick.add_item(tr("Team deathmatch"))
+	box.add_child(_mode_pick)
+	var row := HBoxContainer.new()
+	box.add_child(row)
+	var tl := Label.new()
+	tl.text = tr("Teams")
+	row.add_child(tl)
+	_teams_spin = SpinBox.new()
+	_teams_spin.name = "TeamCount"
+	_teams_spin.min_value = 2
+	_teams_spin.max_value = Net.TEAM_MAX
+	row.add_child(_teams_spin)
+	var ll := Label.new()
+	ll.text = tr("Kill limit (0 = none)")
+	row.add_child(ll)
+	_limit_spin = SpinBox.new()
+	_limit_spin.name = "KillLimit"
+	_limit_spin.min_value = 0
+	_limit_spin.max_value = 999
+	row.add_child(_limit_spin)
+	team_picker.get_parent().add_child(box)
+	team_picker.get_parent().move_child(box, team_picker.get_index() + 1)
+	var push := func(_v = 0.0):
+		Net.set_game_options("teams" if _mode_pick.selected == 1 else "ffa", int(_teams_spin.value), int(_limit_spin.value))
+	_mode_pick.item_selected.connect(push)
+	_teams_spin.value_changed.connect(push)
+	_limit_spin.value_changed.connect(push)
+	_sync_game_options()
+
+
+func _sync_game_options() -> void:
+	if _mode_pick == null:
+		return
+	_mode_pick.select(1 if Net.game_mode == "teams" else 0)
+	_teams_spin.set_value_no_signal(Net.team_count)
+	_teams_spin.editable = Net.game_mode == "teams"
+	_limit_spin.set_value_no_signal(Net.kill_limit)
+
+
+## The team list depends on the mode: free for all = none + 4 teams to pick, team deathmatch = Team 1..N.
+func _rebuild_teams() -> void:
+	team_picker.clear()
+	if Net.game_mode == "teams":
+		for t in range(1, Net.team_count + 1):
+			team_picker.add_item(tr("Team %d") % t)
+	else:
+		team_picker.add_item(tr("No team: everybody else is an enemy"))
+		for t in range(1, 5):
+			team_picker.add_item(tr("Team %d") % t)
+	if is_node_ready():
+		_refresh_all()
 
 
 func _on_lock_pressed() -> void:
@@ -116,7 +189,8 @@ func _refresh_all() -> void:
 	var locked: bool = me.get("locked", false)
 	ship_list.mouse_filter = Control.MOUSE_FILTER_IGNORE if (locked or is_crew) else Control.MOUSE_FILTER_STOP
 	ship_list.modulate = Color(1, 1, 1, 0.5) if (locked or is_crew) else Color(1, 1, 1, 1)
-	team_picker.select(int(me.get("team", 0)))
+	var my_team := int(me.get("team", 0))
+	team_picker.select(clampi(my_team - 1 if Net.game_mode == "teams" else my_team, 0, maxi(team_picker.item_count - 1, 0)))
 	team_picker.disabled = locked or is_crew
 	lock_button.visible = not is_crew
 	lock_button.text = tr("Unlock ship (also releases your crew)") if locked else tr("Lock in ship")

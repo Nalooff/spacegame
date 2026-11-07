@@ -3,6 +3,7 @@ extends PanelContainer
 ## SCOREBOARD: kills, deaths, kill/death ratio, damage dealt and taken of every player (the host keeps the numbers, see Net.stats).
 ## Shown while Tab is held (or pinned with the HUD button). The host also finds the "let new players join" switch here.
 
+const TEAM_COLORS := [Color(0.4, 0.8, 1.0), Color(1.0, 0.5, 0.4), Color(0.5, 1.0, 0.5), Color(1.0, 0.9, 0.4), Color(0.8, 0.5, 1.0), Color(1.0, 0.6, 0.9), Color(0.6, 1.0, 0.9), Color(0.9, 0.7, 0.5)]
 const HEADERS := ["#", "Player", "Kills", "Deaths", "K/D", "Damage", "Taken", ""]
 
 @onready var grid: GridContainer = %ScoreGrid
@@ -58,6 +59,13 @@ func refresh() -> void:
 	for h in HEADERS:
 		grid.add_child(_cell(h, true, false))
 	var me := Net.my_id() if multiplayer.has_multiplayer_peer() else 1
+	if Net.game_mode == "teams":                  # team totals first
+		for t in range(1, Net.team_count + 1):
+			var l := _cell(tr("Team %d") % t + ":  " + str(int(Net.team_kills.get(t, 0))) + (" / %d" % Net.kill_limit if Net.kill_limit > 0 else ""), true, false)
+			l.modulate = TEAM_COLORS[(t - 1) % TEAM_COLORS.size()]
+			grid.add_child(l)
+			for k in HEADERS.size() - 1:
+				grid.add_child(Control.new())
 	var rank := 1
 	for e in Net.ranking():
 		var mine := int(e["id"]) == me

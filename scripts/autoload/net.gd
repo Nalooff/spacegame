@@ -29,6 +29,15 @@ signal crew_orphaned(peer_id: int)  # in game: the captain left, this crew membe
 
 var players: Dictionary = {}
 var in_game: bool = false
+## GAME MODE (host option): "ffa" = every pilot for themselves (teams are the players' own choice), "teams" = team deathmatch
+## with `team_count` teams, players are put in the smallest team and may switch. `kill_limit` > 0: the first team (or pilot)
+## to reach it wins the round and the scores start again.
+const TEAM_MAX := 8
+var game_mode: String = "ffa"
+var team_count: int = 2
+var kill_limit: int = 0
+var team_kills: Dictionary = {}
+signal game_changed
 var late_join: bool = false          # host option: players may join (and pick a ship) while the game is running
 var game_running: bool = false       # the host has started the game (clients learn it when they join)
 signal late_join_changed
@@ -153,6 +162,8 @@ func host_lobby(lobby: String, is_private: bool, password: String) -> Error:
 	_recent.clear()
 	game_running = false
 	late_join = false
+	game_mode = "ffa"
+	team_kills.clear()
 	world_peers.clear()
 	in_game = false
 	lobby_name = lobby.strip_edges() if lobby.strip_edges() != "" else "%s's lobby" % Data.player_name
@@ -180,6 +191,8 @@ func host_steam(lobby: String, is_private: bool, password: String) -> void:
 	_recent.clear()
 	game_running = false
 	late_join = false
+	game_mode = "ffa"
+	team_kills.clear()
 	world_peers.clear()
 	in_game = false
 	lobby_name = lobby.strip_edges() if lobby.strip_edges() != "" else "%s's lobby" % Data.player_name
@@ -244,6 +257,8 @@ func leave() -> void:
 	_recent.clear()
 	game_running = false
 	late_join = false
+	game_mode = "ffa"
+	team_kills.clear()
 	world_peers.clear()
 	in_game = false
 	_lobby_open = false
@@ -323,8 +338,11 @@ func request_join(pname: String, pw_hash: String) -> void:
 			multiplayer.multiplayer_peer.disconnect_peer(id)
 		return
 	players[id] = _new_entry(pname)
+	if game_mode == "teams":
+		players[id]["team"] = _smallest_team()
 	join_result.rpc_id(id, true, "", lobby_name, lobby_private, lobby_seconds_left, game_running)
 	sync_late_join.rpc_id(id, late_join)
+	sync_game.rpc_id(id, game_info())
 	_broadcast()
 
 
@@ -500,8 +518,87 @@ func srv_set_team(team: int) -> void:
 	var id := _sender()
 	if not multiplayer.is_server() or not players.has(id) or players[id]["locked"]:
 		return
-	players[id]["team"] = clampi(team, 0, 4)
+	players[id]["team"] = clampi(team, 1, team_count) if game_mode == "teams" else clampi(team, 0, 4)
 	_broadcast()
+
+
+func game_info() -> Dictionary:
+	return {"mode": game_mode, "teams": team_count, "limit": kill_limit, "scores": team_kills}
+
+
+## Host: choose the game mode ("ffa" / "teams"), how many teams (2..TEAM_MAX) and the kill limit (0 = none).
+func set_game_options(mode: String, teams: int, limit: int) -> void:
+	if not is_host():
+		return
+	game_mode = "teams" if mode == "teams" else "ffa"
+	team_count = clampi(teams, 2, TEAM_MAX)
+	kill_limit = clampi(limit, 0, 999)
+	if game_mode == "teams":
+		for id in players:                   # everybody into a valid team, the smallest first
+			var t := int(players[id]["team"])
+			if t < 1 or t > team_count:
+				players[id]["team"] = _smallest_team()
+	team_kills.clear()
+	_broadcast()
+	sync_game.rpc(game_info())
+	game_changed.emit()
+
+
+@rpc("authority", "reliable")
+func sync_game(d: Dictionary) -> void:
+	game_mode = str(d.get("mode", "ffa"))
+	team_count = clampi(int(d.get("teams", 2)), 2, TEAM_MAX)
+	kill_limit = clampi(int(d.get("limit", 0)), 0, 999)
+	team_kills = d.get("scores", {})
+	game_changed.emit()
+
+
+## The team (1..team_count) with the fewest players.
+func _smallest_team() -> int:
+	var counts := {}
+	for t in range(1, team_count + 1):
+		counts[t] = 0
+	for id in players:
+		var t := int(players[id]["team"])
+		if counts.has(t):
+			counts[t] += 1
+	var best := 1
+	for t in counts:
+		if counts[t] < counts[best]:
+			best = t
+	return best
+
+
+## Host: a kill happened. Team deathmatch counts it for the killer's team (not for killing a friend); a kill limit ends the round.
+func _score_kill(killer: int, victim: int) -> void:
+	if killer == 0 or are_friends(killer, victim):
+		return
+	if game_mode == "teams":
+		var t := int(players.get(killer, {}).get("team", 0))
+		if t > 0:
+			team_kills[t] = int(team_kills.get(t, 0)) + 1
+		sync_game.rpc(game_info())
+		game_changed.emit()
+	if kill_limit <= 0:
+		return
+	var winner := ""
+	if game_mode == "teams":
+		for t in team_kills:
+			if int(team_kills[t]) >= kill_limit:
+				winner = tr("Team %d") % int(t)
+	elif int(stat_of(killer)["kills"]) >= kill_limit:
+		winner = str(players.get(killer, {}).get("name", "?"))
+	if winner != "":
+		announce.rpc(tr("%s wins the round! Scores reset.") % winner)
+		for id in stats:
+			stats[id]["kills"] = 0
+			stats[id]["deaths"] = 0
+			stats[id]["damage"] = 0.0
+			stats[id]["taken"] = 0.0
+		team_kills.clear()
+		sync_game.rpc(game_info())
+		game_changed.emit()
+		_stats_dirty = true
 
 
 ## Friend or foe: the same pilot / crew, or a shared team (> 0).
@@ -976,6 +1073,7 @@ func srv_record_death(victim: int, voluntary: bool = false) -> int:
 	_recent.erase(victim)
 	if best != 0:
 		stat_of(best)["kills"] = int(stat_of(best)["kills"]) + 1
+		_score_kill(best, victim)
 	var vn := str(players[victim]["name"])
 	var text := ""
 	if best != 0 and voluntary:
