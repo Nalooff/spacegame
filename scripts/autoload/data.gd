@@ -147,6 +147,8 @@ var builder_open_path: String = ""
 var notice: String = ""
 ## The ship the local player is flying right now (null in menus). Set by the world.
 var local_ship: Ship = null
+var tutorial: bool = false           ## the solo tutorial mission is running (see TutorialMission)
+var tutorial_text: String = ""       ## what the tutorial asks now (shown by the HintBar)
 
 
 func ship_name_of(json: String) -> String:

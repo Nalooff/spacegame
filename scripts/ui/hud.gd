@@ -16,6 +16,7 @@ func _ready() -> void:
 	Net.kill_feed.connect(_on_kill_feed)
 	%SettingsOverlay.visible = false
 	$HudRoot.add_child(CrewPanel.new())
+	$HudRoot.add_child(HintBar.new())
 	Prefs.changed.connect(_refresh_help)
 	_refresh_help()
 	_on_local_ship_changed(Data.local_ship)

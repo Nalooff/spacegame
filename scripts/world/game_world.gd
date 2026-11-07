@@ -25,6 +25,8 @@ func _ready() -> void:
 		Net.peer_left.connect(_on_peer_left)
 		Net.crew_orphaned.connect(_spawn_for_peer) # captain left: that crew member gets their own ship
 	hud.leave_requested.connect(_on_leave)
+	if Data.tutorial and multiplayer.is_server():
+		add_child(TutorialMission.new())
 	Net.world_ready.rpc_id(1) # tell the host this peer's world is loaded
 
 
@@ -104,6 +106,13 @@ func structure_changed(ship_name: String, alive_cmds: PackedInt32Array, leaving:
 # ---- every peer ------------------------------------------------------------
 func _make_ship(data: Dictionary) -> Node:
 	var ship := SHIP_SCENE.instantiate() as Ship
+	if data.has("drone"):                       # a tutorial target: nobody flies it, the host simulates it
+		ship.name = str(data["drone"])
+		ship.design_blob = ShipDesign.read_blob("res://ships/Brick.json")
+		ship.pilot_name = "Target drone"
+		ship.position = data["pos"]
+		ship.set_multiplayer_authority(1)
+		return ship
 	ship.name = str(data["name"]) if data.has("parent") else str(data["peer"])
 	if data.has("parent"):
 		# A part torn off another ship: cut the same modules out of OUR copy of the parent (deterministic).
@@ -148,6 +157,12 @@ func _process(_dt: float) -> void:
 		target_marker.visible = false
 
 
+func spawn_drone(pos: Vector3, id: String) -> void:
+	spawner.spawn({"drone": id, "pos": pos})
+
+
 func _on_leave() -> void:
+	Data.tutorial = false
+	Data.tutorial_text = ""
 	Net.leave()
 	Game.go_to(Game.MENU_SCENE)

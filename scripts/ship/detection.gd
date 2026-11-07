@@ -114,7 +114,7 @@ func scan() -> void:
 		contacts.append({
 			"visible": seen, "aim_off": aim_off, "stamp": Time.get_ticks_msec(), "est_acc": acc * (best_prec * 0.8),
 			"ship": other, "dist": dist, "how": best_how, "precision": best_prec,
-			"friendly": Net.are_friends(my_owner, other.get_multiplayer_authority()) if not Net.players.is_empty() else false,
+			"friendly": Net.are_friends(my_owner, other.get_multiplayer_authority()) if not Net.players.is_empty() and not other.is_drone() else false,
 			"est_pos": other.global_position + _noise(other, 1, (1.0 - best_prec) * dist * 0.03),
 			"est_vel": other.linear_velocity + _noise(other, 2, (1.0 - best_prec) * (other.linear_velocity.length() * 0.25 + 3.0)),
 		})

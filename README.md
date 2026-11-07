@@ -238,3 +238,7 @@ MIT, see `LICENSE`.
 
 ## Game mode: free for all or team deathmatch
 The host picks the **game mode** in the lobby (under the team picker): *Free for all* (everyone chooses their own team, or none) or *Team deathmatch* with **2 to 8 teams**. In team deathmatch players are put in the smallest team when they join and can switch. Kills count for the killer's team (killing a friend scores nothing); the scoreboard (Tab) shows team totals on top. A **kill limit** (0 = none) ends the round when a team (or a pilot in free for all) reaches it: the winner is announced and the scores restart.
+
+## Hints and tutorial
+- **Tutorial (solo)** on the main menu: a game for one against a target drone. Nine steps: fly, find the drone, lock it, fire, aim at a module, destroy it, ram a second drone (lodging), open the crew panel and the plan. Nothing is advertised on the network.
+- **Hint bar** (top centre): emergencies first (boarders, fire, thin air, electrical faults, stuck in an enemy; each comes back after a minute if it is still true), then lessons you have not followed yet (fly, lock, fire, aim at a module, map, crew panel, plan). Each lesson disappears for good once you do it. Switch them off in Settings > Video > Help.

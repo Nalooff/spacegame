@@ -147,7 +147,11 @@ static func hash_password(lobby: String, password: String) -> String:
 	return (lobby + "|" + password).sha256_text() if password != "" else ""
 
 
-func host_lobby(lobby: String, is_private: bool, password: String) -> Error:
+var solo: bool = false              ## a game for one (the tutorial): not advertised on the LAN / internet
+
+
+func host_lobby(lobby: String, is_private: bool, password: String, solo_game: bool = false) -> Error:
+	solo = solo_game
 	var peer := ENetMultiplayerPeer.new()
 	var port := Data.DEFAULT_PORT
 	var err := peer.create_server(port, Data.MAX_PLAYERS)
@@ -174,9 +178,19 @@ func host_lobby(lobby: String, is_private: bool, password: String) -> Error:
 	_register_host()
 	_game_port = port
 	_advertise()
-	if Data.BOARD_ENABLED and not _no_internet:
+	if Data.BOARD_ENABLED and not _no_internet and not solo:
 		nat.open(port)
 	return OK
+
+
+## A game for one with `ship_path` (res://ships/Dart.json ...): nobody can join. Returns false when it could not start.
+func start_solo(ship_path: String) -> bool:
+	if host_lobby("Solo", true, str(randi()), true) != OK:
+		return false
+	var blob := ShipDesign.read_blob(ship_path)
+	submit_ship(blob)
+	submit_lock(true)
+	return start_game()
 
 
 ## True when Steam is running: hosting then goes through Steam (no port forwarding), see host_steam().
@@ -275,6 +289,8 @@ func my_id() -> int:
 
 
 func _advertise() -> void:
+	if solo:
+		return
 	var info := {"name": lobby_name, "private": lobby_private, "host": Data.player_name,
 		"players": players.size(), "max": Data.MAX_PLAYERS, "port": _game_port, "running": game_running}
 	if _steam_hosting:                               # Steam lists the lobby; no LAN broadcast / board needed

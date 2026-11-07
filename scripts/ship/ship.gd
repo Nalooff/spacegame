@@ -284,6 +284,11 @@ func set_rendered(on: bool) -> void:
 		visible = on
 
 
+## A target drone of the tutorial: an enemy nobody flies.
+func is_drone() -> bool:
+	return str(name).begins_with("drone")
+
+
 func is_wreck() -> bool:
 	return pilot_name == "Wreck"
 

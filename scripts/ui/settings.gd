@@ -309,6 +309,8 @@ func _build_video() -> void:
 	_slider(p, "Maximum frames per second (0 = unlimited)", "max_fps", 0.0, 240.0, 10.0)
 	_slider(p, "Interface scale", "ui_scale", 0.75, 2.0, 0.05)
 	_check(p, "Show FPS counter", "show_fps")
+	_section(p, "Help")
+	_check(p, "Show hints while playing", "hints_on")
 
 
 func _build_audio() -> void:

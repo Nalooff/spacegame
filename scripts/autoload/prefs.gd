@@ -42,6 +42,8 @@ var max_fps: int = 0                 ## 0 = unlimited
 var show_fps: bool = false
 var ui_scale: float = 1.0
 var player_name: String = "Pilot"
+var hints_on: bool = true            ## the contextual hint bar
+var hints_done: String = ""         ## comma separated ids of the hints the player has already followed
 var binds: Dictionary = {}           ## action -> physical keycode (only what the player changed)
 
 var _fps_label: Label
@@ -64,7 +66,7 @@ func values() -> Dictionary:
 	return {"language": language, "scheme": scheme, "mouse_sens": mouse_sens, "invert_y": invert_y, "deadzone": deadzone, "lever_rate": lever_rate,
 		"order_range": order_range, "fov": fov, "cam_dist": cam_dist, "cam_sens": cam_sens, "cam_invert_y": cam_invert_y,
 		"master_volume": master_volume, "fullscreen": fullscreen, "vsync": vsync, "render_scale": render_scale, "max_fps": max_fps,
-		"show_fps": show_fps, "ui_scale": ui_scale, "player_name": player_name}
+		"show_fps": show_fps, "ui_scale": ui_scale, "player_name": player_name, "hints_on": hints_on, "hints_done": hints_done}
 
 
 func set_values(d: Dictionary) -> void:
