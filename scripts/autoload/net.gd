@@ -110,6 +110,9 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	var args := OS.get_cmdline_user_args()
+	if args.has("--server"):
+		_start_dedicated.call_deferred(args)
 
 
 ## Closing the window never ran leave(), so the lobby stayed on the internet list until it went stale.
@@ -125,6 +128,13 @@ func _notification(what: int) -> void:
 
 func _process(dt: float) -> void:
 	directory.poll(dt)
+	if dedicated and is_host():
+		_dedi_timer -= dt
+		if _dedi_timer <= 0.0:
+			_dedi_timer = 1.0
+			if _lobby_open and not game_running and not players.is_empty() and can_start():
+				print("[server] starting the round with %d players" % players.size())
+				start_game()
 	if _stats_dirty and is_host():
 		_stats_timer -= dt
 		if _stats_timer <= 0.0:
@@ -147,13 +157,21 @@ static func hash_password(lobby: String, password: String) -> String:
 	return (lobby + "|" + password).sha256_text() if password != "" else ""
 
 
+## DEDICATED SERVER (opt-in, free: run it on any computer that stays on):
+##   godot --headless --path . -- --server [--name=NAME] [--password=SECRET] [--wait=SECONDS] [--port=N]
+## The host is not a player: it only runs the game. It starts the round by itself when everybody is ready (or after --wait seconds)
+## and lets new players join while it runs. Normal hosting from the game's menus is unchanged.
+var dedicated: bool = false
+var port_override: int = 0
+var _dedi_timer: float = 0.0
+
 var solo: bool = false              ## a game for one (the tutorial): not advertised on the LAN / internet
 
 
 func host_lobby(lobby: String, is_private: bool, password: String, solo_game: bool = false) -> Error:
 	solo = solo_game
 	var peer := ENetMultiplayerPeer.new()
-	var port := Data.DEFAULT_PORT
+	var port := port_override if port_override > 0 else Data.DEFAULT_PORT
 	var err := peer.create_server(port, Data.MAX_PLAYERS)
 	while err != OK and port < Data.DEFAULT_PORT + 20: # port busy (e.g. two games on one PC): try the next
 		port += 1
@@ -194,6 +212,32 @@ func start_solo(ship_path: String) -> bool:
 
 
 ## True when Steam is running: hosting then goes through Steam (no port forwarding), see host_steam().
+func _start_dedicated(args: PackedStringArray) -> void:
+	var lobby := "Dedicated server"
+	var password := ""
+	var wait := 0.0
+	for a in args:
+		if a.begins_with("--name="):
+			lobby = a.substr(7)
+		elif a.begins_with("--password="):
+			password = a.substr(11)
+		elif a.begins_with("--wait="):
+			wait = float(a.substr(7))
+		elif a.begins_with("--port="):
+			port_override = int(a.substr(7))
+	dedicated = true
+	Data.player_name = "Server"
+	var err := host_lobby(lobby, password != "", password)
+	if err != OK:
+		print("[server] could not open the port: error %d" % err)
+		get_tree().quit(1)
+		return
+	late_join = true
+	if wait > 0.0:
+		lobby_seconds_left = wait
+	print("[server] '%s' is open on port %d (%s)" % [lobby, _game_port, "password" if password != "" else "no password"])
+
+
 func steam_active() -> bool:
 	return steam != null and steam.ready_ok
 
@@ -320,6 +364,9 @@ func all_lobbies() -> Array[Dictionary]:
 
 
 func _register_host() -> void:
+	if dedicated:
+		_broadcast()
+		return
 	players[1] = _new_entry(Data.player_name)
 	_broadcast()
 

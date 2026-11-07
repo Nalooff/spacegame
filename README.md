@@ -242,3 +242,7 @@ The host picks the **game mode** in the lobby (under the team picker): *Free for
 ## Hints and tutorial
 - **Tutorial (solo)** on the main menu: a game for one against a target drone. Nine steps: fly, find the drone, lock it, fire, aim at a module, destroy it, ram a second drone (lodging), open the crew panel and the plan. Nothing is advertised on the network.
 - **Hint bar** (top centre): emergencies first (boarders, fire, thin air, electrical faults, stuck in an enemy; each comes back after a minute if it is still true), then lessons you have not followed yet (fly, lock, fire, aim at a module, map, crew panel, plan). Each lesson disappears for good once you do it. Switch them off in Settings > Video > Help.
+
+## Dedicated server (optional) and the duel simulator
+- `godot --headless --path . -- --server "--name=My server" --password=secret` runs a server with no player of its own; see `docs/SERVER.md` (also: free ways to keep one running). Normal hosting in the menus is unchanged.
+- `godot --headless --path . res://tests/duel_sim.tscn -- seconds=40 ranges=150,400,800 types=cannon,railgun` makes identical ships with different bullet types duel and prints win tables: use it when tuning `ModulePresets`.
