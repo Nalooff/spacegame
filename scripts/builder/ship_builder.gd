@@ -442,6 +442,10 @@ func _select_at(mouse: Vector2, additive: bool) -> bool:
 		Mode.OBJECT:
 			var m := _pick_module(mouse)
 			found = m >= 0
+			if paint_mode:
+				if found:
+					paint_modules([m])
+				return found
 			if found:
 				if additive and sel_modules.has(m):
 					sel_modules.erase(m)
@@ -652,6 +656,7 @@ func _handle_key(e: InputEventKey) -> void:
 		KEY_C: create_face()
 		KEY_N: make_module()
 		KEY_B: start_operator("bevel")
+		KEY_K: set_paint_mode(not paint_mode)
 		KEY_T: link_turret_barrel()
 		KEY_L: link_vertices()
 		KEY_U: unlink_vertices()
@@ -1099,6 +1104,34 @@ func save_active_as_preset(label: String) -> void:
 	m["cfg"]["preset"] = id
 	on_design_changed()
 	say("Preset '%s' saved. It now shows in the preset list of %s modules." % [label.strip_edges(), m["type"]])
+
+
+# ---- PAINT: colours and patterns of the modules (see ShipDesign.set_paint)
+var paint_mode: bool = false                    ## K: a click paints the module under the mouse instead of selecting it
+var paint_c1: Color = Color(0.85, 0.85, 0.9)
+var paint_c2: Color = Color(0.15, 0.2, 0.35)
+var paint_pattern: int = 0
+var paint_scale: float = 1.0
+signal paint_mode_changed
+
+
+func set_paint_mode(on: bool) -> void:
+	paint_mode = on
+	paint_mode_changed.emit()
+	say(("Paint mode: click a module to paint it with the current colours. K to leave.") if on else "Paint mode off.")
+
+
+func paint_modules(ids: Array, clear: bool = false) -> void:
+	if ids.is_empty():
+		return
+	checkpoint("paint")
+	for mi in ids:
+		if mi >= 0 and mi < design.modules.size():
+			if clear:
+				design.clear_paint(mi)
+			else:
+				design.set_paint(mi, paint_c1, paint_c2, paint_pattern, paint_scale)
+	on_design_changed()
 
 
 func set_active_material(id: String) -> void:

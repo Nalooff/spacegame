@@ -130,6 +130,7 @@ func _ready() -> void:
 	_build_menus()
 	_build_common_tools()
 	operator_panel.setup(builder)
+	_build_paint_section()
 	builder.box_changed.connect(func(r: Rect2): box_overlay.show_box(r))
 	builder.operator_changed.connect(refresh_all)
 	builder.message.connect(func(text: String): status_label.text = text)
@@ -301,6 +302,71 @@ func _refresh_tool_states() -> void:
 # =====================================================================
 #  Reading the builder state into the widgets
 # =====================================================================
+## PAINT section (Properties tab): brush colours + pattern, paint mode (K), paint the selection, clear.
+func _build_paint_section() -> void:
+	var host := thruster_section.get_parent().get_parent() as Control      # PropertiesList
+	var box := VBoxContainer.new()
+	box.name = "PaintSection"
+	host.add_child(box)
+	var head := Label.new()
+	head.text = tr("PAINT")
+	head.add_theme_color_override("font_color", Color(0.3, 0.78, 1.0))
+	box.add_child(head)
+	var mode := CheckButton.new()
+	mode.name = "PaintModeCheck"
+	mode.text = tr("Paint mode (K): click modules to paint")
+	mode.toggled.connect(func(on: bool): builder.set_paint_mode(on))
+	builder.paint_mode_changed.connect(func(): mode.set_pressed_no_signal(builder.paint_mode))
+	box.add_child(mode)
+	var row := HBoxContainer.new()
+	box.add_child(row)
+	var c1 := ColorPickerButton.new()
+	c1.name = "PaintColor1"
+	c1.color = builder.paint_c1
+	c1.custom_minimum_size = Vector2(64, 28)
+	c1.color_changed.connect(func(c: Color): builder.paint_c1 = c)
+	row.add_child(c1)
+	var c2 := ColorPickerButton.new()
+	c2.name = "PaintColor2"
+	c2.color = builder.paint_c2
+	c2.custom_minimum_size = Vector2(64, 28)
+	c2.color_changed.connect(func(c: Color): builder.paint_c2 = c)
+	row.add_child(c2)
+	var pat := OptionButton.new()
+	pat.name = "PaintPattern"
+	for n in ShipDesign.PATTERNS:
+		pat.add_item(tr(n))
+	pat.item_selected.connect(func(i: int): builder.paint_pattern = i)
+	pat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(pat)
+	var sc := HSlider.new()
+	sc.name = "PaintScale"
+	sc.min_value = 0.2
+	sc.max_value = 4.0
+	sc.step = 0.1
+	sc.value = 1.0
+	sc.tooltip_text = tr("Size of the stripes / squares (metres)")
+	sc.value_changed.connect(func(v: float): builder.paint_scale = v)
+	box.add_child(sc)
+	var btns := HBoxContainer.new()
+	box.add_child(btns)
+	var apply := Button.new()
+	apply.name = "PaintSelected"
+	apply.text = tr("Paint selected")
+	apply.pressed.connect(func(): builder.paint_modules(builder.sel_modules))
+	btns.add_child(apply)
+	var clear := Button.new()
+	clear.name = "ClearPaint"
+	clear.text = tr("Clear paint")
+	clear.pressed.connect(func(): builder.paint_modules(builder.sel_modules, true))
+	btns.add_child(clear)
+	var help := Label.new()
+	help.text = tr("Thrusters, barrels and turrets keep a glowing end that shows where they point, whatever the paint.")
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help.add_theme_font_size_override("font_size", 12)
+	box.add_child(help)
+
+
 func refresh_all() -> void:
 	_refresh_selection_warning()
 	_refreshing = true

@@ -154,7 +154,11 @@ func attach(d: ShipDesign, prepared: Array) -> void:
 		var chunks: Array = []
 		var mat := ShaderMaterial.new()
 		mat.shader = shader
-		mat.set_shader_parameter("base_color", ModuleCatalog.color_of(d.modules[mi]["type"]))
+		mat.set_shader_parameter("base_color", d.module_color(mi))
+		mat.set_shader_parameter("accent_color", d.module_color2(mi))
+		mat.set_shader_parameter("pattern", int(d.extra(mi, "pat")) if float(d.extra(mi, "painted")) > 0.5 else 0)
+		mat.set_shader_parameter("pattern_scale", float(d.extra(mi, "pscale")))
+		_set_mark(mat, d, mi)
 		var cell_chunk: Dictionary = info.get("cells", {})
 		for ci in info["chunk_faces"].size():
 			chunks.append({"faces": PackedInt32Array(info["chunk_faces"][ci]), "node": null, "arrays": info["arrays"][ci]})
@@ -162,6 +166,38 @@ func attach(d: ShipDesign, prepared: Array) -> void:
 		_mods.append({"chunks": chunks, "face_chunk": info["face_chunk"], "lo": info["lo"], "size": info["size"],
 			"dims": info["dims"], "cells": cell_chunk, "material": mat})
 	set_process(true)
+
+
+## The glowing end of a module that points somewhere: thruster = where the flame comes out, barrel = the muzzle.
+## (turret bases and radars get a plain accent so they are recognisable too.)
+func _set_mark(mat: ShaderMaterial, d: ShipDesign, mi: int) -> void:
+	var type: String = d.modules[mi]["type"]
+	var axis := Vector3.ZERO
+	var col := Color(1, 0.5, 0.1)
+	match type:
+		ModuleCatalog.THRUSTER:
+			axis = -(d.modules[mi]["dir"] as Vector3).normalized()      # the flame goes out opposite to the push
+			col = Color(1.0, 0.55, 0.1)
+		ModuleCatalog.BARREL:
+			axis = d.barrel_dir(mi)
+			col = Color(1.0, 0.15, 0.1)
+		ModuleCatalog.TURRET:
+			axis = (d.modules[mi]["dir"] as Vector3).normalized()
+			col = Color(1.0, 0.85, 0.2)
+		ModuleCatalog.RADAR:
+			axis = (d.modules[mi]["dir"] as Vector3).normalized() if (d.modules[mi]["dir"] as Vector3).length() > 0.1 else Vector3.UP
+			col = Color(0.3, 1.0, 0.6)
+		_:
+			pass
+	var c := d.module_centroid(mi)
+	var reach := 0.1
+	if axis != Vector3.ZERO:
+		for p in d.module_points(mi):
+			reach = maxf(reach, (p - c).dot(axis))
+	mat.set_shader_parameter("mark_center", c)
+	mat.set_shader_parameter("mark_axis", axis)
+	mat.set_shader_parameter("mark_len", reach)
+	mat.set_shader_parameter("mark_color", col)
 
 
 ## Create meshes now (small ships) instead of spreading them over frames.

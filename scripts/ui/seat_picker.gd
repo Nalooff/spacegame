@@ -98,7 +98,7 @@ func _add_box_preview(mi: int, box: AABB) -> void:
 	var bm := BoxMesh.new()
 	bm.size = box.size
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = ModuleCatalog.color_of(_design.modules[mi]["type"])
+	mat.albedo_color = _design.module_color(mi)
 	bm.material = mat
 	m.mesh = bm
 	m.position = box.get_center()

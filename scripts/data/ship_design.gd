@@ -25,9 +25,10 @@ extends RefCounted
 const PRETTY_JSON_MAX_VERTICES := 20000  # bigger ships are saved as compressed binary (.ship)
 const BINARY_MAGIC := "VSHP"
 ## Extra per-module settings (turret base: arc and speed; barrel link). Saved only when present.
-const MODULE_EXTRA_KEYS := ["yaw_min", "yaw_max", "pitch_min", "pitch_max", "aim_set"]
+const MODULE_EXTRA_KEYS := ["yaw_min", "yaw_max", "pitch_min", "pitch_max", "aim_set", "painted", "pr", "pg", "pb", "qr", "qg", "qb", "pat", "pscale"]
 ## aim_set (barrels): 1 = the barrel has its own chosen direction ("dir"); 0 = older ships, it points from its turret base to itself.
-const EXTRA_DEFAULTS := {"yaw_min": -180.0, "yaw_max": 180.0, "pitch_min": -10.0, "pitch_max": 85.0, "aim_set": 0.0}
+const EXTRA_DEFAULTS := {"yaw_min": -180.0, "yaw_max": 180.0, "pitch_min": -10.0, "pitch_max": 85.0, "aim_set": 0.0,
+	"painted": 0.0, "pr": 0.5, "pg": 0.5, "pb": 0.5, "qr": 0.1, "qg": 0.1, "qb": 0.1, "pat": 0.0, "pscale": 1.0}
 
 var ship_name: String = "New Ship"
 var vertices: PackedVector3Array = PackedVector3Array()
@@ -104,6 +105,37 @@ func remove_module(mi: int) -> void:
 ## Setting `key` of module `mi` (EXTRA_DEFAULTS when it was never set): turret arcs.
 func extra(mi: int, key: String) -> Variant:
 	return modules[mi].get(key, EXTRA_DEFAULTS[key])
+
+
+## PAINT: colour of a module (its own paint, or the colour of its type). Patterns (see hull.gdshader): 0 solid, 1 stripes,
+## 2 checker, 3 hazard stripes, 4 two halves; they use the second colour.
+const PATTERNS := ["Solid", "Stripes", "Checker", "Hazard", "Two-tone"]
+
+func module_color(mi: int) -> Color:
+	if float(extra(mi, "painted")) > 0.5:
+		return Color(float(extra(mi, "pr")), float(extra(mi, "pg")), float(extra(mi, "pb")))
+	return ModuleCatalog.color_of(modules[mi]["type"])
+
+
+func module_color2(mi: int) -> Color:
+	return Color(float(extra(mi, "qr")), float(extra(mi, "qg")), float(extra(mi, "qb")))
+
+
+func set_paint(mi: int, c1: Color, c2: Color, pattern: int, pscale: float) -> void:
+	var m: Dictionary = modules[mi]
+	m["painted"] = 1.0
+	m["pr"] = c1.r
+	m["pg"] = c1.g
+	m["pb"] = c1.b
+	m["qr"] = c2.r
+	m["qg"] = c2.g
+	m["qb"] = c2.b
+	m["pat"] = float(pattern)
+	m["pscale"] = clampf(pscale, 0.2, 8.0)
+
+
+func clear_paint(mi: int) -> void:
+	modules[mi]["painted"] = 0.0
 
 
 ## The turret base that barrel `bar` is mounted on (-1 = none).
@@ -1039,7 +1071,7 @@ func build_mesh(health_ratio: PackedFloat32Array = PackedFloat32Array(), highlig
 			ratio = health_ratio[i]
 		if ratio <= 0.0 or hidden.has(i):
 			continue
-		var col := ModuleCatalog.color_of(modules[i]["type"]).lerp(Color(0.12, 0.05, 0.04), (1.0 - ratio) * 0.8)
+		var col := module_color(i).lerp(Color(0.12, 0.05, 0.04), (1.0 - ratio) * 0.8)
 		if highlight.has(i):
 			col = col.lightened(0.4)
 		var tris := module_tris(i)
