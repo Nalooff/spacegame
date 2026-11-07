@@ -81,6 +81,10 @@ static func _name(m: Dictionary) -> String:
 	return "Crew #%d" % int(m["id"])
 
 
+func log_event(text: String) -> void:
+	_log(text)
+
+
 func _log(text: String) -> void:
 	log_lines.append(text)
 	if log_lines.size() > 100:
@@ -152,7 +156,7 @@ func tick(ship: Ship, dt: float) -> bool:
 	for mi in ship.module_hp.size():
 		if ship.module_max_hp.size() <= mi:
 			break
-		var damaged: bool = ship.module_hp[mi] >= 0.0 and ship.module_hp[mi] < ship.module_max_hp[mi] * 0.98
+		var damaged: bool = ship.module_hp[mi] >= 0.0 and (ship.module_hp[mi] < ship.module_max_hp[mi] * 0.98 or _hazard_at(ship, mi))
 		if not damaged:
 			noticed.erase(mi)
 		elif comms:
@@ -161,7 +165,7 @@ func tick(ship: Ship, dt: float) -> bool:
 		if m["hp"] <= 0.0:
 			continue
 		for mi in ship.module_hp.size():
-			if noticed.has(mi) or ship.module_hp[mi] < 0.0 or mi >= ship.module_max_hp.size() or ship.module_hp[mi] >= ship.module_max_hp[mi] * 0.98:
+			if noticed.has(mi) or ship.module_hp[mi] < 0.0 or mi >= ship.module_max_hp.size() or (ship.module_hp[mi] >= ship.module_max_hp[mi] * 0.98 and not _hazard_at(ship, mi)):
 				continue
 			if (ship.design.module_centroid(mi) as Vector3).distance_to(m["pos"]) < maxf(Data.CREW_NOTICE_RADIUS, ship.design.module_extent(mi).length() * 0.5):
 				noticed[mi] = true
@@ -193,14 +197,16 @@ func _step_member(ship: Ship, m: Dictionary, dt: float, workers: Dictionary) -> 
 		return
 	var mi: int = m["module"]
 	if m["task"] == "work" and mi >= 0:
-		var ok: bool = mi < ship.module_hp.size() and ship.module_hp[mi] >= 0.0 and ship.module_hp[mi] < ship.module_max_hp[mi]
+		var live: bool = mi < ship.module_hp.size() and ship.module_hp[mi] >= 0.0
+		var ok: bool = live and (ship.module_hp[mi] < ship.module_max_hp[mi] or _hazard_at(ship, mi))
 		if ok and int(workers.get(mi, 0)) < Data.CREW_MAX_WORKERS:
 			workers[mi] = int(workers.get(mi, 0)) + 1
-			var hp := ship.module_hp
-			hp[mi] = minf(hp[mi] + ship.module_max_hp[mi] * Data.CREW_REPAIR_PER_S * dt, ship.module_max_hp[mi])
-			ship.module_hp = hp
-			ship._function_dirty = true
-			return
+			if ship.module_hp[mi] < ship.module_max_hp[mi]:
+				var hp := ship.module_hp
+				hp[mi] = minf(hp[mi] + ship.module_max_hp[mi] * Data.CREW_REPAIR_PER_S * dt, ship.module_max_hp[mi])
+				ship.module_hp = hp
+				ship._function_dirty = true
+			return       # (fire and electrical faults are dealt with by ShipHazards while somebody is in the room)
 		m["task"] = "idle"
 		m["module"] = -1
 		m["ordered"] = false
@@ -229,10 +235,17 @@ func _find_job(ship: Ship, m: Dictionary, workers: Dictionary) -> int:
 		var ni := node_for_module(ship, mi)
 		if ni < 0 or dist[ni] == INF:
 			continue
-		if dist[ni] < best_d:
-			best_d = dist[ni]
+		if mi < ship.haz_air.size() and ship.haz_air[mi] < 0.4:
+			continue                                  # nobody walks into a room with no air
+		var score: float = dist[ni] - (200.0 if mi < ship.haz_fire.size() and ship.haz_fire[mi] > 0.03 else 0.0)
+		if score < best_d:
+			best_d = score
 			best = mi
 	return best
+
+
+static func _hazard_at(ship: Ship, mi: int) -> bool:
+	return (mi < ship.haz_fire.size() and ship.haz_fire[mi] > 0.03) or (mi < ship.haz_elec.size() and ship.haz_elec[mi] > 0.0)
 
 
 func _heading_to(mi: int, except: Dictionary) -> int:

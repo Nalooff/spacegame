@@ -217,3 +217,11 @@ Thrusters respond instantly; RigidBody3D inertia is diagonal only; client-author
 smoothing, no lag compensation. Module links are decided from the design and not recomputed after dents. Doors are drawn on the plan but have no gameplay effect yet.
 A ship split uses each peer's copy of the parent, so a ship still building its mesh in the background should not be split in its first seconds. Bevel is clean where up to
 3 faces meet at the edge ends. Turret barrels cannot be dented. The seat-picker preview of ships above 30,000 vertices shows one box per module.
+
+## Fire, air, electricity and doors
+Damage inside the ship is not only lost health:
+- **Fire** starts in modules that were hit hard (engine rooms burn best, armor hardly), grows while there is air, burns the module's health and the people in it, eats the air and jumps through open doors. It dies when the fuel is gone or the air is gone. Crew standing in the room put it out.
+- **Air** leaks from hit modules (a *breach*; repairs close it) and flows through open doors. Under about a third of the air, people suffocate. A vented room puts fires out - and kills the crew inside.
+- **Electrical faults** can follow a hit: the module does nothing until the fault clears (25 s, much faster with somebody in the room).
+- **Doors**: every wall doorway and every corridor door you placed in the builder. In the live plan, click a door: open -> closed -> locked. Closed doors stop fire and air, crew can still walk through them. **Locked** doors stop the crew too. Doors next to a hit, a fire or thin air close **by themselves** and open again when it is safe. Changing doors needs working communications.
+- **Roles**: a turret base, radar or engine room with somebody standing in it works 15% better (reload, range, thrust). Nobody is assigned; it is where the crew happens to be (or where you send them).

@@ -56,6 +56,24 @@ const CREW_REPAIR_PER_S := 0.012     # fraction of a module's maximum health one
 const CREW_MAX_WORKERS := 3          # people that work on one module at once
 const CREW_NOTICE_RADIUS := 6.0      # a person this close to damage (ship space) notices it
 const CREW_HIT_DAMAGE := 160.0       # crew hit points lost per 1.0 (= the module's whole health) of damage dealt to the room they stand in
+# ---- hazards (ShipHazards): fire, air, electrical faults, doors
+const HAZ_FIRE_GROW := 0.10          # fire intensity gained per second in a room with air
+const HAZ_FIRE_BURN := 0.012         # fraction of a module's maximum health burnt per second at full fire
+const HAZ_FIRE_SPREAD := 0.06        # chance per second (x intensity) that fire jumps through an open door
+const HAZ_FIRE_FUEL := 0.012         # fuel burnt per second (x intensity); a room with no fuel left stops burning
+const HAZ_FIRE_OUT_AIR := 0.15       # below this much air a fire starves
+const HAZ_FIRE_AIR_USE := 0.02       # air a full fire eats per second
+const HAZ_FIRE_CREW_DPS := 22.0      # crew hit points lost per second in a full fire
+const HAZ_AIR_EQUALIZE := 0.6        # how fast air flows through an open door (per second)
+const HAZ_LEAK := 0.35               # air lost per second through a full breach
+const HAZ_AIR_RECOVER := 0.03        # air restored per second when nothing leaks (life support)
+const HAZ_SUFFOCATE_AIR := 0.35      # below this much air people choke
+const HAZ_SUFFOCATE_DPS := 9.0       # crew hit points lost per second with no air at all
+const HAZ_ELEC_SECONDS := 25.0       # an electrical fault clears by itself after this long
+const HAZ_ELEC_CREW_X := 4.0         # somebody standing in the room clears it this many times faster
+const HAZ_EXTINGUISH := 0.22         # fire intensity one person puts out per second
+const HAZ_ALERT_SECONDS := 3.0       # doors next to a freshly hit room close for this long
+const ROLE_BONUS := 0.15             # a manned turret base reloads / manned radar sees / manned engine room pushes this much better
 const CREW_PATROL_MIN := 12.0        # an idle person walks to another room after this many seconds (at least)
 const BARREL_TUBE_LENGTH := 4.0      # the tube in front of a barrel's muzzle (the size of its bullet) that nothing may block, metres
 const BARREL_TUBE_MARGIN := 0.05

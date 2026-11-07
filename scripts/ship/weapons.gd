@@ -96,11 +96,11 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 				r.burst_count += 1
 				if r.burst_count >= r.burst:
 					r.burst_count = 0
-					r.cool = r.cooldown * slow
+					r.cool = r.cooldown * slow / ship.role_bonus(r.base)
 				else:
-					r.cool = r.burst_gap * slow
+					r.cool = r.burst_gap * slow / ship.role_bonus(r.base)
 			else:
-				r.cool = r.cooldown * slow
+				r.cool = r.cooldown * slow / ship.role_bonus(r.base)
 			for pi in r.pellets:               # the shot damage is shared by the pellets
 				origins.append(shot["origin"])
 				dirs.append(shot["dir"] if pi == 0 else ShipTurrets.spread_dir(shot["base"], r.spread_deg, _rng))

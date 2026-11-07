@@ -151,7 +151,7 @@ func fresh(c: Dictionary) -> Array:
 func radar_range(r: Dictionary, target: Ship) -> float:
 	var sig := target.sig_elec if r["kind"] == "electronic" else target.sig_heat
 	var ref := Data.ELEC_REF_W if r["kind"] == "electronic" else Data.HEAT_REF_W
-	return float(r["range"]) * clampf(sqrt(maxf(sig, 1.0) / ref), Data.SIGNATURE_MIN_MULT, Data.SIGNATURE_MAX_MULT)
+	return float(r["range"]) * ship.role_bonus(int(r["module"])) * clampf(sqrt(maxf(sig, 1.0) / ref), Data.SIGNATURE_MIN_MULT, Data.SIGNATURE_MAX_MULT)
 
 
 ## Slowly drifting error vector of the given size (stable between scans, different per target and per quantity).

@@ -67,6 +67,18 @@ var corridor_hp: PackedFloat32Array = PackedFloat32Array():
 	set(v):
 		corridor_hp = v
 		_function_dirty = true
+## FIRE / AIR / ELECTRICAL FAULTS per module and DOOR STATES (see ShipHazards). Replicated.
+var haz_fire: PackedFloat32Array = PackedFloat32Array()
+var haz_air: PackedFloat32Array = PackedFloat32Array()
+var haz_elec: PackedFloat32Array = PackedFloat32Array():
+	set(v):
+		haz_elec = v
+		_function_dirty = true
+var haz_doors: PackedByteArray = PackedByteArray():
+	set(v):
+		haz_doors = v
+		_function_dirty = true
+var hazards: ShipHazards = ShipHazards.new()
 var crew: ShipCrew = ShipCrew.new()          ## the people on board (authority peer only, see ShipCrew)
 var reports: ShipReports = ShipReports.new()   ## what the commander has been told so far (own ship, see ShipReports)
 var _held_dents: Array[Dictionary] = []     # visible dents waiting for their report: {due, changed}
@@ -438,6 +450,7 @@ func apply_hit(hit: DamageHit) -> void:
 		_dent(hit.module, hit.point, result.dent_direction, result.dent_depth, result.dent_radius)
 	_damage_corridors(hit, result)
 	crew.on_hit(self, hit.module, result.hp_damage)
+	hazards.on_hit(self, hit.module, result.hp_damage)
 	BusEvent.ship_hit.emit(self, hit, result)
 
 
@@ -549,6 +562,19 @@ func _build_plan() -> void:
 	elif is_multiplayer_authority():
 		corridor_hp = plan_state.edge_hp.duplicate()
 	comms.configure(self)
+	hazards.build(plan, design.modules.size())
+	if haz_air.size() != hazards.n:
+		var full := PackedFloat32Array()
+		full.resize(hazards.n)
+		full.fill(1.0)
+		var zero := PackedFloat32Array()
+		zero.resize(hazards.n)
+		if is_multiplayer_authority() or haz_air.is_empty():
+			haz_air = full
+			haz_fire = zero.duplicate()
+			haz_elec = zero.duplicate()
+	if haz_doors.size() != hazards.doors.size() and (is_multiplayer_authority() or haz_doors.is_empty()):
+		haz_doors = hazards.fresh_doors()
 	if is_multiplayer_authority():
 		crew.plan_ready(self)
 	_function_dirty = true
@@ -563,7 +589,7 @@ func _update_function() -> void:
 	comms.refresh()
 	if corridor_hp.size() == plan_state.edge_hp.size():
 		plan_state.edge_hp = corridor_hp.duplicate()
-	plan_state.update(_types, module_hp, comms.online)
+	plan_state.update(_types, module_hp, comms.online, haz_elec, ShipHazards.locked_edges(hazards, haz_doors, plan_state.plan.edges.size()))
 
 
 ## A hit also wrecks corridors: a LINE from the impact, along the way it travelled, `reach` metres into the ship.
@@ -979,7 +1005,31 @@ func _update_report_spheres() -> void:
 			m.transparency = pulse
 
 
+## The bridge sets door `i` (ShipHazards.OPEN / CLOSED / LOCKED). Needs working communications. Returns true when it was done.
+func set_door(i: int, state: int) -> bool:
+	if not is_multiplayer_authority() or plan_state == null or not plan_state.comms_ok or i < 0 or i >= haz_doors.size():
+		return false
+	var d := haz_doors
+	d[i] = state
+	haz_doors = d
+	return true
+
+
+## A living crew member stands in module `mi` (role bonus: manned turret base, radar, engine room).
+func is_manned(mi: int) -> bool:
+	return hazards.manned(self, mi)
+
+
+## 1.0, or 1 + Data.ROLE_BONUS when somebody stands in module `mi` (only where a role makes sense).
+func role_bonus(mi: int) -> float:
+	if not is_multiplayer_authority() or not crew.active():
+		return 1.0
+	return 1.0 + Data.ROLE_BONUS if hazards.manned(self, mi) else 1.0
+
+
 func _process(dt: float) -> void:
+	if alive and plan_state != null and is_multiplayer_authority():
+		hazards.tick(self, dt)
 	if alive and plan_state != null and is_multiplayer_authority() and crew.tick(self, dt):
 		_die()                      # the last person on board is dead: the ship is lost
 	if plan_state != null and is_flown_by_me():
@@ -1184,6 +1234,14 @@ func _authority_step(dt: float) -> void:
 ## ORDER DELAY. Without communications the pilot's thruster orders must be WALKED to each engine room: thruster i obeys
 ## the command the pilot gave order_delay(i) seconds ago (PlanState.order_delay). With communications: no delay.
 func _delayed_throttles(thr: PackedFloat32Array, dt: float) -> PackedFloat32Array:
+	if plan_state != null and not plan_state.engine_rooms.is_empty():
+		var push := 1.0
+		for er in plan_state.engine_rooms:
+			if plan_state.is_working(er):
+				push = maxf(push, role_bonus(er))      # somebody in a working engine room: a little more push
+		if push > 1.0:
+			for ti in thr.size():
+				thr[ti] *= push
 	if plan_state != null and plan_state.engines_cut():
 		_cmd_hist.clear()
 		var none := thr.duplicate()

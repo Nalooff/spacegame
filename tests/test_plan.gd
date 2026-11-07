@@ -368,6 +368,7 @@ func _test_reports() -> void:
 	s.design_blob = ShipDesign.read_blob("res://ships/Dart.json")
 	add_child(s)
 	await _frames(6)
+	s.crew.members.clear()       # (with a crew, a report needs somebody near the damage: tests/test_crew.gd; here somebody is always there)
 	var thr := _first(s.design, ModuleCatalog.THRUSTER)
 	s.apply_damage(thr, 1e9)
 	await _frames(6)

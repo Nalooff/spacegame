@@ -119,6 +119,7 @@ func show_design(d: ShipDesign, can_edit: bool, live: Ship = null) -> void:
 	design = d
 	editable = can_edit
 	ship = live
+	tooltip_text = tr("Click a door to change it: open, closed, locked (needs communications). Closed doors stop fire and air, only locked doors stop the crew.") if live != null else ""
 	_adj = ModuleGraph.build(d).adj if live == null else live._graph.adj if live._graph != null else ModuleGraph.build(d).adj
 	rebuild()
 
@@ -787,6 +788,7 @@ func _layer_rooms(font: Font) -> void:
 				draw_string(font, _place_text(font, dt0, cp0 + Vector2(4, 14), 10), dt0, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.6))
 			elif delay == INF and ship.reports.known_state.reach[room] == INF:
 				draw_string(font, _place_text(font, tr("NO LINK"), cp0 + Vector2(-6, 14), 10), tr("NO LINK"), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.45, 0.2))
+	_draw_hazards()
 	# 4. junction marks
 	for ni in plan.nodes.size():
 		if not _node_visible(ni):
@@ -1213,7 +1215,15 @@ func _draw_hover_card(font: Font, mi: int) -> void:
 
 
 ## Hover animation: the module under the mouse grows, the others are pushed away from it (nearer ones farther).
+var _haz_t: float = 0.0
+
+
 func _process(dt: float) -> void:
+	if ship != null and view != View.ISO and is_visible_in_tree():
+		_haz_t += dt
+		if _haz_t > 0.2:
+			_haz_t = 0.0
+			queue_redraw()                      # fire, air and doors change all the time
 	if view != View.ISO or not is_visible_in_tree() or design == null:
 		return
 	var n := design.modules.size()
@@ -1321,6 +1331,90 @@ func _draw_doorway(dd: Dictionary, col: Color, width: float) -> void:
 
 
 ## A bulkhead door ON a corridor (placed with the Door tool): a bar across the tube with a seam in the middle.
+## Where hazard door `di` is on the screen (Vector2.INF when it is not on this deck).
+func _hazard_door_pos(di: int) -> Vector2:
+	var d: Dictionary = ship.hazards.doors[di]
+	if int(d["node"]) >= 0:
+		return _node_screen(int(d["node"])) if _node_visible(int(d["node"])) else Vector2.INF
+	var ei: int = d["edges"][0]
+	var e: Dictionary = plan.edges[ei]
+	if not _node_visible(e["a"]) or not _node_visible(e["b"]):
+		return Vector2.INF
+	return _corridor_point(ei, float(d["t"]))["pos"]
+
+
+## FIRE, THIN AIR and ELECTRICAL FAULTS tint the modules; every door shows its state (click it to change: needs communications).
+func _draw_hazards() -> void:
+	if ship == null or ship.hazards == null or not ship.hazards.is_built() or ship.haz_air.size() != ship.hazards.n:
+		return
+	var font := ThemeDB.fallback_font
+	var pulse := 0.6 + 0.4 * sin(Time.get_ticks_msec() * 0.008)
+	for mi in ship.hazards.n:
+		if ship.hazards.holds[mi] == 0 or (view == View.DECK and _mod_layer(mi) != deck):
+			continue
+		var f: float = ship.haz_fire[mi]
+		var air: float = ship.haz_air[mi]
+		var el: float = ship.haz_elec[mi]
+		if f < 0.03 and air > 0.8 and el <= 0.0:
+			continue
+		var poly := _screen_poly(mi)
+		if poly.size() < 3:
+			continue
+		if air <= 0.8:
+			draw_colored_polygon(poly, Color(0.45, 0.35, 1.0, (0.8 - air) * 0.55))
+		if f >= 0.03:
+			draw_colored_polygon(poly, Color(1.0, 0.45, 0.1, (0.15 + 0.45 * f) * pulse))
+		var c := _centroid(poly)
+		var tag := ""
+		if f >= 0.03:
+			tag += tr("FIRE") + " "
+		if air < 0.5:
+			tag += tr("NO AIR") if air < 0.2 else tr("THIN AIR")
+			tag += " "
+		if el > 0.0:
+			tag += tr("SHORT")
+		draw_string(font, c + Vector2(-26, 26), tag.strip_edges(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.75, 0.3))
+	for di in ship.hazards.doors.size():
+		var p := _hazard_door_pos(di)
+		if p == Vector2.INF:
+			continue
+		var st: int = ship.haz_doors[di] if di < ship.haz_doors.size() else 0
+		var col := Color(0.4, 0.9, 0.5)
+		if st == ShipHazards.CLOSED or st == ShipHazards.AUTO:
+			col = Color(1.0, 0.75, 0.2)
+		elif st == ShipHazards.LOCKED:
+			col = Color(1.0, 0.3, 0.25)
+		var r := Rect2(p - Vector2(4, 4), Vector2(8, 8))
+		if st == ShipHazards.OPEN:
+			draw_rect(r, col, false, 1.5)
+		else:
+			draw_rect(r, col, true)
+			if st == ShipHazards.LOCKED:
+				draw_line(r.position, r.end, _fill, 1.5)
+				draw_line(Vector2(r.position.x, r.end.y), Vector2(r.end.x, r.position.y), _fill, 1.5)
+
+
+## Click on a door in the live plan: open -> closed -> locked -> open.
+func _hazard_door_click(p: Vector2) -> bool:
+	if ship == null or ship.hazards == null or not ship.hazards.is_built() or view != View.DECK:
+		return false
+	var best := 11.0
+	var which := -1
+	for di in ship.hazards.doors.size():
+		var dp := _hazard_door_pos(di)
+		if dp != Vector2.INF and dp.distance_to(p) < best:
+			best = dp.distance_to(p)
+			which = di
+	if which < 0:
+		return false
+	var st: int = ship.haz_doors[which]
+	var nxt := ShipHazards.CLOSED if st == ShipHazards.OPEN or st == ShipHazards.AUTO else (ShipHazards.LOCKED if st == ShipHazards.CLOSED else ShipHazards.OPEN)
+	if not ship.set_door(which, nxt):
+		hint.emit("Doors answer only while the communications work.")
+	queue_redraw()
+	return true
+
+
 func _draw_corridor_door(pos: Vector2, dir: Vector2, col: Color) -> void:
 	var half := _tube() * 0.5 + 3.0
 	var n := dir.orthogonal()
@@ -1482,6 +1576,10 @@ func _gui_input(event: InputEvent) -> void:
 		_mouse = (event as InputEventMouseMotion).position
 		if _from >= 0 or _has_free_start or tool == Tool.DRAW:
 			queue_redraw()                                # the highlight of what a click would link to follows the mouse
+	if not editable and ship != null and event is InputEventMouseButton and event.pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		if _hazard_door_click((event as InputEventMouseButton).position):
+			accept_event()
+			return
 	if not editable or tool == Tool.VIEW or design == null or plan == null:
 		return
 	if event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:

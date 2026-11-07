@@ -37,7 +37,7 @@ func _init(p: ShipPlan) -> void:
 
 
 ## `types`: module type names. `hp`: Ship.module_hp. Recomputes `work` and `reach`.
-func update(types: PackedStringArray, hp: PackedFloat32Array, comms: bool) -> void:
+func update(types: PackedStringArray, hp: PackedFloat32Array, comms: bool, elec: PackedFloat32Array = PackedFloat32Array(), locked: PackedByteArray = PackedByteArray()) -> void:
 	comms_ok = comms
 	var n := types.size()
 	work.resize(n)
@@ -49,7 +49,7 @@ func update(types: PackedStringArray, hp: PackedFloat32Array, comms: bool) -> vo
 	for ei in plan.edges.size():
 		var m: int = plan.edges[ei]["module"]
 		var open := ei < edge_hp.size() and edge_hp[ei] > 0.0
-		ok[ei] = 1 if open and (m < 0 or (m < n and hp[m] > 0.0)) else 0
+		ok[ei] = 1 if open and (m < 0 or (m < n and hp[m] > 0.0)) and not (ei < locked.size() and locked[ei] != 0) else 0
 	ok_edges = ok
 	var sources := PackedInt32Array()
 	for r in plan.rooms:
@@ -71,6 +71,8 @@ func update(types: PackedStringArray, hp: PackedFloat32Array, comms: bool) -> vo
 		is_room[mi] = 1 if plan.rooms.has(mi) else 0
 		if not alive_hp or t == ModuleCatalog.LOOSE:
 			work[mi] = 0
+		elif mi < elec.size() and elec[mi] > 0.0 and t != ModuleCatalog.COMMANDER:
+			work[mi] = 0               # electrical fault: dark until cleared
 		elif t == ModuleCatalog.COMMANDER or t == ModuleCatalog.ANTENNA or is_room[mi] == 0:
 			work[mi] = 1
 		else:

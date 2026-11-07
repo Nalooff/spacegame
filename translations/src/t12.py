@@ -1,0 +1,8 @@
+T = {
+"FIRE": ("FEU", "FEUER", "FUEGO", "ПОЖАР", "火灾", "火災"),
+"NO AIR": ("SANS AIR", "KEINE LUFT", "SIN AIRE", "НЕТ ВОЗДУХА", "无空气", "空気なし"),
+"THIN AIR": ("AIR RARE", "DÜNNE LUFT", "POCO AIRE", "МАЛО ВОЗДУХА", "空气稀薄", "空気が薄い"),
+"SHORT": ("COURT-CIRCUIT", "KURZSCHLUSS", "CORTOCIRCUITO", "ЗАМЫКАНИЕ", "短路", "ショート"),
+"Doors answer only while the communications work.": ("Les portes ne répondent que si les communications fonctionnent.", "Türen reagieren nur, solange die Kommunikation funktioniert.", "Las puertas solo responden mientras funcionan las comunicaciones.", "Двери отвечают, только пока работает связь.", "只有通讯正常时门才会响应。", "通信が生きている間だけドアは反応します。"),
+"Click a door to change it: open, closed, locked (needs communications). Closed doors stop fire and air, only locked doors stop the crew.": ("Cliquez sur une porte pour la changer : ouverte, fermée, verrouillée (communications requises). Les portes fermées arrêtent le feu et l'air, seules les portes verrouillées arrêtent l'équipage.", "Tür anklicken zum Ändern: offen, geschlossen, verriegelt (Kommunikation nötig). Geschlossene Türen halten Feuer und Luft auf, nur verriegelte Türen halten die Besatzung auf.", "Haz clic en una puerta para cambiarla: abierta, cerrada, bloqueada (requiere comunicaciones). Las puertas cerradas frenan el fuego y el aire; solo las bloqueadas frenan a la tripulación.", "Щёлкните по двери, чтобы изменить: открыта, закрыта, заблокирована (нужна связь). Закрытые двери задерживают огонь и воздух, экипаж останавливают только заблокированные.", "点击门可切换：打开、关闭、锁定（需要通讯）。关闭的门可阻挡火和空气，只有锁定的门才能挡住船员。", "ドアをクリックして切り替え：開・閉・施錠（通信が必要）。閉じたドアは火と空気を止め、施錠したドアだけが乗員を止めます。"),
+}
