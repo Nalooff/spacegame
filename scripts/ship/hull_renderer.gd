@@ -138,13 +138,35 @@ func add_pivot(mi: int, pivot: Vector3) -> Node3D:
 	return n
 
 
+var _rest_rot: Dictionary = {}               ## barrel module -> [Quaternion, centre]: its mesh is turned to the direction the designer chose
+
+
+## Turn the mesh of barrel `mi` by `q` about its own centre `c` (so it points where it fires, but stays where it was built).
+func set_rest_rotation(mi: int, q: Quaternion, c: Vector3) -> void:
+	_rest_rot[mi] = [q, c]
+	var pivot: Node3D = _pivots.get(mi)
+	if pivot != null:
+		for n in pivot.get_children():
+			_apply_rest(mi, n as Node3D, pivot)
+
+
+func _apply_rest(mi: int, node: Node3D, pivot: Node3D) -> void:
+	var r: Array = _rest_rot.get(mi, [])
+	if r.is_empty():
+		node.position = -pivot.position
+		return
+	var q: Quaternion = r[0]
+	var c: Vector3 = r[1]
+	node.transform = Transform3D(Basis(q), (c - q * c) - pivot.position)
+
+
 func _place(mi: int, node: MeshInstance3D) -> void:
 	var pivot: Node3D = _pivots.get(mi)
 	if pivot == null:
 		add_child(node)
 	else:
 		pivot.add_child(node)
-		node.position = -pivot.position      # mesh vertices are in ship space, the pivot sits at the swivel point
+		_apply_rest(mi, node, pivot)      # mesh vertices are in ship space, the pivot sits at the swivel point
 
 
 func attach(d: ShipDesign, prepared: Array) -> void:
@@ -180,6 +202,11 @@ func _set_mark(mat: ShaderMaterial, d: ShipDesign, mi: int) -> void:
 			col = Color(1.0, 0.55, 0.1)
 		ModuleCatalog.BARREL:
 			axis = d.barrel_dir(mi)
+			var tb := d.turret_of(mi)
+			if tb >= 0 and float(d.extra(mi, "aim_set")) > 0.5:      # the mesh itself is turned to the chosen direction (set_rest_rotation)
+				var modelled := d.module_centroid(mi) - d.module_centroid(tb)
+				if modelled.length() > 0.1:
+					axis = modelled.normalized()
 			col = Color(1.0, 0.15, 0.1)
 		ModuleCatalog.TURRET:
 			axis = (d.modules[mi]["dir"] as Vector3).normalized()

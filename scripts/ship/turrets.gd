@@ -249,6 +249,22 @@ func average_bullet_range() -> float:
 	return sum / n if n > 0 else 0.0
 
 
+## Where the guns in use point right now, as a point `dist` metres out along the mean barrel direction (ZERO = no gun).
+func current_aim_point(dist: float) -> Vector3:
+	var sum := Vector3.ZERO
+	var org := Vector3.ZERO
+	var n := 0
+	for r in rigs:
+		if is_usable(r) and in_use(r):
+			var m := muzzle(r)
+			sum += m[1] as Vector3
+			org += m[0] as Vector3
+			n += 1
+	if n == 0:
+		return Vector3.ZERO
+	return ship.global_transform * (org / n) + (ship.global_transform.basis * (sum / n)).normalized() * dist
+
+
 func in_use(r: Rig) -> bool:
 	if filter_base == -3:
 		return filter_set.has(r.base)

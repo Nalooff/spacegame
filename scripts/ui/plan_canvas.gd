@@ -1159,6 +1159,23 @@ func _draw_iso(font: Font) -> void:
 		if room2 and r2 > 0.0:
 			_room_icon(t2, cs + Vector2(0, -10), Color(col2, 0.9))
 		draw_string(font, cs + Vector2(-13, 10), ROOM_CODES.get(t2, "???"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col2 if r2 > 0.0 else Color(0.8, 0.8, 0.85))
+	# the CREW: one dot per living person (green = idle, yellow = walking, blue = repairing), moving through the corridors
+	if show_rooms and ship != null and is_instance_valid(ship) and ship.crew.active():
+		for m in ship.crew.members:
+			if m["hp"] <= 0.0:
+				continue
+			var cm := ship.crew.module_of(ship, m)
+			if cm < 0 or cm >= offs.size() or not order.has(cm):
+				continue
+			var cq := _iso((m["pos"] as Vector3) + offs[cm] + _iso_push.get(cm, Vector3.ZERO)) * sc + org
+			var cc := Color(0.3, 0.9, 0.4)
+			if m["task"] == "walk":
+				cc = Color(1.0, 0.85, 0.2)
+			elif m["task"] == "work":
+				cc = Color(0.3, 0.6, 1.0)
+			draw_circle(cq, 5.0, Color(_ink, 0.9))
+			draw_circle(cq, 3.5, cc)
+			draw_string(font, cq + Vector2(6, 4), "#%d" % m["id"], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(_ink, 0.8))
 	# extra layers added by other scripts (they draw in the same projection)
 	for l in layers:
 		if l["enabled"] and (l["iso"] as Callable).is_valid():
@@ -1232,7 +1249,7 @@ func _process(dt: float) -> void:
 			moving = true
 		_iso_push[mi] = nxt
 		_iso_grow[mi] = ng
-	if moving:
+	if moving or (ship != null and is_instance_valid(ship) and ship.crew.active()):      # the crew walks
 		queue_redraw()
 
 

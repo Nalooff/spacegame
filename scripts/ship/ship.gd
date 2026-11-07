@@ -925,6 +925,11 @@ func _finish_hull(data: Dictionary, chunks: Array = []) -> void:
 	turrets.setup(self)
 	for r in turrets.rigs:
 		r.node = hull.add_pivot(r.barrel, r.pivot)     # the barrel meshes live in a pivot node that can swivel
+		if float(design.extra(r.barrel, "aim_set")) > 0.5:   # the designer chose another direction: the model points there too
+			var modelled := (design.module_centroid(r.barrel) - r.pivot).normalized()
+			var chosen := design.barrel_dir(r.barrel)
+			if modelled.length() > 0.5 and modelled.dot(chosen) < 0.9999:
+				hull.set_rest_rotation(r.barrel, Quaternion(modelled, chosen), design.module_centroid(r.barrel))
 	_configure_electricity()
 	_graph = data["graph"]
 	_build_plan()

@@ -74,6 +74,11 @@ func _draw() -> void:
 				draw_arc(lp, 9.0, 0.0, TAU, 24, lc, 2.0)
 				draw_circle(lp, 1.8, lc)
 				draw_dashed_line(p, lp, Color(lc, 0.5), 1.0, 5.0)
+				# where the guns REALLY point right now (they turn slowly): a small white square at the target's distance
+				var gp := ship.turrets.current_aim_point(float(c["dist"]))
+				if gp != Vector3.ZERO and not cam.is_position_behind(gp):
+					var gs := cam.unproject_position(gp)
+					draw_rect(Rect2(gs - Vector2(4, 4), Vector2(8, 8)), Color(1, 1, 1, 0.9), false, 1.5)
 				draw_string(font, lp + Vector2(12, 14), tr("LEAD") + ("  " + tr("out of range") if lc != LOCKED else ""), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, lc)
 
 

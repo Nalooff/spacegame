@@ -348,6 +348,16 @@ func _build_paint_section() -> void:
 	sc.tooltip_text = tr("Size of the stripes / squares (metres)")
 	sc.value_changed.connect(func(v: float): builder.paint_scale = v)
 	box.add_child(sc)
+	var preview := PaintPreview.new()
+	preview.name = "PaintPreview"
+	box.add_child(preview)
+	var upd := func():
+		preview.set_paint(builder.paint_c1, builder.paint_c2, builder.paint_pattern, builder.paint_scale)
+	c1.color_changed.connect(func(_c: Color): upd.call())
+	c2.color_changed.connect(func(_c: Color): upd.call())
+	pat.item_selected.connect(func(_i: int): upd.call())
+	sc.value_changed.connect(func(_v: float): upd.call())
+	upd.call()
 	var btns := HBoxContainer.new()
 	box.add_child(btns)
 	var apply := Button.new()
