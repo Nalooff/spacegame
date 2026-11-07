@@ -225,3 +225,6 @@ Damage inside the ship is not only lost health:
 - **Electrical faults** can follow a hit: the module does nothing until the fault clears (25 s, much faster with somebody in the room).
 - **Doors**: every wall doorway and every corridor door you placed in the builder. In the live plan, click a door: open -> closed -> locked. Closed doors stop fire and air, crew can still walk through them. **Locked** doors stop the crew too. Doors next to a hit, a fire or thin air close **by themselves** and open again when it is safe. Changing doors needs working communications.
 - **Roles**: a turret base, radar or engine room with somebody standing in it works 15% better (reload, range, thrust). Nobody is assigned; it is where the crew happens to be (or where you send them).
+
+## License
+MIT, see `LICENSE`.
