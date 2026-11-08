@@ -929,9 +929,20 @@ func velocity_at(frame: int, p: Vector3) -> Vector3:
 	return _hist_vel[slot] + _hist_ang[slot].cross(p - global_position)
 
 
+var _hp_status: PackedByteArray = PackedByteArray()
+
+
+## Mass, centre of mass, thrusters and what works only depend on WHICH modules are gone / dead / alive, not on how hurt they are:
+## recomputing all that for every bullet (about 2 ms each) was the main cost of a big fight (found with tests/bench_hits.gd).
 func _on_hp_changed() -> void:
 	_on_hp_changed_shapes_only()
-	_refresh_props()    # lost modules: less mass, a new centre of mass, fewer thrusters
+	var status := PackedByteArray()
+	status.resize(module_hp.size())
+	for i in status.size():
+		status[i] = 0 if module_hp[i] < 0.0 else (1 if module_hp[i] <= 0.0 else 2)
+	if status != _hp_status:
+		_hp_status = status
+		_refresh_props()    # lost modules: less mass, a new centre of mass, fewer thrusters
 	_mesh_dirty = true
 
 

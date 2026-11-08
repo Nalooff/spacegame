@@ -95,8 +95,12 @@ func _physics_process(dt: float) -> void:
 		deactivate()
 
 
-## Explosion: every other module of the hit ship whose centre is within `splash` metres takes damage that falls off with distance.
+## Explosion: the other modules of the hit ship whose centre is within `splash` metres share ONE extra helping of damage (the
+## shell's damage), the nearer the more. (Before, every module in the radius took a full falloff share: on a compact ship a flak
+## shell did ten times its damage - found with tests/duel_sim.gd.)
 func _explode(body: Ship, hit_module: int, at: Vector3) -> void:
+	var near: Array[Vector2] = []                 # (module, weight)
+	var total := 0.0
 	for mi in body.design.modules.size():
 		if mi == hit_module or mi >= body.module_hp.size() or body.module_hp[mi] < 0.0:
 			continue
@@ -104,4 +108,8 @@ func _explode(body: Ship, hit_module: int, at: Vector3) -> void:
 			continue
 		var d := at.distance_to(body.global_transform * body.design.module_centroid(mi))
 		if d < splash:
-			body.apply_hit(DamageHit.weapon(&"explosive", mi, damage * (1.0 - d / splash) * 0.6, at, shooter, (at - body.global_position).normalized()))
+			var w := 1.0 - d / splash
+			near.append(Vector2(mi, w))
+			total += w
+	for e in near:
+		body.apply_hit(DamageHit.weapon(&"explosive", int(e.x), damage * e.y / maxf(total, 1.0), at, shooter, (at - body.global_position).normalized()))
