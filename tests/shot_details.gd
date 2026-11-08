@@ -3,8 +3,9 @@ extends Node
 func _ready() -> void:
 	var d := ShipDesign.load_file(OS.get_environment("SHOT_SHIP") if OS.get_environment("SHOT_SHIP") != "" else "res://ships/Dart.json")
 	var t0 := Time.get_ticks_msec()
-	var n := AutoPaint.apply(d, {"style": int(OS.get_environment("STYLE")) if OS.get_environment("STYLE") != "" else 0})
-	print("auto paint: ", n, " details in ", Time.get_ticks_msec() - t0, " ms")
+	if OS.get_environment("AUTO") != "0":
+		var n := AutoPaint.apply(d, {"style": int(OS.get_environment("STYLE")) if OS.get_environment("STYLE") != "" else 0})
+		print("auto paint: ", n, " details in ", Time.get_ticks_msec() - t0, " ms")
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.background_mode = Environment.BG_COLOR
@@ -26,7 +27,16 @@ func _ready() -> void:
 	for v in d.vertices:
 		c += v
 	c /= maxf(d.vertices.size(), 1)
-	cam.position = c + Vector3(1, 0.6, 1.2).normalized() * d.extent_length() * 0.9
+	var dir := Vector3(1, 0.6, 1.2)
+	if OS.get_environment("CAMDIR") != "":
+		var p := OS.get_environment("CAMDIR").split(",")
+		dir = Vector3(float(p[0]), float(p[1]), float(p[2]))
+	var f := float(OS.get_environment("CAMF")) if OS.get_environment("CAMF") != "" else 0.9
+	if OS.get_environment("CAMAT") != "":
+		var q := OS.get_environment("CAMAT").split(",")
+		c = Vector3(float(q[0]), float(q[1]), float(q[2]))
+	cam.far = 20000.0
+	cam.position = c + dir.normalized() * d.extent_length() * f
 	cam.look_at(c)
 	await get_tree().create_timer(1.5).timeout
 	get_viewport().get_texture().get_image().save_png(OS.get_environment("SHOT_OUT"))

@@ -1256,10 +1256,11 @@ func detail_click(mouse: Vector2, shift: bool) -> bool:
 		return true
 	checkpoint("detail")
 	var made := _make_detail(hit["p"], hit["n"], hit["m"])
+	_fit_one(made)
 	if detail_mirror and absf((hit["p"] as Vector3).x) > 0.05:
 		var q: Vector3 = hit["p"]
 		var nn: Vector3 = hit["n"]
-		_make_detail(Vector3(-q.x, q.y, q.z), Vector3(-nn.x, nn.y, nn.z), hit["m"], true)
+		_fit_one(_make_detail(Vector3(-q.x, q.y, q.z), Vector3(-nn.x, nn.y, nn.z), hit["m"], true))
 	detail_sel = made
 	detail_selection_changed.emit()
 	on_details_changed()
@@ -1277,6 +1278,30 @@ func _make_detail(p: Vector3, n: Vector3, m: int, mirrored: bool = false) -> int
 	return design.add_detail(dt)
 
 
+## Shrinks detail `i` until it lies completely on the surface under it (a decal never hangs over an edge).
+func _fit_one(i: int) -> void:
+	if i < 0 or i >= design.details.size():
+		return
+	var dt: Dictionary = design.details[i]
+	var m: int = dt["m"]
+	if m < 0 or m >= design.modules.size() or DetailCatalog.is_solid(dt["k"]):
+		return
+	var w0: float = dt["w"]
+	var tf := PackedInt32Array()
+	if DetailFit.fit(dt, design.module_tris(m, tf)) and dt["w"] < w0 * 0.99:
+		say("Shrunk to fit the surface so it does not hang over the edge.")
+
+
+## "Fit all": shrink every detail that overhangs its surface (removes the ones that are not on a surface at all).
+func fit_all_details() -> void:
+	checkpoint()
+	var n := DetailFit.fit_all(design, false, false)
+	detail_sel = -1
+	detail_selection_changed.emit()
+	on_details_changed()
+	say("%d details were adjusted to the surface." % n)
+
+
 func on_details_changed() -> void:
 	view.redraw_details(self)
 	BusEvent.builder_design_changed.emit()
@@ -1290,6 +1315,8 @@ func edit_detail(key: String, value: Variant) -> void:
 	var dt: Dictionary = design.details[detail_sel]
 	dt[key] = value
 	design.details[detail_sel] = _manual(DetailCatalog.clean(dt))
+	if key == "a":
+		_fit_one(detail_sel)
 	design.detail_rev += 1
 	on_details_changed()
 
@@ -2117,6 +2144,7 @@ func resize_detail(factor: float) -> void:
 	dt["h"] = info[3] * unit
 	dt["d"] = info[4] * unit
 	design.details[detail_sel] = _manual(DetailCatalog.clean(dt))
+	_fit_one(detail_sel)
 	design.detail_rev += 1
 	on_details_changed()
 

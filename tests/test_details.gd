@@ -50,6 +50,32 @@ func _ready() -> void:
 	check(g.finish_value("panels") > 0.1 and g.finish_value("rivets") > 0.5, "auto paint sets plate lines and rivets")
 	g.clear_details(true)
 	check(g.details.size() == 1, "'Clear automatic' removes only auto details")
+	# decals never hang over the edge of their surface
+	var hang := 0
+	for x in g.details:
+		var m: int = x["m"]
+		if m < 0 or DetailCatalog.is_solid(x["k"]):
+			continue
+		var tf := PackedInt32Array()
+		var probe := x.duplicate()
+		if not DetailFit.fit(probe, g.module_tris(m, tf)) or probe["w"] < x["w"] * 0.999 or probe["h"] < x["h"] * 0.999:
+			hang += 1
+	check(hang == 0, "every auto detail lies fully on its surface (%d overhang)" % hang)
+	var big := DetailCatalog.make(DetailCatalog.TEXT, g.module_centroid(0), Vector3.UP, 1.0)
+	big["w"] = 5000.0
+	big["h"] = 3000.0
+	big["m"] = 0
+	var tf0 := PackedInt32Array()
+	var tris0 := g.module_tris(0, tf0)
+	var topn := Vector3.UP
+	var hit_p := Vector3.ZERO
+	for i in range(0, tris0.size(), 3):
+		var nn := (tris0[i + 1] - tris0[i]).cross(tris0[i + 2] - tris0[i]).normalized()
+		if nn.dot(topn) > 0.99:
+			hit_p = (tris0[i] + tris0[i + 1] + tris0[i + 2]) / 3.0
+			break
+	big["p"] = hit_p
+	check(not DetailFit.fit(big, tris0) or big["w"] < 5000.0, "a huge text is shrunk or refused, not left hanging off the ship")
 	# builder: place, select, edit, delete, undo
 	var b: ShipBuilder = load("res://scenes/ship_builder.tscn").instantiate()
 	add_child(b)

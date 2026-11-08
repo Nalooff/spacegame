@@ -578,6 +578,12 @@ func _build_detail_section() -> void:
 	clr2.text = tr("Clear all")
 	clr2.pressed.connect(func(): builder.clear_all_details(false))
 	brow.add_child(clr2)
+	var fitb := Button.new()
+	fitb.name = "FitDetails"
+	fitb.text = tr("Fit all to surface")
+	fitb.tooltip_text = tr("Shrinks every detail that hangs over the edge of its surface, like a decal.")
+	fitb.pressed.connect(func(): builder.fit_all_details())
+	box.add_child(fitb)
 	var help := Label.new()
 	help.text = tr("Click a detail to select it, Shift+click on the hull moves it, Delete removes it. Details can go anywhere, even across modules.")
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

@@ -70,6 +70,8 @@ static func apply(d: ShipDesign, options: Dictionary = {}) -> int:
 	_surface_details(d, ctx, st, rng, u, density, bool(o["greebles"]))
 	if float(o["wear"]) > 0.02:
 		_wear(d, ctx, st, rng, u, float(o["wear"]))
+	DetailFit.fit_all(d, true, true)           # nothing may hang over an edge: decals are stuck to the hull
+	d.detail_rev += 1
 	added = d.details.size() - before
 	return added
 
@@ -112,6 +114,9 @@ static func _recolor(d: ShipDesign, st: Array, rng: RandomNumberGenerator) -> vo
 				if rng.randf() < 0.12:
 					c2 = acc
 					pat = 4
+		var ext := d.module_extent(mi)
+		if maxf(ext.x, maxf(ext.y, ext.z)) > u * 40.0 and t != ModuleCatalog.THRUSTER:
+			pat = 0                     # a patterned giant block looks like a flag: patterns only on small modules
 		d.set_paint(mi, c1, c2, pat, maxf(u * 2.0, 0.5))
 
 
