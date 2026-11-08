@@ -112,4 +112,6 @@ func _explode(body: Ship, hit_module: int, at: Vector3) -> void:
 			near.append(Vector2(mi, w))
 			total += w
 	for e in near:
-		body.apply_hit(DamageHit.weapon(&"explosive", int(e.x), damage * e.y / maxf(total, 1.0), at, shooter, (at - body.global_position).normalized()))
+		var h := DamageHit.weapon(&"explosive", int(e.x), damage * e.y / maxf(total, 1.0), at, shooter, (at - body.global_position).normalized())
+		h.dents = false                  # the shell itself dents; its blast only hurts (a dent per module per shell was the slowest thing in the game)
+		body.apply_hit(h)

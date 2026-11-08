@@ -455,7 +455,7 @@ func apply_hit(hit: DamageHit) -> void:
 	if result.hp_damage > 0.0 and module_hp[hit.module] > 0.0:
 		_note_damage(hit, minf(result.hp_damage, module_hp[hit.module]))
 		_remove_module_hp(hit.module, result.hp_damage)
-	if result.dent_depth > 0.005 and alive and design.modules[hit.module]["type"] != ModuleCatalog.BARREL:
+	if hit.dents and result.dent_depth > 0.005 and alive and design.modules[hit.module]["type"] != ModuleCatalog.BARREL:
 		_dent(hit.module, hit.point, result.dent_direction, result.dent_depth, result.dent_radius)
 	_damage_corridors(hit, result)
 	crew.on_hit(self, hit.module, result.hp_damage)

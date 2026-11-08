@@ -246,3 +246,6 @@ The host picks the **game mode** in the lobby (under the team picker): *Free for
 ## Dedicated server (optional) and the duel simulator
 - `godot --headless --path . -- --server "--name=My server" --password=secret` runs a server with no player of its own; see `docs/SERVER.md` (also: free ways to keep one running). Normal hosting in the menus is unchanged.
 - `godot --headless --path . res://tests/duel_sim.tscn -- seconds=40 ranges=150,400,800 types=cannon,railgun` makes identical ships with different bullet types duel and prints win tables: use it when tuning `ModulePresets`.
+
+### Bullet balance (tests/duel_sim.gd, 8 Nov 2026)
+Rough damage per second per m3 of barrel now: cannon 450, autocannon 450, railgun 600 (long range, pierces 3), armor-piercing 330 (pierces 2, ignores armor), scatter gun 400 per pellet-volley (best under ~150 m, useless beyond 300 m), flak 290 + one extra helping of splash damage. In 25 s duels at 300 m the types landed 3-9% of the enemy ship's health; the short-range scatter gun wins at 100 m. Re-run the simulator after changing any preset. Performance: hits used to recompute mass and function every time (2 ms each), a blast dented every module around it; both fixed (0.03 ms per hit).

@@ -12,7 +12,7 @@ func _ready() -> void:
 	for id in ["cannon", "autocannon", "shotgun", "flak", "railgun"]:
 		check(not ModulePresets.preset(ModuleCatalog.BARREL, id).is_empty(), "preset %s exists" % id)
 	check(ModulePresets.stat_default("pellets") == 1.0 and ModulePresets.stat_default("lifetime") == 4.0, "defaults for stats an old ship does not have")
-	check(int(ModulePresets.preset(ModuleCatalog.BARREL, "shotgun")["stats"]["pellets"]) == 8, "the scatter gun fires 8 pellets")
+	check(int(ModulePresets.preset(ModuleCatalog.BARREL, "shotgun")["stats"]["pellets"]) == 8, "the scatter gun fires 10 pellets")
 	var d := ShipDesign.from_blob(ShipDesign.read_blob("res://ships/Brick.json"))
 	var bar := -1
 	for mi in d.modules.size():
