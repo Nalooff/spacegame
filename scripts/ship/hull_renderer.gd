@@ -25,6 +25,7 @@ var _mods: Array = []
 var _queue: Array = []     # [module, chunk index] waiting for its mesh to be created
 var _health: PackedFloat32Array = PackedFloat32Array()
 var _pivots: Dictionary = {}        # module -> Node3D its chunk meshes live in (turret barrels swivel as a whole)
+var _details: DetailRenderer = null
 var _scratch := PackedInt32Array()   # vertex id -> local index while building one chunk (all -1 between uses)
 
 
@@ -180,6 +181,7 @@ func attach(d: ShipDesign, prepared: Array) -> void:
 		mat.set_shader_parameter("accent_color", d.module_color2(mi))
 		mat.set_shader_parameter("pattern", int(d.extra(mi, "pat")) if float(d.extra(mi, "painted")) > 0.5 else 0)
 		mat.set_shader_parameter("pattern_scale", float(d.extra(mi, "pscale")))
+		_set_finish(mat, d)
 		_set_mark(mat, d, mi)
 		var cell_chunk: Dictionary = info.get("cells", {})
 		for ci in info["chunk_faces"].size():
@@ -187,7 +189,25 @@ func attach(d: ShipDesign, prepared: Array) -> void:
 			_queue.append([mi, ci])
 		_mods.append({"chunks": chunks, "face_chunk": info["face_chunk"], "lo": info["lo"], "size": info["size"],
 			"dims": info["dims"], "cells": cell_chunk, "material": mat})
+	if _details != null:
+		_details.queue_free()
+	_details = DetailRenderer.new()
+	_details.name = "Details"
+	add_child(_details)
+	_details.setup(d)
 	set_process(true)
+
+
+## The ship-wide finish (metal, gloss, wear, plate lines): same values in every module's material.
+func _set_finish(mat: ShaderMaterial, d: ShipDesign) -> void:
+	mat.set_shader_parameter("metal", d.finish_value("metal"))
+	mat.set_shader_parameter("rough", d.finish_value("rough"))
+	mat.set_shader_parameter("gloss", d.finish_value("gloss"))
+	mat.set_shader_parameter("wear", d.finish_value("wear"))
+	mat.set_shader_parameter("panels", d.finish_value("panels"))
+	mat.set_shader_parameter("rivets", d.finish_value("rivets"))
+	mat.set_shader_parameter("panel_size", d.panel_size())
+	mat.set_shader_parameter("ship_size", d.extent_length())
 
 
 ## The glowing end of a module that points somewhere: thruster = where the flame comes out, barrel = the muzzle.
@@ -231,6 +251,8 @@ func _set_mark(mat: ShaderMaterial, d: ShipDesign, mi: int) -> void:
 func flush() -> void:
 	while not _queue.is_empty():
 		_make_next()
+	if _details != null:
+		_details.flush()
 
 
 func _process(_dt: float) -> void:
@@ -262,6 +284,8 @@ func _make_next() -> void:
 ## ratios[i] = module health 0..1. A destroyed module (0) disappears.
 func set_health(ratios: PackedFloat32Array) -> void:
 	_health = ratios
+	if _details != null:
+		_details.set_states(ratios)
 	for mi in _mods.size():
 		var r := ratios[mi] if mi < ratios.size() else 1.0
 		(_mods[mi]["material"] as ShaderMaterial).set_shader_parameter("damage", 1.0 - clampf(r, 0.0, 1.0))

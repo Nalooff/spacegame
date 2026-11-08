@@ -50,6 +50,8 @@ var _mat_depth: ShaderMaterial
 var _mat_xray: ShaderMaterial
 var _ship_mat_solid: Material
 var _ship_mat_xray: StandardMaterial3D
+var _details: DetailRenderer = null
+var _details_key := ""
 var _tri_mesh: RayIndex = null      ## cached collision mesh of the visible modules (for "is this point hidden?")
 
 
@@ -99,8 +101,24 @@ func redraw(b: ShipBuilder) -> void:
 	ship_mesh.mesh = b.design.build_mesh(PackedFloat32Array(), highlighted, b.hidden_modules)
 	_tri_mesh = null
 	_apply_shading(b)
+	redraw_details(b)
 	redraw_dots(b)
 	_redraw_overlay(b)
+
+
+## The detail layer (windows, decals...) on top of the hull; rebuilt only when it changed.
+func redraw_details(b: ShipBuilder) -> void:
+	var key := "%d:%d:%d:%d" % [b.design.get_instance_id(), b.design.detail_rev, b.detail_sel, b.design.details.size()]
+	if key == _details_key and _details != null:
+		return
+	_details_key = key
+	if _details == null:
+		_details = DetailRenderer.new()
+		_details.name = "Details"
+		ship_mesh.add_child(_details)
+	_details.setup(b.design, b.detail_sel)
+	_details.flush()
+	_details.visible = b.shading != ShipBuilder.Shading.WIRE
 
 
 ## Solid / X-ray / Wireframe: which material the ship and the overlays use.

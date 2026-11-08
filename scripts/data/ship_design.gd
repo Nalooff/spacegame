@@ -37,6 +37,13 @@ var modules: Array[Dictionary] = []
 var plan: Dictionary = {}
 var reactor_scale: float = 1.0 # electricity output vs. recommended
 var gyro_scale: float = 1.0    # gyroscope torque vs. recommended
+## DETAIL layer (see DetailCatalog): small things stuck anywhere on the surface, independent of the modules.
+var details: Array[Dictionary] = []
+var detail_rev: int = 0        # bumps on every change of `details` / `finish` (views redraw when it moves)
+## Surface FINISH of the whole ship (hull.gdshader): metal / rough / gloss 0..1, wear 0..1 (grime, rust),
+## panels 0..1 (plate lines + rivets), panel_size metres (0 = automatic from the ship's size).
+var finish: Dictionary = {}
+const FINISH_DEFAULTS := {"metal": 0.3, "rough": 0.55, "gloss": 0.0, "wear": 0.0, "panels": 0.0, "panel_size": 0.0, "rivets": 0.0}
 
 
 # =====================================================================
@@ -85,6 +92,14 @@ func remove_module(mi: int) -> void:
 				id_map[i] = i - 1 if i > mi else i
 		plan = ShipPlan.remap_overrides(plan, id_map)
 	modules.remove_at(mi)
+	if not details.is_empty():
+		for dt in details:
+			var dm: int = dt["m"]
+			if dm == mi:
+				dt["m"] = -1
+			elif dm > mi:
+				dt["m"] = dm - 1
+		detail_rev += 1
 	for m in modules: # keep turret -> barrel and commander -> turret links valid
 		var c: Dictionary = m["cfg"]
 		if c.has("barrels"):
@@ -105,6 +120,100 @@ func remove_module(mi: int) -> void:
 ## Setting `key` of module `mi` (EXTRA_DEFAULTS when it was never set): turret arcs.
 func extra(mi: int, key: String) -> Variant:
 	return modules[mi].get(key, EXTRA_DEFAULTS[key])
+
+
+## ---- DETAIL / FINISH helpers
+func finish_value(key: String) -> float:
+	return float(finish.get(key, FINISH_DEFAULTS[key]))
+
+
+func set_finish(key: String, v: float) -> void:
+	finish[key] = v
+	detail_rev += 1
+
+
+## Metres of one hull plate: the chosen size, or a size that fits the ship (a 20 m fighter gets 0.5 m plates, a 2 km
+## dreadnought 16 m ones).
+func panel_size() -> float:
+	var s := finish_value("panel_size")
+	if s > 0.05:
+		return s
+	return clampf(extent_length() / 45.0, 0.5, 16.0)
+
+
+## Longest side of the ship's bounding box.
+func extent_length() -> float:
+	if vertices.is_empty():
+		return 10.0
+	var lo := vertices[0]
+	var hi := vertices[0]
+	for v in vertices:
+		lo = lo.min(v)
+		hi = hi.max(v)
+	var sz := hi - lo
+	return maxf(maxf(sz.x, maxf(sz.y, sz.z)), 1.0)
+
+
+func add_detail(dt: Dictionary) -> int:
+	if details.size() >= DetailCatalog.MAX_DETAILS:
+		return -1
+	details.append(dt)
+	detail_rev += 1
+	return details.size() - 1
+
+
+func remove_detail(i: int) -> void:
+	if i >= 0 and i < details.size():
+		details.remove_at(i)
+		detail_rev += 1
+
+
+## Removes every detail AutoPaint made (the player's own are kept), or all of them with `only_auto = false`.
+func clear_details(only_auto: bool = true) -> void:
+	var keep: Array[Dictionary] = []
+	for dt in details:
+		if only_auto and not bool(dt["auto"]):
+			keep.append(dt)
+	details = keep
+	detail_rev += 1
+
+
+func details_to_array() -> Array:
+	var out: Array = []
+	for dt in details:
+		out.append(DetailCatalog.pack(dt))
+	return out
+
+
+func details_from_array(list: Variant) -> void:
+	details.clear()
+	if typeof(list) != TYPE_ARRAY:
+		return
+	for a in list:
+		if typeof(a) != TYPE_ARRAY or details.size() >= DetailCatalog.MAX_DETAILS:
+			continue
+		var dt := DetailCatalog.unpack(a)
+		if not dt.is_empty():
+			details.append(dt)
+
+
+func finish_to_dict() -> Dictionary:
+	var out := {}
+	for key in FINISH_DEFAULTS:
+		if finish.has(key):
+			out[key] = snappedf(float(finish[key]), 0.001)
+	return out
+
+
+func finish_from_dict(src: Variant) -> void:
+	finish = {}
+	if typeof(src) != TYPE_DICTIONARY:
+		return
+	for key in FINISH_DEFAULTS:
+		if (src as Dictionary).has(key):
+			var v := float(src[key])
+			if is_finite(v):
+				finish[key] = clampf(v, 0.0, 64.0 if key == "panel_size" else 1.0)
 
 
 ## PAINT: colour of a module (its own paint, or the colour of its type). Patterns (see hull.gdshader): 0 solid, 1 stripes,
@@ -407,6 +516,12 @@ func extract(ids: PackedInt32Array) -> ShipDesign:
 		s.modules.append(entry)
 	if not plan.is_empty():
 		s.plan = ShipPlan.remap_overrides(plan, new_index)
+	s.finish = finish.duplicate()
+	for dt in details:
+		if int(dt["m"]) >= 0 and new_index.has(int(dt["m"])):
+			var c := dt.duplicate()
+			c["m"] = int(new_index[int(dt["m"])])
+			s.details.append(c)
 	return s
 
 
@@ -1126,6 +1241,10 @@ func to_dict() -> Dictionary:
 		"vertices": vs, "modules": ms}
 	if not plan.is_empty():
 		out["plan"] = plan.duplicate(true)
+	if not finish.is_empty():
+		out["finish"] = finish_to_dict()
+	if not details.is_empty():
+		out["details"] = details_to_array()
 	return out
 
 
@@ -1135,6 +1254,8 @@ static func from_dict(data: Dictionary) -> ShipDesign:
 	s.reactor_scale = float(data.get("reactor_scale", 1.0))
 	s.gyro_scale = float(data.get("gyro_scale", 1.0))
 	s.plan = _clean_plan(data.get("plan", {}))
+	s.finish_from_dict(data.get("finish", {}))
+	s.details_from_array(data.get("details", []))
 	for v in data.get("vertices", []):
 		s.vertices.append(Vector3(v[0], v[1], v[2]))
 	for m in data.get("modules", []):
@@ -1291,6 +1412,13 @@ func to_pretty_json() -> String:
 	out += ",\n".join(mblocks) + "\n\t]"
 	if d.has("plan"):
 		out += ",\n\t\"plan\": %s" % JSON.stringify(d["plan"])
+	if d.has("finish"):
+		out += ",\n\t\"finish\": %s" % JSON.stringify(d["finish"])
+	if d.has("details"):
+		var dl: Array[String] = []
+		for a in d["details"]:
+			dl.append("\t\t" + JSON.stringify(a))
+		out += ",\n\t\"details\": [\n" + ",\n".join(dl) + "\n\t]"
 	out += "\n}\n"
 	return out
 
@@ -1326,7 +1454,7 @@ func to_bytes() -> PackedByteArray:
 				packed[key] = m[key]
 		mods.append(packed)
 	var raw := var_to_bytes({"name": ship_name, "reactor_scale": reactor_scale, "gyro_scale": gyro_scale,
-		"vertices": vertices, "modules": mods, "plan": plan})
+		"vertices": vertices, "modules": mods, "plan": plan, "finish": finish_to_dict(), "details": details_to_array()})
 	var out := BINARY_MAGIC.to_utf8_buffer()
 	out.append_array(PackedByteArray([0, 0, 0, 0]))
 	out.encode_u32(4, raw.size())
@@ -1351,6 +1479,8 @@ static func from_bytes(blob: PackedByteArray) -> ShipDesign:
 	s.gyro_scale = float(data["gyro_scale"])
 	s.vertices = data["vertices"]
 	s.plan = _clean_plan(data.get("plan", {}))
+	s.finish_from_dict(data.get("finish", {}))
+	s.details_from_array(data.get("details", []))
 	for m in data["modules"]:
 		var fs := FaceSet.new()
 		fs.ids = m["ids"]
@@ -1372,16 +1502,21 @@ static func from_blob(blob: PackedByteArray) -> ShipDesign:
 	return from_bytes(blob) if is_binary(blob) else from_json(blob.get_string_from_utf8())
 
 
+## Too big for readable JSON (many vertices or details)?
+func is_big() -> bool:
+	return vertices.size() > PRETTY_JSON_MAX_VERTICES or details.size() > 1500
+
+
 ## Blob used on the network and in files: JSON text for small ships, binary for big ones.
 func to_blob() -> PackedByteArray:
-	if vertices.size() <= PRETTY_JSON_MAX_VERTICES:
+	if not is_big():
 		return to_json().to_utf8_buffer()
 	return to_bytes()
 
 
 ## Editor only (the game is started from the Godot editor): save into res://ships/ as a PREMADE ship.
 func save_premade() -> Error:
-	var big := vertices.size() > PRETTY_JSON_MAX_VERTICES
+	var big := is_big()
 	var path := "res://ships/" + ship_name.validate_filename() + (".ship" if big else ".json")
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
@@ -1395,7 +1530,7 @@ func save_premade() -> Error:
 
 func save_user() -> Error:
 	DirAccess.make_dir_recursive_absolute(Data.SAVED_SHIP_DIR)
-	var big := vertices.size() > PRETTY_JSON_MAX_VERTICES
+	var big := is_big()
 	var path := Data.SAVED_SHIP_DIR + ship_name.validate_filename() + (".ship" if big else ".json")
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:

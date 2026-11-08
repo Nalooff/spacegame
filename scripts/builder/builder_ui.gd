@@ -131,6 +131,7 @@ func _ready() -> void:
 	_build_common_tools()
 	operator_panel.setup(builder)
 	_build_paint_section()
+	_build_detail_section()
 	builder.box_changed.connect(func(r: Rect2): box_overlay.show_box(r))
 	builder.operator_changed.connect(refresh_all)
 	builder.message.connect(func(text: String): status_label.text = text)
@@ -375,6 +376,233 @@ func _build_paint_section() -> void:
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help.add_theme_font_size_override("font_size", 12)
 	box.add_child(help)
+
+
+## DETAILS / FINISH / AUTO PAINT sections (Properties tab).
+func _build_detail_section() -> void:
+	var host := thruster_section.get_parent().get_parent() as Control
+	var box := VBoxContainer.new()
+	box.name = "DetailSection"
+	host.add_child(box)
+	var sync: Array[Callable] = []        # called to copy the builder state into the widgets
+	var head := Label.new()
+	head.text = tr("AUTO PAINT")
+	head.add_theme_color_override("font_color", Color(0.3, 0.78, 1.0))
+	box.add_child(head)
+	var help0 := Label.new()
+	help0.text = tr("One button: livery, plate lines, rivets, windows, lights, name, number, stripes, vents, greebles, wear. Everything stays editable by hand below.")
+	help0.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help0.add_theme_font_size_override("font_size", 12)
+	box.add_child(help0)
+	var opts := AutoPaint.default_options()
+	var style := OptionButton.new()
+	style.name = "AutoStyle"
+	for n in AutoPaint.style_names():
+		style.add_item(tr(n))
+	style.item_selected.connect(func(i: int): opts["style"] = i)
+	box.add_child(style)
+	var checks := {"recolor": "Repaint modules", "windows": "Windows", "lights": "Lights", "livery": "Stripes, insignia", "greebles": "Greebles", "text": "Name and number"}
+	var crow := GridContainer.new()
+	crow.columns = 2
+	box.add_child(crow)
+	for key in checks:
+		var cb := CheckBox.new()
+		cb.text = tr(checks[key])
+		cb.button_pressed = true
+		cb.toggled.connect(func(on: bool): opts[key] = on)
+		crow.add_child(cb)
+	var sliders := {"density": ["Detail amount", 0.2, 3.0, 0.1], "wear": ["Wear", 0.0, 1.0, 0.05]}
+	for key in sliders:
+		var info: Array = sliders[key]
+		var l := Label.new()
+		l.text = tr(info[0])
+		box.add_child(l)
+		var sl := HSlider.new()
+		sl.min_value = info[1]
+		sl.max_value = info[2]
+		sl.step = info[3]
+		sl.value = opts[key]
+		sl.value_changed.connect(func(v: float): opts[key] = v)
+		box.add_child(sl)
+	var seed_row := HBoxContainer.new()
+	box.add_child(seed_row)
+	var seed_l := Label.new()
+	seed_l.text = tr("Variation")
+	seed_row.add_child(seed_l)
+	var seed_s := SpinBox.new()
+	seed_s.min_value = 1
+	seed_s.max_value = 9999
+	seed_s.value = 1
+	seed_s.value_changed.connect(func(v: float): opts["seed"] = int(v))
+	seed_row.add_child(seed_s)
+	var auto := Button.new()
+	auto.name = "AutoPaintButton"
+	auto.text = tr("Auto paint")
+	auto.pressed.connect(func(): builder.auto_paint(opts))
+	box.add_child(auto)
+
+	# ---- finish
+	var fh := Label.new()
+	fh.text = tr("FINISH")
+	fh.add_theme_color_override("font_color", Color(0.3, 0.78, 1.0))
+	box.add_child(fh)
+	var fin := {"metal": "Metallic", "rough": "Roughness", "gloss": "Gloss coat", "wear": "Wear and dirt", "panels": "Plate lines"}
+	for key in fin:
+		var l2 := Label.new()
+		l2.text = tr(fin[key])
+		box.add_child(l2)
+		var sl2 := HSlider.new()
+		sl2.name = "Finish_" + key
+		sl2.min_value = 0.0
+		sl2.max_value = 1.0
+		sl2.step = 0.02
+		sl2.value = builder.design.finish_value(key)
+		sl2.value_changed.connect(func(v: float): builder.set_finish_value(key, v))
+		box.add_child(sl2)
+		sync.append(func(): sl2.set_value_no_signal(builder.design.finish_value(key)))
+	var riv := CheckBox.new()
+	riv.name = "Finish_rivets"
+	riv.text = tr("Rivets")
+	riv.toggled.connect(func(on: bool): builder.set_finish_value("rivets", 1.0 if on else 0.0))
+	box.add_child(riv)
+	sync.append(func(): riv.set_pressed_no_signal(builder.design.finish_value("rivets") > 0.5))
+	var pl := Label.new()
+	pl.text = tr("Plate size in metres (0 = automatic)")
+	box.add_child(pl)
+	var psz := SpinBox.new()
+	psz.name = "Finish_panel_size"
+	psz.min_value = 0.0
+	psz.max_value = 64.0
+	psz.step = 0.25
+	psz.value_changed.connect(func(v: float): builder.set_finish_value("panel_size", v))
+	box.add_child(psz)
+	sync.append(func(): psz.set_value_no_signal(builder.design.finish_value("panel_size")))
+
+	# ---- details
+	var dh := Label.new()
+	dh.text = tr("DETAILS (placed anywhere, independent of modules)")
+	dh.add_theme_color_override("font_color", Color(0.3, 0.78, 1.0))
+	dh.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(dh)
+	var mode := CheckButton.new()
+	mode.name = "DetailModeCheck"
+	mode.text = tr("Detail mode (O): click the hull to place")
+	mode.toggled.connect(func(on: bool): builder.set_detail_mode(on))
+	box.add_child(mode)
+	var cat := OptionButton.new()
+	cat.name = "DetailCategory"
+	for c in DetailCatalog.CATEGORIES:
+		cat.add_item(tr(c))
+	box.add_child(cat)
+	var kind := OptionButton.new()
+	kind.name = "DetailKind"
+	box.add_child(kind)
+	var fill_kinds := func(ci: int):
+		kind.clear()
+		for k in DetailCatalog.kinds_in(DetailCatalog.CATEGORIES[ci]):
+			kind.add_item(tr(DetailCatalog.name_of(k)), k)
+	fill_kinds.call(0)
+	cat.item_selected.connect(func(ci: int):
+		fill_kinds.call(ci)
+		builder.set_detail_kind(kind.get_item_id(0)))
+	kind.item_selected.connect(func(i: int): builder.set_detail_kind(kind.get_item_id(i)))
+	var drow := HBoxContainer.new()
+	box.add_child(drow)
+	var dc1 := ColorPickerButton.new()
+	dc1.name = "DetailColor1"
+	dc1.custom_minimum_size = Vector2(64, 28)
+	dc1.color_changed.connect(func(c: Color):
+		builder.detail_c1 = c
+		builder.edit_detail("c", c))
+	drow.add_child(dc1)
+	var dc2 := ColorPickerButton.new()
+	dc2.name = "DetailColor2"
+	dc2.custom_minimum_size = Vector2(64, 28)
+	dc2.color_changed.connect(func(c: Color):
+		builder.detail_c2 = c
+		builder.edit_detail("c2", c))
+	drow.add_child(dc2)
+	var mir := CheckBox.new()
+	mir.name = "DetailMirror"
+	mir.text = tr("Mirror")
+	mir.toggled.connect(func(on: bool): builder.detail_mirror = on)
+	drow.add_child(mir)
+	var dsl := {"size": ["Size", 0.2, 8.0, 0.05, 1.0], "angle": ["Rotation", 0.0, 360.0, 1.0, 0.0], "opt": ["Lit / blink / strength", 0.0, 1.0, 0.05, 0.5]}
+	var dslw := {}
+	for key in dsl:
+		var info2: Array = dsl[key]
+		var l3 := Label.new()
+		l3.text = tr(info2[0])
+		box.add_child(l3)
+		var s3 := HSlider.new()
+		s3.name = "Detail_" + key
+		s3.min_value = info2[1]
+		s3.max_value = info2[2]
+		s3.step = info2[3]
+		s3.value = info2[4]
+		box.add_child(s3)
+		dslw[key] = s3
+	(dslw["size"] as HSlider).value_changed.connect(func(v: float):
+		builder.detail_scale = v
+		builder.resize_detail(v))
+	(dslw["angle"] as HSlider).value_changed.connect(func(v: float):
+		builder.detail_angle = deg_to_rad(v)
+		builder.edit_detail("a", deg_to_rad(v)))
+	(dslw["opt"] as HSlider).value_changed.connect(func(v: float):
+		builder.detail_opt = v
+		builder.edit_detail("g", v))
+	var txt := LineEdit.new()
+	txt.name = "DetailText"
+	txt.placeholder_text = tr("Text (name, number...)")
+	txt.max_length = DetailCatalog.MAX_TEXT_LEN
+	txt.text = builder.detail_text
+	txt.text_changed.connect(func(t: String):
+		builder.detail_text = t
+		if builder.detail_sel >= 0 and builder.design.details[builder.detail_sel]["k"] == DetailCatalog.TEXT:
+			builder.edit_detail("t", t))
+	box.add_child(txt)
+	var brow := HBoxContainer.new()
+	box.add_child(brow)
+	var del := Button.new()
+	del.name = "DeleteDetail"
+	del.text = tr("Delete detail")
+	del.pressed.connect(func(): builder.delete_detail())
+	brow.add_child(del)
+	var clr := Button.new()
+	clr.name = "ClearAutoDetails"
+	clr.text = tr("Clear automatic")
+	clr.pressed.connect(func(): builder.clear_all_details(true))
+	brow.add_child(clr)
+	var clr2 := Button.new()
+	clr2.name = "ClearAllDetails"
+	clr2.text = tr("Clear all")
+	clr2.pressed.connect(func(): builder.clear_all_details(false))
+	brow.add_child(clr2)
+	var help := Label.new()
+	help.text = tr("Click a detail to select it, Shift+click on the hull moves it, Delete removes it. Details can go anywhere, even across modules.")
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help.add_theme_font_size_override("font_size", 12)
+	box.add_child(help)
+	var refresh := func():
+		mode.set_pressed_no_signal(builder.detail_mode)
+		dc1.color = builder.detail_c1
+		dc2.color = builder.detail_c2
+		(dslw["opt"] as HSlider).set_value_no_signal(builder.detail_opt)
+		(dslw["angle"] as HSlider).set_value_no_signal(rad_to_deg(builder.detail_angle))
+		var ci := DetailCatalog.CATEGORIES.find(DetailCatalog.INFO[builder.detail_kind][1])
+		if ci >= 0 and cat.selected != ci:
+			cat.select(ci)
+			fill_kinds.call(ci)
+		for i in kind.item_count:
+			if kind.get_item_id(i) == builder.detail_kind:
+				kind.select(i)
+		txt.visible = builder.detail_kind == DetailCatalog.TEXT
+		for f in sync:
+			f.call()
+	builder.detail_mode_changed.connect(refresh)
+	builder.detail_selection_changed.connect(refresh)
+	BusEvent.builder_design_changed.connect(refresh)
+	refresh.call()
 
 
 func refresh_all() -> void:

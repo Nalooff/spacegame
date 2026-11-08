@@ -438,6 +438,8 @@ static func _distance_to_segment(p: Vector2, a: Vector2, b: Vector2) -> float:
 ## Returns true if something was under the mouse.
 func _select_at(mouse: Vector2, additive: bool) -> bool:
 	var found := false
+	if detail_mode:
+		return detail_click(mouse, additive)
 	match mode:
 		Mode.OBJECT:
 			var m := _pick_module(mouse)
@@ -657,6 +659,7 @@ func _handle_key(e: InputEventKey) -> void:
 		KEY_N: make_module()
 		KEY_B: start_operator("bevel")
 		KEY_K: set_paint_mode(not paint_mode)
+		KEY_O: set_detail_mode(not detail_mode)
 		KEY_T: link_turret_barrel()
 		KEY_L: link_vertices()
 		KEY_U: unlink_vertices()
@@ -671,7 +674,11 @@ func _handle_key(e: InputEventKey) -> void:
 		KEY_D:
 			if e.shift_pressed:
 				duplicate_selection()
-		KEY_X, KEY_DELETE: delete_selection()
+		KEY_X, KEY_DELETE:
+			if detail_mode and detail_sel >= 0:
+				delete_detail()
+			else:
+				delete_selection()
 		KEY_F: frame_selection()
 		KEY_A: select_all()
 
@@ -1132,6 +1139,195 @@ func paint_modules(ids: Array, clear: bool = false) -> void:
 			else:
 				design.set_paint(mi, paint_c1, paint_c2, paint_pattern, paint_scale)
 	on_design_changed()
+
+
+# ---- DETAILS: windows, lights, decals, text, wear, greebles stuck anywhere on the surface (see DetailCatalog)
+var detail_mode: bool = false                   ## O: a click puts the chosen detail on the surface under the mouse
+var detail_kind: int = DetailCatalog.WINDOW
+var detail_scale: float = 1.0
+var detail_angle: float = 0.0
+var detail_c1: Color = DetailCatalog.INFO[DetailCatalog.WINDOW][5]
+var detail_c2: Color = DetailCatalog.INFO[DetailCatalog.WINDOW][6]
+var detail_opt: float = 0.5
+var detail_text: String = "MY SHIP"
+var detail_mirror: bool = false                 ## also place the mirror image across the ship's middle (x = 0)
+var detail_sel: int = -1                        ## selected detail (index in design.details), -1 = none
+signal detail_mode_changed
+signal detail_selection_changed
+
+
+func set_detail_mode(on: bool) -> void:
+	detail_mode = on
+	if on:
+		paint_mode = false
+		paint_mode_changed.emit()
+	detail_mode_changed.emit()
+	say(("Detail mode: click the hull to place a %s, click a detail to select it (Shift+click moves it). O to leave." % DetailCatalog.name_of(detail_kind).to_lower()) if on else "Detail mode off.")
+
+
+## Picks a detail kind: loads its default look into the brush (and into the selected detail).
+func set_detail_kind(kind: int) -> void:
+	detail_kind = kind
+	var info: Array = DetailCatalog.INFO[kind]
+	detail_c1 = info[5]
+	detail_c2 = info[6]
+	detail_opt = info[7]
+	detail_scale = 1.0
+	detail_changed_brush()
+
+
+func detail_changed_brush() -> void:
+	detail_mode_changed.emit()
+
+
+## What is under the mouse: {p, n, m} (point on the surface, outward normal, module) or {}.
+func pick_surface(mouse: Vector2) -> Dictionary:
+	var idx := view.triangle_mesh()
+	if idx == null:
+		return {}
+	var from := camera.project_ray_origin(mouse)
+	var dir := camera.project_ray_normal(mouse)
+	var t := idx.first_hit(from, dir, 1.0e7)
+	if t == INF or idx.last_tri < 0:
+		return {}
+	var tri := idx.last_tri
+	var n := (idx.corner(tri, 1) - idx.corner(tri, 0)).cross(idx.corner(tri, 2) - idx.corner(tri, 0)).normalized()
+	if n.dot(dir) > 0.0:
+		n = -n
+	return {"p": from + dir * t, "n": n, "m": _module_of_triangle(tri)}
+
+
+## The module that owns triangle number `tri` of the drawn mesh (same order as ShipDesign.build_mesh).
+func _module_of_triangle(tri: int) -> int:
+	var count := 0
+	for mi in design.modules.size():
+		if hidden_modules.has(mi):
+			continue
+		var fs: FaceSet = design.modules[mi]["fs"]
+		for fi in fs.count():
+			if fs.sizes[fi] >= 3:
+				count += fs.sizes[fi] - 2
+		if tri < count:
+			return mi
+	return -1
+
+
+func _nearest_detail(mouse: Vector2) -> int:
+	var best := -1
+	var best_d := 9.0
+	for i in design.details.size():
+		var p: Vector3 = design.details[i]["p"]
+		if camera.is_position_behind(p):
+			continue
+		var d := camera.unproject_position(p).distance_to(mouse)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
+
+
+## Click in detail mode. Returns true when it did something.
+func detail_click(mouse: Vector2, shift: bool) -> bool:
+	var near := _nearest_detail(mouse)
+	if near >= 0 and not shift:
+		detail_sel = near
+		var dt: Dictionary = design.details[near]
+		detail_kind = dt["k"]
+		detail_c1 = dt["c"]
+		detail_c2 = dt["c2"]
+		detail_opt = dt["g"]
+		detail_angle = dt["a"]
+		detail_text = dt["t"] if dt["t"] != "" else detail_text
+		detail_mode_changed.emit()
+		detail_selection_changed.emit()
+		view.redraw_details(self)
+		return true
+	var hit := pick_surface(mouse)
+	if hit.is_empty():
+		return false
+	if shift and detail_sel >= 0 and detail_sel < design.details.size():
+		checkpoint("detail")
+		var dt2: Dictionary = design.details[detail_sel]
+		dt2["p"] = hit["p"]
+		dt2["n"] = hit["n"]
+		dt2["m"] = hit["m"]
+		design.detail_rev += 1
+		on_details_changed()
+		return true
+	checkpoint("detail")
+	var made := _make_detail(hit["p"], hit["n"], hit["m"])
+	if detail_mirror and absf((hit["p"] as Vector3).x) > 0.05:
+		var q: Vector3 = hit["p"]
+		var nn: Vector3 = hit["n"]
+		_make_detail(Vector3(-q.x, q.y, q.z), Vector3(-nn.x, nn.y, nn.z), hit["m"], true)
+	detail_sel = made
+	detail_selection_changed.emit()
+	on_details_changed()
+	return true
+
+
+func _make_detail(p: Vector3, n: Vector3, m: int, mirrored: bool = false) -> int:
+	var dt := DetailCatalog.make(detail_kind, p, n, detail_scale * maxf(design.extent_length() / 60.0, 0.4), -detail_angle if mirrored else detail_angle)
+	dt["c"] = detail_c1
+	dt["c2"] = detail_c2
+	dt["g"] = detail_opt
+	dt["m"] = m
+	if detail_kind == DetailCatalog.TEXT:
+		dt["t"] = detail_text.left(DetailCatalog.MAX_TEXT_LEN)
+	return design.add_detail(dt)
+
+
+func on_details_changed() -> void:
+	view.redraw_details(self)
+	BusEvent.builder_design_changed.emit()
+
+
+## Changes the selected detail: key is one of "w", "h", "d", "a", "c", "c2", "g", "t".
+func edit_detail(key: String, value: Variant) -> void:
+	if detail_sel < 0 or detail_sel >= design.details.size():
+		return
+	checkpoint("detail_edit_" + key)
+	var dt: Dictionary = design.details[detail_sel]
+	dt[key] = value
+	design.details[detail_sel] = _manual(DetailCatalog.clean(dt))
+	design.detail_rev += 1
+	on_details_changed()
+
+
+func delete_detail() -> void:
+	if detail_sel < 0 or detail_sel >= design.details.size():
+		return
+	checkpoint()
+	design.remove_detail(detail_sel)
+	detail_sel = -1
+	detail_selection_changed.emit()
+	on_details_changed()
+
+
+func clear_all_details(only_auto: bool) -> void:
+	checkpoint()
+	design.clear_details(only_auto)
+	detail_sel = -1
+	detail_selection_changed.emit()
+	on_details_changed()
+	say("Removed %s details." % ("automatic" if only_auto else "all"))
+
+
+func set_finish_value(key: String, v: float) -> void:
+	checkpoint("finish_" + key)
+	design.set_finish(key, v)
+	on_details_changed()
+
+
+## The Auto paint button: livery, plate lines, windows, lights, decals, greebles and wear in one go (undoable).
+func auto_paint(options: Dictionary) -> void:
+	checkpoint()
+	var t0 := Time.get_ticks_msec()
+	var n := AutoPaint.apply(design, options)
+	detail_sel = -1
+	on_design_changed()
+	detail_selection_changed.emit()
+	say("Auto paint added %d details in %.1f s. You can still edit, move or delete any of them (O)." % [n, (Time.get_ticks_msec() - t0) / 1000.0])
 
 
 func set_active_material(id: String) -> void:
@@ -1907,3 +2103,25 @@ func load_from(path: String) -> void:
 
 func set_ship_name(text: String) -> void:
 	design.ship_name = text
+
+
+## Scale the selected detail's size to `factor` times the default of its kind (the Size slider).
+func resize_detail(factor: float) -> void:
+	if detail_sel < 0 or detail_sel >= design.details.size():
+		return
+	checkpoint("detail_size")
+	var dt: Dictionary = design.details[detail_sel]
+	var info: Array = DetailCatalog.INFO[dt["k"]]
+	var unit := maxf(design.extent_length() / 60.0, 0.4) * factor
+	dt["w"] = info[2] * unit
+	dt["h"] = info[3] * unit
+	dt["d"] = info[4] * unit
+	design.details[detail_sel] = _manual(DetailCatalog.clean(dt))
+	design.detail_rev += 1
+	on_details_changed()
+
+
+## A detail the player edited by hand is theirs now: Auto paint will not replace it.
+static func _manual(dt: Dictionary) -> Dictionary:
+	dt["auto"] = false
+	return dt

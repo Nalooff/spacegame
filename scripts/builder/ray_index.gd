@@ -12,6 +12,7 @@ var _n := 1
 var _cells: Array = []                                 # cell index -> PackedInt32Array of triangle numbers
 var _stamp: PackedInt32Array = PackedInt32Array()
 var _tick := 0
+var last_tri := -1                                     ## triangle number of the last first_hit (-1 = none)
 
 
 func triangle_count() -> int:
@@ -52,6 +53,11 @@ func build(faces: PackedVector3Array) -> void:
 	_tick = 0
 
 
+## Corner `k` (0..2) of triangle `t`.
+func corner(t: int, k: int) -> Vector3:
+	return _tris[t * 3 + k]
+
+
 func _coord(p: Vector3) -> Vector3i:
 	var q := (p - _lo) / _cell
 	return Vector3i(clampi(int(floor(q.x)), 0, _n - 1), clampi(int(floor(q.y)), 0, _n - 1), clampi(int(floor(q.z)), 0, _n - 1))
@@ -62,6 +68,7 @@ func first_hit(origin: Vector3, dir: Vector3, max_distance: float) -> float:
 	if _cells.is_empty():
 		return INF
 	_tick += 1
+	last_tri = -1
 	var best := INF
 	var step := minf(_cell.x, minf(_cell.y, _cell.z)) * 0.4
 	var steps := mini(int(max_distance / step) + 1, 600)
@@ -82,6 +89,7 @@ func first_hit(origin: Vector3, dir: Vector3, max_distance: float) -> float:
 			var d := _ray_triangle(origin, dir, _tris[t * 3], _tris[t * 3 + 1], _tris[t * 3 + 2])
 			if d >= 0.0 and d < best and d <= max_distance:
 				best = d
+				last_tri = t
 	return best
 
 
