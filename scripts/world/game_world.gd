@@ -25,12 +25,42 @@ func _ready() -> void:
 	spawner.spawn_function = _make_ship
 	if multiplayer.is_server():
 		Net.peer_ready_in_world.connect(_spawn_for_peer)
+		Net.ship_missing_reported.connect(_respawn_missing)
 		Net.peer_left.connect(_on_peer_left)
 		Net.crew_orphaned.connect(_spawn_for_peer) # captain left: that crew member gets their own ship
 	hud.leave_requested.connect(_on_leave)
 	if Data.tutorial and multiplayer.is_server():
 		add_child(TutorialMission.new())
 	Net.world_ready.rpc_id(1) # tell the host this peer's world is loaded
+	if multiplayer.is_server():
+		# peers that finished loading BEFORE this world existed reported to nobody: give them their ships now
+		for id in Net.ready_msec.keys():
+			if int(id) != 1 and ships_root.get_node_or_null(str(id)) == null:
+				_spawn_for_peer.call_deferred(int(id))
+	_watch_own_ship()
+
+
+## Safety net: if no ship of ours exists a few seconds after loading, ask the host to spawn it again.
+func _watch_own_ship() -> void:
+	for wait in [4.0, 9.0, 16.0]:
+		await get_tree().create_timer(wait).timeout
+		if not is_inside_tree() or not Net.in_game:
+			return
+		var me := multiplayer.get_unique_id()
+		if ships_root.get_node_or_null(str(Net.ship_owner_of(me))) != null:
+			return
+		Net.report_ship_missing()
+
+
+func _respawn_missing(id: int) -> void:
+	var entry: Dictionary = Net.players.get(id, {})
+	if entry.is_empty() or entry["crew_of"] != 0:
+		return
+	var old := ships_root.get_node_or_null(str(id))
+	if old != null:
+		old.queue_free()
+		await get_tree().create_timer(0.3).timeout
+	_spawn_for_peer(id)
 
 
 ## The battlefield chosen in the lobby (the tutorial always uses the classic one).

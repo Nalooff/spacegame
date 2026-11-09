@@ -297,3 +297,10 @@ larger than before (spawn ring up to 2800 m, camera far plane 30 km) so capital 
 the lobby game options (synced as `Net.map_id`); a dedicated server takes `--map=<id>`. Rocks are decoration only
 (no collision) and planets/stars live in the sky shader (no parallax). Test: `tests/test_maps.tscn`, `tests/test_map_game.tscn`;
 screenshot: `tests/shot_map.tscn`.
+
+## Missing-ship fix (9 Nov 2026)
+
+A client could end up in the world with no ship (camera in the void). Cause: a client that finished loading before the host's
+world scene existed reported "ready" to nobody, so no ship was ever spawned for it. The host now remembers every
+`Net.ready_msec` and spawns waiting peers when its world is built, and a client with no ship 4 / 9 / 16 s after loading
+asks the host (`Net.report_ship_missing`) to spawn it again (also covers a lost spawn packet).

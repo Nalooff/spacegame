@@ -24,6 +24,7 @@ signal join_rejected(reason: String)
 signal connection_failed
 signal disconnected_from_host
 signal peer_ready_in_world(peer_id: int)
+signal ship_missing_reported(peer_id: int)
 signal peer_left(peer_id: int)
 signal crew_orphaned(peer_id: int)  # in game: the captain left, this crew member now gets a ship of their own
 
@@ -42,6 +43,8 @@ signal game_changed
 var late_join: bool = false          # host option: players may join (and pick a ship) while the game is running
 var game_running: bool = false       # the host has started the game (clients learn it when they join)
 signal late_join_changed
+var ready_msec: Dictionary = {}     # host: peer id -> Time.get_ticks_msec() when that peer's world reported ready (kept so a host that loads later still spawns them)
+var _missing_msec: Dictionary = {}
 var world_peers: Dictionary = {}     # once the game runs: the peers that have (or are loading) the world. Nothing is replicated to the others (late joiners still in the lobby).
 signal world_peers_changed
 
@@ -974,6 +977,7 @@ func start_game() -> bool:
 			_give_random_ship(id)
 		p["locked"] = true
 	game_running = true
+	ready_msec.clear()
 	world_peers.clear()
 	for id in players:
 		world_peers[id] = true
@@ -1035,6 +1039,7 @@ func srv_enter_game() -> void:
 		_give_random_ship(id)
 	p["locked"] = true
 	_distribute_blobs()
+	ready_msec.erase(id)
 	sync_roster.rpc(players)
 	roster_changed.emit()
 	_load_world.rpc_id(id)
@@ -1082,11 +1087,31 @@ func _load_world() -> void:
 func world_ready() -> void:
 	if multiplayer.is_server():
 		var id := multiplayer.get_remote_sender_id()
+		ready_msec[id if id > 0 else 1] = Time.get_ticks_msec()
 		world_peers[id if id > 0 else 1] = true
 		sync_world_peers.rpc(world_peers.keys(), true)
 		if id > 1:
 			sync_stats.rpc_id(id, stats)      # the scoreboard as it is now (a player who joins late sees the whole game)
 		peer_ready_in_world.emit(id if id > 0 else 1) # 0 = the host calling itself
+
+
+## A player whose world has loaded but who has no ship asks for one (the spawn got lost). Host: the world re-spawns it.
+func report_ship_missing() -> void:
+	_ask_host(&"srv_ship_missing", [])
+
+
+@rpc("any_peer", "call_local", "reliable")
+func srv_ship_missing() -> void:
+	if not multiplayer.is_server():
+		return
+	var id := _sender()
+	if id <= 0 or not players.has(id) or not ready_msec.has(id):
+		return
+	var now := Time.get_ticks_msec()
+	if now - int(ready_msec[id]) > 30000 or now - int(_missing_msec.get(id, -10000)) < 4000:
+		return                    # only right after the world loaded (later it is a normal respawn wait)
+	_missing_msec[id] = now
+	ship_missing_reported.emit(id)
 
 
 @rpc("authority", "call_local", "reliable")
