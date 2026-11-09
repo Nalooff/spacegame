@@ -171,6 +171,7 @@
  "Shrinks every detail that hangs over the edge of its surface, like a decal.": "表面の端からはみ出したディテールをステッカーのように縮小します。",
  "Text (name, number...)": "テキスト（名前、番号など）",
  "Variation": "バリエーション",
+ "Map": "マップ",
  "DECK %d": "デッキ %d",
  "DRIVE  (an arrow, never stops)": "DRIVE（矢印、止まらない）",
  "DRIVE would ram a friend: use GO TO to follow it": "DRIVE だと味方に衝突します：追従するには GO TO を使ってください",

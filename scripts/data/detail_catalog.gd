@@ -10,7 +10,7 @@ extends RefCounted
 ##   a  rotation around the normal, rad   w, h  size in metres             d  height above the hull (solid kinds)
 ##   c  main colour                       c2 second colour (glass, stripe...)
 ##   g  option: WINDOW = how lit it is 0..1, LIGHT = 1 blinks, STREAK/SCORCH = strength
-##   t  text (TEXT kind only)             m  module it was put on (-1 = none)
+##   t  text (TEXT kind only)             f  its font (FontCatalog index)   m  module it was put on (-1 = none)
 ##   auto  true when AutoPaint made it (so "Auto paint" can replace its own work and leave the player's alone)
 
 const WINDOW := 0
@@ -33,7 +33,15 @@ const BOX := 16
 const CYLINDER := 17
 const ANTENNA := 18
 const TEXT := 19
-const KIND_COUNT := 20
+const HAZARD := 20
+const CHECKER := 21
+const ARROW := 22
+const BARCODE := 23
+const CIRCUIT := 24
+const DIAMOND := 25
+const CROSS := 26
+const SHIELD := 27
+const KIND_COUNT := 28
 
 const MAX_DETAILS := 60000
 const MAX_TEXTS := 24
@@ -61,6 +69,14 @@ const INFO := {
 	CYLINDER: ["Tank / pipe", "Greebles", 1.2, 1.2, 1.0, Color(0.5, 0.5, 0.52), Color(0.2, 0.2, 0.22), 0.0],
 	ANTENNA: ["Antenna / mast", "Greebles", 0.12, 0.12, 5.0, Color(0.6, 0.6, 0.62), Color(1, 0.2, 0.2), 0.0],
 	TEXT: ["Text", "Livery", 8.0, 1.6, 0.0, Color(0.95, 0.95, 0.95), Color(0, 0, 0), 0.0],
+	HAZARD: ["Hazard stripes", "Livery", 8.0, 1.2, 0.0, Color(0.95, 0.75, 0.1), Color(0.05, 0.05, 0.05), 0.0],
+	CHECKER: ["Checker band", "Livery", 8.0, 1.0, 0.0, Color(0.95, 0.95, 0.95), Color(0.05, 0.05, 0.05), 0.0],
+	ARROW: ["Arrow", "Livery", 3.0, 2.0, 0.0, Color(0.95, 0.95, 0.95), Color(0, 0, 0), 0.0],
+	BARCODE: ["Barcode / serial", "Livery", 4.0, 1.2, 0.0, Color(0.9, 0.9, 0.9), Color(0, 0, 0), 0.0],
+	CIRCUIT: ["Circuit lines", "Surface", 5.0, 3.0, 0.0, Color(0.2, 0.9, 1.0), Color(0.05, 0.1, 0.12), 0.0],
+	DIAMOND: ["Diamond", "Livery", 3.0, 3.0, 0.0, Color(0.95, 0.75, 0.1), Color(0.05, 0.05, 0.05), 0.0],
+	CROSS: ["Cross", "Livery", 3.0, 3.0, 0.0, Color(0.85, 0.1, 0.1), Color(0.95, 0.95, 0.95), 0.0],
+	SHIELD: ["Shield crest", "Livery", 3.0, 3.5, 0.0, Color(0.15, 0.3, 0.7), Color(0.95, 0.85, 0.3), 0.0],
 }
 const CATEGORIES := ["Openings", "Lights", "Surface", "Livery", "Wear", "Greebles"]
 
@@ -85,7 +101,7 @@ static func is_solid(kind: int) -> bool:
 static func make(kind: int, p: Vector3, n: Vector3, scale: float = 1.0, angle: float = 0.0) -> Dictionary:
 	var info: Array = INFO[kind]
 	return {"k": kind, "p": p, "n": n.normalized(), "a": angle, "w": info[2] * scale, "h": info[3] * scale,
-		"d": info[4] * scale, "c": info[5], "c2": info[6], "g": info[7], "t": "", "m": -1, "auto": false}
+		"d": info[4] * scale, "c": info[5], "c2": info[6], "g": info[7], "t": "", "f": 0, "m": -1, "auto": false}
 
 
 ## Fixes whatever came from a file or from the network (never trust it): ranges, finite numbers, known kind.
@@ -101,7 +117,7 @@ static func clean(src: Dictionary) -> Dictionary:
 	return {"k": k, "p": p, "n": n.normalized(), "a": clampf(float(src.get("a", 0.0)), -TAU, TAU),
 		"w": clampf(float(src.get("w", 1.0)), 0.01, 400.0), "h": clampf(float(src.get("h", 1.0)), 0.01, 400.0),
 		"d": clampf(float(src.get("d", 0.0)), 0.0, 400.0), "c": src.get("c", Color.WHITE), "c2": src.get("c2", Color.BLACK),
-		"g": clampf(float(src.get("g", 0.0)), 0.0, 1.0), "t": t, "m": maxi(int(src.get("m", -1)), -1), "auto": bool(src.get("auto", false))}
+		"g": clampf(float(src.get("g", 0.0)), 0.0, 1.0), "t": t, "f": clampi(int(src.get("f", 0)), 0, FontCatalog.count() - 1), "m": maxi(int(src.get("m", -1)), -1), "auto": bool(src.get("auto", false))}
 
 
 ## Rotation frame of a detail: x = its right, y = its top, z = the normal. "Top" follows the ship's up axis (Y) unless
@@ -126,6 +142,7 @@ static func pack(dt: Dictionary) -> Array:
 		int(dt["m"]), 1 if dt["auto"] else 0]
 	if int(dt["k"]) == TEXT:
 		out.append(str(dt["t"]))
+		out.append(int(dt.get("f", 0)))
 	return out
 
 
@@ -138,4 +155,6 @@ static func unpack(a: Array) -> Dictionary:
 		"g": float(a[13]), "m": int(a[14]), "auto": int(a[15]) == 1}
 	if a.size() > 16:
 		src["t"] = str(a[16])
+	if a.size() > 17:
+		src["f"] = int(a[17])
 	return clean(src)

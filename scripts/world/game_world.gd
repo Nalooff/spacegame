@@ -15,10 +15,13 @@ const SHIP_SCENE := preload("res://scenes/ship.tscn")
 var _local_ship: Ship
 var _spawn_index: int = 0
 var _derelict_counter: int = 0
+var _spawn_radius: float = 30.0
+var _ship_len_cache: Dictionary = {}
 
 
 func _ready() -> void:
 	add_to_group("world")
+	_build_map()
 	spawner.spawn_function = _make_ship
 	if multiplayer.is_server():
 		Net.peer_ready_in_world.connect(_spawn_for_peer)
@@ -28,6 +31,17 @@ func _ready() -> void:
 	if Data.tutorial and multiplayer.is_server():
 		add_child(TutorialMission.new())
 	Net.world_ready.rpc_id(1) # tell the host this peer's world is loaded
+
+
+## The battlefield chosen in the lobby (the tutorial always uses the classic one).
+func _build_map() -> void:
+	var m := MapCatalog.get_map(MapCatalog.CLASSIC if Data.tutorial else Net.map_id)
+	_spawn_radius = float(m["spawn_radius"])
+	var n := spawn_points.get_child_count()
+	for i in n:                                  # ring of start points (bigger maps: further apart)
+		var a := float(i) / n * TAU
+		(spawn_points.get_child(i) as Marker3D).position = Vector3(cos(a) * _spawn_radius, float((i % 3) - 1) * 4.0 * _spawn_radius / 30.0 * 0.15, sin(a) * _spawn_radius)
+	WorldBuilder.build(self, m)
 
 
 # ---- host side -------------------------------------------------------------
@@ -45,7 +59,19 @@ func _spawn_for_peer(id: int) -> void:
 	var n := spawn_points.get_child_count()
 	var marker := spawn_points.get_child(_spawn_index % n) as Marker3D
 	_spawn_index += 1
-	spawner.spawn({"peer": id, "design": entry["ship"], "name": entry["name"], "pos": marker.global_position})
+	# a capital ship needs more room than a fighter: push its start point out so ships do not overlap
+	var pos := marker.global_position
+	var need := _ship_length(entry["ship"]) * 1.3
+	if need > _spawn_radius and _spawn_radius > 100.0:
+		pos = pos.normalized() * minf(need, 2800.0)
+	spawner.spawn({"peer": id, "design": entry["ship"], "name": entry["name"], "pos": pos})
+
+
+func _ship_length(design_name: String) -> float:
+	if not _ship_len_cache.has(design_name):
+		var d := ShipDesign.from_blob(Net.blobs.get(design_name, PackedByteArray()))
+		_ship_len_cache[design_name] = d.extent_length() if d != null else 20.0
+	return _ship_len_cache[design_name]
 
 
 func _on_peer_left(id: int) -> void:

@@ -36,6 +36,7 @@ const TEAM_MAX := 8
 var game_mode: String = "ffa"
 var team_count: int = 2
 var kill_limit: int = 0
+var map_id: String = MapCatalog.CLASSIC      ## battlefield (MapCatalog id), chosen by the host in the lobby
 var team_kills: Dictionary = {}
 signal game_changed
 var late_join: bool = false          # host option: players may join (and pick a ship) while the game is running
@@ -158,7 +159,7 @@ static func hash_password(lobby: String, password: String) -> String:
 
 
 ## DEDICATED SERVER (opt-in, free: run it on any computer that stays on):
-##   godot --headless --path . -- --server [--name=NAME] [--password=SECRET] [--wait=SECONDS] [--port=N]
+##   godot --headless --path . -- --server [--name=NAME] [--password=SECRET] [--wait=SECONDS] [--port=N] [--map=ID]
 ## The host is not a player: it only runs the game. It starts the round by itself when everybody is ready (or after --wait seconds)
 ## and lets new players join while it runs. Normal hosting from the game's menus is unchanged.
 var dedicated: bool = false
@@ -185,6 +186,7 @@ func host_lobby(lobby: String, is_private: bool, password: String, solo_game: bo
 	game_running = false
 	late_join = false
 	game_mode = "ffa"
+	map_id = MapCatalog.CLASSIC
 	team_kills.clear()
 	world_peers.clear()
 	in_game = false
@@ -202,9 +204,11 @@ func host_lobby(lobby: String, is_private: bool, password: String, solo_game: bo
 
 
 ## A game for one with `ship_path` (res://ships/Dart.json ...): nobody can join. Returns false when it could not start.
-func start_solo(ship_path: String) -> bool:
+func start_solo(ship_path: String, map: String = "") -> bool:
 	if host_lobby("Solo", true, str(randi()), true) != OK:
 		return false
+	if map != "" and MapCatalog.is_valid(map):
+		map_id = map
 	var blob := ShipDesign.read_blob(ship_path)
 	submit_ship(blob)
 	submit_lock(true)
@@ -221,6 +225,8 @@ func _start_dedicated(args: PackedStringArray) -> void:
 			lobby = a.substr(7)
 		elif a.begins_with("--password="):
 			password = a.substr(11)
+		elif a.begins_with("--map="):
+			map_id = a.substr(6) if MapCatalog.is_valid(a.substr(6)) else MapCatalog.CLASSIC
 		elif a.begins_with("--wait="):
 			wait = float(a.substr(7))
 		elif a.begins_with("--port="):
@@ -250,6 +256,7 @@ func host_steam(lobby: String, is_private: bool, password: String) -> void:
 	game_running = false
 	late_join = false
 	game_mode = "ffa"
+	map_id = MapCatalog.CLASSIC
 	team_kills.clear()
 	world_peers.clear()
 	in_game = false
@@ -316,6 +323,7 @@ func leave() -> void:
 	game_running = false
 	late_join = false
 	game_mode = "ffa"
+	map_id = MapCatalog.CLASSIC
 	team_kills.clear()
 	world_peers.clear()
 	in_game = false
@@ -586,13 +594,15 @@ func srv_set_team(team: int) -> void:
 
 
 func game_info() -> Dictionary:
-	return {"mode": game_mode, "teams": team_count, "limit": kill_limit, "scores": team_kills}
+	return {"mode": game_mode, "teams": team_count, "limit": kill_limit, "scores": team_kills, "map": map_id}
 
 
 ## Host: choose the game mode ("ffa" / "teams"), how many teams (2..TEAM_MAX) and the kill limit (0 = none).
-func set_game_options(mode: String, teams: int, limit: int) -> void:
+func set_game_options(mode: String, teams: int, limit: int, map: String = "") -> void:
 	if not is_host():
 		return
+	if map != "" and MapCatalog.is_valid(map):
+		map_id = map
 	game_mode = "teams" if mode == "teams" else "ffa"
 	team_count = clampi(teams, 2, TEAM_MAX)
 	kill_limit = clampi(limit, 0, 999)
@@ -612,6 +622,8 @@ func sync_game(d: Dictionary) -> void:
 	game_mode = str(d.get("mode", "ffa"))
 	team_count = clampi(int(d.get("teams", 2)), 2, TEAM_MAX)
 	kill_limit = clampi(int(d.get("limit", 0)), 0, 999)
+	var m := str(d.get("map", MapCatalog.CLASSIC))
+	map_id = m if MapCatalog.is_valid(m) else MapCatalog.CLASSIC
 	team_kills = d.get("scores", {})
 	game_changed.emit()
 

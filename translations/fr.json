@@ -171,6 +171,7 @@
  "Shrinks every detail that hangs over the edge of its surface, like a decal.": "Réduit chaque détail qui dépasse du bord de sa surface, comme un décalque.",
  "Text (name, number...)": "Texte (nom, numéro...)",
  "Variation": "Variante",
+ "Map": "Carte",
  "DECK %d": "PONT %d",
  "DRIVE  (an arrow, never stops)": "DRIVE  (une flèche, ne s'arrête jamais)",
  "DRIVE would ram a friend: use GO TO to follow it": "DRIVE percuterait un allié : utilisez GO TO pour le suivre",

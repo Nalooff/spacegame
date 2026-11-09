@@ -171,6 +171,7 @@
  "Shrinks every detail that hangs over the edge of its surface, like a decal.": "缩小所有超出表面边缘的细节，就像贴花。",
  "Text (name, number...)": "文字（名称、编号…）",
  "Variation": "变化",
+ "Map": "地图",
  "DECK %d": "甲板 %d",
  "DRIVE  (an arrow, never stops)": "DRIVE（箭头，永不停止）",
  "DRIVE would ram a friend: use GO TO to follow it": "DRIVE 会撞上友军：请用 GO TO 跟随",

@@ -15,6 +15,11 @@ func _ready() -> void:
 	var errs := d.validate()
 	errs.append_array(d.turret_errors())
 	check(errs.is_empty(), "it passes the builder's checks %s" % str(errs.slice(0, 2)))
+	var cmd := 0
+	for m in d.modules:
+		if m["type"] == ModuleCatalog.COMMANDER:
+			cmd += 1
+	check(cmd >= 4, "it has several command posts (%d)" % cmd)
 	check(d.details.size() > 3000, "it is fully detailed (%d details)" % d.details.size())
 	var t0 := Time.get_ticks_msec()
 	var ship: Ship = load("res://scenes/ship.tscn").instantiate()

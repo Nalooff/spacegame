@@ -191,6 +191,52 @@ void fragment() {
 		mask = clamp(ring + cross_ * 0.0 + (1.0 - smoothstep(0.0, 0.03 + aa, min(abs(p.x), abs(p.y)))) * step(r, 0.47) * step(0.22, r) , 0.0, 1.0);
 		col = mix(col, c2, step(0.3, r) * 0.0 + inner);
 		mask = max(mask, inner * 0.0);
+	} else if (kind > 19.5 && kind < 20.5) {              // HAZARD: diagonal bars
+		float d = box(p, vec2(ax, 0.5));
+		mask = 1.0 - smoothstep(-aa, aa, d);
+		float bars = step(0.5, fract((p.x + p.y) * 4.0 / max(0.4, 0.5)));
+		col = mix(c2, col, bars);
+	} else if (kind > 20.5 && kind < 21.5) {              // CHECKER
+		float d = box(p, vec2(ax, 0.5));
+		mask = 1.0 - smoothstep(-aa, aa, d);
+		col = mix(c2, col, mod(floor(p.x * 8.0) + floor(p.y * 8.0), 2.0));
+	} else if (kind > 21.5 && kind < 22.5) {              // ARROW pointing along the detail's x axis
+		float shaft = box(p - vec2(-ax * 0.3, 0.0), vec2(ax * 0.7, 0.12));
+		float head = max(abs(p.y) - (ax - p.x) * 0.6, max(p.x - ax, ax * 0.25 - p.x));
+		mask = max(1.0 - smoothstep(-aa, aa, shaft), 1.0 - smoothstep(-aa, aa, head));
+	} else if (kind > 22.5 && kind < 23.5) {              // BARCODE
+		float d = box(p, vec2(ax, 0.5));
+		float bar = step(0.4, h11(floor((p.x + ax) * 7.0 / max(ax, 0.2)) + seed));
+		mask = (1.0 - smoothstep(-aa, aa, d)) * bar;
+	} else if (kind > 23.5 && kind < 24.5) {              // CIRCUIT: traces and pads, glowing
+		vec2 g = p * 6.0;
+		vec2 id = floor(g);
+		vec2 f = fract(g) - 0.5;
+		float r = h21(id + seed);
+		float line = r < 0.5 ? 1.0 - smoothstep(0.03, 0.06, abs(f.y)) : 1.0 - smoothstep(0.03, 0.06, abs(f.x));
+		line *= step(abs(f.x), 0.5) * step(0.35, h21(id * 1.7 + seed));
+		float pad = 1.0 - smoothstep(0.08, 0.12, length(f)) ;
+		pad *= step(0.75, h21(id * 3.1 + seed));
+		mask = clamp(line + pad, 0.0, 1.0) * (1.0 - smoothstep(-aa, aa, -box(p, vec2(ax, 0.5))));
+		emis = col * mask * (1.0 + night);
+	} else if (kind > 24.5 && kind < 25.5) {              // DIAMOND with inner diamond
+		float dd = abs(p.x) + abs(p.y) - 0.48;
+		mask = 1.0 - smoothstep(-aa, aa, dd);
+		float inner = 1.0 - smoothstep(-aa, aa, abs(p.x) + abs(p.y) - 0.28);
+		col = mix(col, c2, inner);
+	} else if (kind > 25.5 && kind < 26.5) {              // CROSS
+		float a1 = box(p, vec2(0.46, 0.15));
+		float a2 = box(p, vec2(0.15, 0.46));
+		mask = 1.0 - smoothstep(-aa, aa, min(a1, a2));
+		float edge = 1.0 - smoothstep(-aa, aa, min(box(p, vec2(0.38, 0.07)), box(p, vec2(0.07, 0.38))));
+		col = mix(c2, col, edge);
+	} else if (kind > 26.5 && kind < 27.5) {              // SHIELD crest
+		vec2 q = vec2(p.x, p.y + 0.0);
+		float half_w = 0.42 * (1.0 - max(0.0, -q.y - 0.0) * 1.2);
+		float body = max(abs(q.x) - half_w, max(q.y - 0.45, -q.y - 0.48));
+		mask = 1.0 - smoothstep(-aa, aa, body);
+		float band = 1.0 - smoothstep(-aa, aa, abs(q.y - 0.12) - 0.07);
+		col = mix(col, c2, band * mask);
 	} else {                                            // solids (BOX, CYLINDER, ANTENNA) and TEXT backing: lit by their own normal
 		float edge = smoothstep(0.0, 0.08, min(min(v_uv.x, 1.0 - v_uv.x), min(v_uv.y, 1.0 - v_uv.y)));
 		col *= 0.75 + 0.25 * edge;

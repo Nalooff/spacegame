@@ -255,6 +255,7 @@
  "MODULE TYPE",
  "MOUSE steers  W/S move the throttle lever  X lever to zero  A/D strafe  Space/C up/down  Q/E roll  RMB free look",
  "MOUSE steers (move the cursor away from the centre)  W/S thrust  A/D strafe  Space/C up/down  Q/E roll  RMB free look",
+ "Map",
  "Mass: %.0f kg\nVertices: %d%s\nModules: %s",
  "Master volume",
  "Material (decides damage resistance and dents)",

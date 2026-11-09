@@ -561,6 +561,16 @@ func _build_detail_section() -> void:
 		if builder.detail_sel >= 0 and builder.design.details[builder.detail_sel]["k"] == DetailCatalog.TEXT:
 			builder.edit_detail("t", t))
 	box.add_child(txt)
+	var fontb := OptionButton.new()
+	fontb.name = "DetailFont"
+	for fi in FontCatalog.count():
+		fontb.add_item(tr(FontCatalog.name_of(fi)), fi)
+	fontb.select(builder.detail_font)
+	fontb.item_selected.connect(func(i: int):
+		builder.detail_font = i
+		if builder.detail_sel >= 0 and builder.design.details[builder.detail_sel]["k"] == DetailCatalog.TEXT:
+			builder.edit_detail("f", i))
+	box.add_child(fontb)
 	var brow := HBoxContainer.new()
 	box.add_child(brow)
 	var del := Button.new()
@@ -603,6 +613,8 @@ func _build_detail_section() -> void:
 			if kind.get_item_id(i) == builder.detail_kind:
 				kind.select(i)
 		txt.visible = builder.detail_kind == DetailCatalog.TEXT
+		fontb.visible = txt.visible
+		fontb.select(builder.detail_font)
 		for f in sync:
 			f.call()
 	builder.detail_mode_changed.connect(refresh)

@@ -18,6 +18,8 @@ const STYLES := [
 	["Raider rust", Color(0.4, 0.25, 0.18), Color(0.85, 0.7, 0.1), Color(0.3, 0.3, 0.3), Color(0.08, 0.07, 0.06), Color(1.0, 0.55, 0.2), Color(1.0, 0.5, 0.15), 0.35, 0.75, 0.0],
 ]
 const MAX_AUTO := 45000
+## font (FontCatalog index) of the name / number for each style
+const STYLE_FONT := [10, 3, 9, 1, 2, 12, 11]
 
 
 static func style_names() -> Array:
@@ -29,7 +31,7 @@ static func style_names() -> Array:
 
 static func default_options() -> Dictionary:
 	return {"style": 0, "seed": 1, "density": 1.0, "recolor": true, "windows": true, "lights": true,
-		"livery": true, "greebles": true, "wear": 0.3, "text": true}
+		"livery": true, "greebles": true, "wear": 0.3, "text": true, "font": -1}
 
 
 ## Returns how many details were added.
@@ -66,7 +68,7 @@ static func apply(d: ShipDesign, options: Dictionary = {}) -> int:
 	if bool(o["lights"]):
 		_lights(d, ctx, st, rng, u, density)
 	if bool(o["livery"]):
-		_livery(d, ctx, st, rng, u, bool(o["text"]))
+		_livery(d, ctx, st, rng, u, bool(o["text"]), int(o["font"]) if int(o["font"]) >= 0 else STYLE_FONT[clampi(int(o["style"]), 0, STYLE_FONT.size() - 1)])
 	_surface_details(d, ctx, st, rng, u, density, bool(o["greebles"]))
 	if float(o["wear"]) > 0.02:
 		_wear(d, ctx, st, rng, u, float(o["wear"]))
@@ -221,7 +223,7 @@ static func _lights(d: ShipDesign, s: _Surface, st: Array, rng: RandomNumberGene
 # ---------------------------------------------------------------------------------------------
 #  livery: name, hull number, roundels, stripes, chevrons, docking marks, hatches on bays
 # ---------------------------------------------------------------------------------------------
-static func _livery(d: ShipDesign, s: _Surface, st: Array, rng: RandomNumberGenerator, u: float, text: bool) -> void:
+static func _livery(d: ShipDesign, s: _Surface, st: Array, rng: RandomNumberGenerator, u: float, text: bool, font: int) -> void:
 	var acc: Color = st[2]
 	var ink := Color(0.93, 0.93, 0.9) if (st[1] as Color).get_luminance() < 0.5 else Color(0.1, 0.1, 0.12)
 	# largest exposed flat faces on each side
@@ -252,6 +254,7 @@ static func _livery(d: ShipDesign, s: _Surface, st: Array, rng: RandomNumberGene
 				tt["w"] = minf(wid * 0.8, th * name_s.length() * 0.7)
 				tt["h"] = th
 				tt["c"] = ink
+				tt["f"] = font
 				tt["m"] = f["m"]
 				tt["auto"] = true
 				d.details.append(tt)
@@ -260,6 +263,7 @@ static func _livery(d: ShipDesign, s: _Surface, st: Array, rng: RandomNumberGene
 				num["w"] = minf(wid * 0.6, th * 5.0)
 				num["h"] = th * 0.7
 				num["c"] = ink
+				num["f"] = font
 				num["m"] = f["m"]
 				num["auto"] = true
 				d.details.append(num)
@@ -317,23 +321,34 @@ static func _surface_details(d: ShipDesign, s: _Surface, st: Array, rng: RandomN
 			continue
 		var roll := rng.randf()
 		var dt: Dictionary
-		if roll < 0.4:
+		if roll > 0.88:                    # markings: hazard bars, serial barcodes, arrows, circuit lines, diamonds, checker bands
+			var kinds := [DetailCatalog.HAZARD, DetailCatalog.BARCODE, DetailCatalog.ARROW, DetailCatalog.CIRCUIT, DetailCatalog.DIAMOND, DetailCatalog.CHECKER]
+			var kd: int = kinds[rng.randi() % kinds.size()]
+			dt = DetailCatalog.make(kd, pt, n, u * rng.randf_range(0.8, 1.6), 0.0 if rng.randf() < 0.6 else PI * 0.5)
+			if kd == DetailCatalog.CIRCUIT:
+				dt["c"] = st[6]
+				dt["c2"] = dark
+			elif kd == DetailCatalog.BARCODE or kd == DetailCatalog.ARROW:
+				dt["c"] = Color(0.9, 0.9, 0.88) if base.get_luminance() < 0.5 else Color(0.1, 0.1, 0.12)
+			elif kd == DetailCatalog.DIAMOND:
+				dt["c"] = st[2]
+		elif roll < 0.4:
 			dt = DetailCatalog.make(DetailCatalog.PANEL, pt, n, u * rng.randf_range(0.8, 1.6), 0.0 if rng.randf() < 0.5 else PI * 0.5)
 			dt["c"] = base.lerp(trim, rng.randf())
 			dt["c2"] = dark
-		elif roll < 0.55:
+		elif roll < 0.5:
 			dt = DetailCatalog.make(DetailCatalog.VENT, pt, n, u * rng.randf_range(0.8, 1.4))
 			dt["c"] = dark
 			dt["c2"] = trim
-		elif roll < 0.67:
+		elif roll < 0.6:
 			dt = DetailCatalog.make(DetailCatalog.GRILLE, pt, n, u * rng.randf_range(0.8, 1.5))
 			dt["c"] = dark
 			dt["c2"] = trim
-		elif roll < 0.8:
+		elif roll < 0.7:
 			dt = DetailCatalog.make(DetailCatalog.HATCH, pt, n, u * rng.randf_range(0.8, 1.4))
 			dt["c"] = trim
 			dt["c2"] = dark
-		elif greebles and roll < 0.96:
+		elif greebles and roll < 0.86:
 			var kind := DetailCatalog.BOX if rng.randf() < 0.65 else DetailCatalog.CYLINDER
 			dt = DetailCatalog.make(kind, pt, n, u)
 			dt["w"] = u * rng.randf_range(0.6, 2.6)

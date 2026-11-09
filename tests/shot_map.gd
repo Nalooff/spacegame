@@ -1,42 +1,52 @@
 extends Node
-## Screenshot: commander-mode Brick auto-fires at a moving Dart (tracers, lock marker, lead marker, HUD).
-## xvfb-run godot --path . res://tests/shot_combat.tscn   (see tools/shots.sh)
+## Screenshot of a map. MAP=id LOOK=x,y,z SHIP=res://ships/X CAMD=distance SHOT_OUT=file.png
 func _ready() -> void:
-	var cam := Camera3D.new(); cam.far = 6000.0; add_child(cam)
-	var light := DirectionalLight3D.new(); light.rotation = Vector3(-0.8, 0.6, 0); add_child(light)
-	var env := WorldEnvironment.new(); env.environment = Environment.new()
-	env.environment.background_mode = Environment.BG_COLOR; env.environment.background_color = Color(0.02, 0.025, 0.05)
-	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; env.environment.ambient_light_color = Color(0.5, 0.5, 0.6)
-	add_child(env)
-	var pool := ProjectilePool.new(); pool.name = "ProjectilePool"; add_child(pool)
-	var me: Ship = load("res://scenes/ship.tscn").instantiate()
-	me.design_blob = ShipDesign.read_blob("res://ships/Brick.json"); me.name = "1"; me.pilot_name = "Brick"
-	add_child(me)
-	var foe: Ship = load("res://scenes/ship.tscn").instantiate()
-	foe.design_blob = ShipDesign.read_blob("res://ships/Dart.json"); foe.name = "2"; foe.pilot_name = "Dart"
-	foe.position = Vector3(40, 10, -420)
-	add_child(foe)
-	Data.local_ship = me
-	var hud: Node = load("res://scenes/hud.tscn").instantiate()
-	add_child(hud)
-	var crew := OS.get_environment("SHOT_CREW") != ""
-	me.stations.mode = "crew" if crew else "commander"
-	if crew:
-		me.stations.go_to(2)
-	foe.linear_velocity = Vector3(-14, 0, 6)
-	foe.freeze = false
-	for i in 20: await get_tree().physics_frame
-	if crew:      # first person at a gun station, the real StationCamera
-		cam.set_script(load("res://scripts/world/station_camera.gd"))
-		cam._captured = false
-		await get_tree().create_timer(3.0).timeout
-		me.detection.cycle_lock()
-	else:
-		cam.position = Vector3(12, 9, 26)
-		cam.look_at(Vector3(10, 4, -200))
-		cam.make_current()
-	await get_tree().create_timer(1.6).timeout
-	me.autopilot.drive_to(Vector3(150, 20, -300), 0.7, null, true)
-	me.linear_velocity = Vector3(8, 1, -20)
-	hud.get_node("HudRoot/TacticalMap").open()
-	await get_tree().create_timer(1.0).timeout
+	var world := Node3D.new()
+	add_child(world)
+	world.add_child(WorldEnvironment.new())
+	world.get_child(0).name = "WorldEnvironment"
+	var sun := DirectionalLight3D.new()
+	sun.name = "Sun"
+	world.add_child(sun)
+	var lm := Node3D.new()
+	lm.name = "Landmarks"
+	world.add_child(lm)
+	var sp := Node3D.new()
+	sp.name = "SpawnPoints"
+	world.add_child(sp)
+	for i in 8:
+		var m := Marker3D.new()
+		var a := i / 8.0 * TAU
+		var map := MapCatalog.get_map(OS.get_environment("MAP"))
+		m.position = Vector3(cos(a), 0, sin(a)) * float(map["spawn_radius"])
+		sp.add_child(m)
+	WorldBuilder.build(world, MapCatalog.get_map(OS.get_environment("MAP")))
+	var look := Vector3(0, 0, -1)
+	if OS.get_environment("LOOK") != "":
+		var p := OS.get_environment("LOOK").split(",")
+		look = Vector3(float(p[0]), float(p[1]), float(p[2])).normalized()
+	var ship_path := OS.get_environment("SHIP") if OS.get_environment("SHIP") != "" else "res://ships/Dart.json"
+	var d := ShipDesign.load_file(ship_path)
+	var hull := HullRenderer.new()
+	hull.shader = load("res://shaders/hull.gdshader")
+	var ship_root := Node3D.new()
+	world.add_child(ship_root)
+	ship_root.add_child(hull)
+	hull.attach(d, HullRenderer.prepare(d))
+	hull.flush()
+	var c := Vector3.ZERO
+	for v in d.vertices:
+		c += v
+	c /= maxf(d.vertices.size(), 1)
+	ship_root.position = -c
+	var cam := Camera3D.new()
+	cam.far = 30000.0
+	cam.fov = float(OS.get_environment("FOV")) if OS.get_environment("FOV") != "" else 70.0
+	world.add_child(cam)
+	var dist := float(OS.get_environment("CAMD")) if OS.get_environment("CAMD") != "" else 40.0
+	var side := look.cross(Vector3.UP).normalized()
+	cam.position = -look * dist + Vector3.UP * dist * 0.25 + side * dist * 0.2
+	cam.look_at(cam.position + look * 100.0 + Vector3.UP * 5.0)
+	await get_tree().create_timer(2.5).timeout
+	get_viewport().get_texture().get_image().save_png(OS.get_environment("SHOT_OUT"))
+	get_tree().quit()

@@ -121,6 +121,9 @@ func set_night(v: float) -> void:
 func _add_text(dt: Dictionary) -> void:
 	var l := Label3D.new()
 	l.text = str(dt["t"])
+	var fnt := FontCatalog.get_font(int(dt.get("f", 0)))
+	if fnt != null:
+		l.font = fnt
 	l.font_size = 64
 	l.outline_size = 0
 	l.double_sided = true

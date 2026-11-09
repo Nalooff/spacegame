@@ -171,6 +171,7 @@
  "Shrinks every detail that hangs over the edge of its surface, like a decal.": "Уменьшает каждую деталь, выступающую за край поверхности, как наклейку.",
  "Text (name, number...)": "Текст (имя, номер...)",
  "Variation": "Вариант",
+ "Map": "Карта",
  "DECK %d": "ПАЛУБА %d",
  "DRIVE  (an arrow, never stops)": "DRIVE  (стрелка, никогда не останавливается)",
  "DRIVE would ram a friend: use GO TO to follow it": "DRIVE протаранит союзника: используйте GO TO, чтобы следовать за ним",

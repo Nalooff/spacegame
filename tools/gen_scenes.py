@@ -157,7 +157,7 @@ def world():
     for i in range(8):
         a = i / 8 * math.tau
         spawn.append(N(f"Spawn{i}", "Marker3D", {"transform": f"Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, {30*math.cos(a):.2f}, {(i%3-1)*4:.1f}, {30*math.sin(a):.2f})"}))
-    rig = N("CameraRig", "Node3D", {}, [N("Pivot", "Node3D", {}, [N("Camera3D", "Camera3D", {"current": "true", "far": 6000.0, "fov": 70.0})])], script='ExtResource("3_cam")')
+    rig = N("CameraRig", "Node3D", {}, [N("Pivot", "Node3D", {}, [N("Camera3D", "Camera3D", {"current": "true", "far": 30000.0, "fov": 70.0})])], script='ExtResource("3_cam")')
     hud_inst = N("HUD", None, {}, instance='ExtResource("5_hud")')
     root = N("GameWorld", "Node3D", {}, [
         N("WorldEnvironment", "WorldEnvironment", {"environment": 'SubResource("Env_w")'}),
@@ -168,7 +168,7 @@ def world():
         N("ShipSpawner", "MultiplayerSpawner", {"spawn_path": 'NodePath("../Ships")'}),
         N("ProjectilePool", "Node3D", {}, [], script='ExtResource("2_pool")'),
         rig,
-        N("StationCamera", "Camera3D", {"fov": 80.0, "far": 6000.0}, [], script='ExtResource("6_stcam")'),
+        N("StationCamera", "Camera3D", {"fov": 80.0, "far": 30000.0}, [], script='ExtResource("6_stcam")'),
         N("OrderControls", "Node3D", {}, [], script='ExtResource("7_orders")'),
         N("TargetMarker", "MeshInstance3D", {"visible": "false", "mesh": 'SubResource("Mesh_marker")'}),
         hud_inst], script='ExtResource("1_world")')

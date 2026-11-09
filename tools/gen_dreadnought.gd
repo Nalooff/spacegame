@@ -69,6 +69,11 @@ func build() -> void:
 	box(H, Vector3(0, 230, 360), Vector3(40, 25, 70))
 	box(ModuleCatalog.COMMANDER, Vector3(0, 277, 350), Vector3(45, 22, 45), "bridge")
 	box(ModuleCatalog.COMMANDER, Vector3(0, 100, -300), Vector3(25, 12, 40), "cockpit")      # forward conn
+	# backup command posts: an armoured citadel deep in the hull, an aft engineering bridge, two flag-bridge wings
+	box(ModuleCatalog.COMMANDER, Vector3(0, -10, 150), Vector3(30, 25, 40), "cockpit")
+	box(ModuleCatalog.COMMANDER, Vector3(0, 25, 890), Vector3(30, 20, 30), "cockpit")
+	for sx in [-1.0, 1.0]:
+		box(ModuleCatalog.COMMANDER, Vector3(sx * 62.0, 175, 350), Vector3(16, 14, 28), "cockpit")
 	d.add_module(ModuleCatalog.RADAR, "dome", Vector3(0, 299, 350), Vector3(16, 14, 16), 10, "electronic")
 	d.add_module(ModuleCatalog.RADAR, "dome", Vector3(0, 105, -330), Vector3(10, 8, 10), 10, "electronic")
 	for sx in [-1.0, 1.0]:

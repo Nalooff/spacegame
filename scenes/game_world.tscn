@@ -456,13 +456,13 @@ script = ExtResource("3_cam")
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig/Pivot"]
 current = true
-far = 6000.0
+far = 30000.0
 fov = 70.0
 
 [node name="StationCamera" type="Camera3D" parent="."]
 script = ExtResource("6_stcam")
 fov = 80.0
-far = 6000.0
+far = 30000.0
 
 [node name="OrderControls" type="Node3D" parent="."]
 script = ExtResource("7_orders")

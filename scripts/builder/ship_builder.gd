@@ -1150,6 +1150,7 @@ var detail_c1: Color = DetailCatalog.INFO[DetailCatalog.WINDOW][5]
 var detail_c2: Color = DetailCatalog.INFO[DetailCatalog.WINDOW][6]
 var detail_opt: float = 0.5
 var detail_text: String = "MY SHIP"
+var detail_font: int = 1                        ## FontCatalog index for TEXT details
 var detail_mirror: bool = false                 ## also place the mirror image across the ship's middle (x = 0)
 var detail_sel: int = -1                        ## selected detail (index in design.details), -1 = none
 signal detail_mode_changed
@@ -1238,6 +1239,7 @@ func detail_click(mouse: Vector2, shift: bool) -> bool:
 		detail_opt = dt["g"]
 		detail_angle = dt["a"]
 		detail_text = dt["t"] if dt["t"] != "" else detail_text
+		detail_font = int(dt.get("f", 0))
 		detail_mode_changed.emit()
 		detail_selection_changed.emit()
 		view.redraw_details(self)
@@ -1275,6 +1277,7 @@ func _make_detail(p: Vector3, n: Vector3, m: int, mirrored: bool = false) -> int
 	dt["m"] = m
 	if detail_kind == DetailCatalog.TEXT:
 		dt["t"] = detail_text.left(DetailCatalog.MAX_TEXT_LEN)
+		dt["f"] = detail_font
 	return design.add_detail(dt)
 
 

@@ -85,6 +85,8 @@ func _on_team_selected(index: int) -> void:
 	Net.submit_team(index + 1 if Net.game_mode == "teams" else index)
 
 
+var _map_pick: OptionButton
+var _map_help: Label
 var _mode_pick: OptionButton
 var _teams_spin: SpinBox
 var _limit_spin: SpinBox
@@ -97,6 +99,19 @@ func _build_game_options() -> void:
 	box.name = "GameOptions"
 	box.visible = Net.is_host()
 	_options_row = box
+	var mt := Label.new()
+	mt.text = tr("Map")
+	box.add_child(mt)
+	_map_pick = OptionButton.new()
+	_map_pick.name = "MapPicker"
+	for mp in MapCatalog.MAPS:
+		_map_pick.add_item(tr(mp["name"]))
+	box.add_child(_map_pick)
+	_map_help = Label.new()
+	_map_help.name = "MapHelp"
+	_map_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_map_help.add_theme_font_size_override("font_size", 12)
+	box.add_child(_map_help)
 	var title := Label.new()
 	title.text = tr("Game mode")
 	box.add_child(title)
@@ -126,7 +141,8 @@ func _build_game_options() -> void:
 	team_picker.get_parent().add_child(box)
 	team_picker.get_parent().move_child(box, team_picker.get_index() + 1)
 	var push := func(_v = 0.0):
-		Net.set_game_options("teams" if _mode_pick.selected == 1 else "ffa", int(_teams_spin.value), int(_limit_spin.value))
+		Net.set_game_options("teams" if _mode_pick.selected == 1 else "ffa", int(_teams_spin.value), int(_limit_spin.value), MapCatalog.MAPS[_map_pick.selected]["id"])
+	_map_pick.item_selected.connect(push)
 	_mode_pick.item_selected.connect(push)
 	_teams_spin.value_changed.connect(push)
 	_limit_spin.value_changed.connect(push)
@@ -137,6 +153,9 @@ func _sync_game_options() -> void:
 	if _mode_pick == null:
 		return
 	_mode_pick.select(1 if Net.game_mode == "teams" else 0)
+	var mi := MapCatalog.ids().find(Net.map_id)
+	_map_pick.select(maxi(mi, 0))
+	_map_help.text = tr(MapCatalog.get_map(Net.map_id)["help"])
 	_teams_spin.set_value_no_signal(Net.team_count)
 	_teams_spin.editable = Net.game_mode == "teams"
 	_limit_spin.set_value_no_signal(Net.kill_limit)
