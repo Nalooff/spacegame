@@ -304,3 +304,15 @@ A client could end up in the world with no ship (camera in the void). Cause: a c
 world scene existed reported "ready" to nobody, so no ship was ever spawned for it. The host now remembers every
 `Net.ready_msec` and spawns waiting peers when its world is built, and a client with no ship 4 / 9 / 16 s after loading
 asks the host (`Net.report_ship_missing`) to spawn it again (also covers a lost spawn packet).
+
+## Collision physics (bounce, friction, angle)
+
+Hull-hull hits are now resolved like real rigid bodies (`Ship._integrate_forces`, `_restitution`, `_bounce`):
+
+- **Restitution per material** (`restitution` in `MaterialCatalog`: aluminium 0.30, bronze 0.22, steel 0.45, titanium 0.55; the two hulls' values are averaged). Only the part of the speed *along the contact normal* rebounds, so a head-on hit bounces back and a glancing one barely does - the angle matters automatically.
+- **Speed**: below a material pair's dent speed the hit is elastic and rebounds by `e * closing speed`; above it the hull dents and the ships lodge in each other (no rebound), as before.
+- **Effective mass**: the rebound impulse is applied at the centre of the whole contact patch and uses both masses and both moments of inertia, so an off-centre hit spins the ships and a face-on-face hit goes straight back. Momentum is conserved (each owner applies its own half; the halves sum to exactly the rebound).
+- **Friction** (`Data.HULL_FRICTION` 0.25): a glancing blow scrapes along the hull and keeps its sideways speed instead of sticking.
+- Multiplayer: the rammed player's PC receives the restitution in `receive_ram` and adds it to its own push.
+
+Tune in `Data` (`HULL_FRICTION`, `BOUNCE_MAX_SPEED`) and `MaterialCatalog`. Test: `tests/test_bounce.tscn`.

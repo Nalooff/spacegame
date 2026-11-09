@@ -166,6 +166,10 @@ func _ready() -> void:
 	can_sleep = false
 	continuous_cd = true
 	contact_monitor = true      # needed to read collisions in _integrate_forces
+	var pm := PhysicsMaterial.new()
+	pm.friction = Data.HULL_FRICTION
+	pm.bounce = 0.0             # the engine bounce is off: rebounds are added in _integrate_forces (angle, speed and material aware)
+	physics_material_override = pm
 	max_contacts_reported = 8
 
 	var count := design.modules.size()
@@ -813,11 +817,11 @@ func _report_structure(alive_cmds: PackedInt32Array, leaving: Array, payloads: A
 ## Another player's ship rammed OURS (we only see their ship as a copy, so we could not feel it ourselves).
 ## Runs on the owner of the rammed ship: same damage rules as a local collision, plus the push it would have received.
 @rpc("any_peer", "call_remote", "reliable")
-func receive_ram(module: int, point: Vector3, normal_out: Vector3, closing: float, reduced_mass: float, attacker_hardness: float) -> void:
+func receive_ram(module: int, point: Vector3, normal_out: Vector3, closing: float, reduced_mass: float, attacker_hardness: float, restitution: float = 0.0) -> void:
 	if not is_multiplayer_authority() or not alive or not is_finite(closing) or closing <= 0.0 or closing > 100000.0:
 		return
 	apply_hit(DamageHit.ramming(module, closing, point, normal_out, Vector3.ZERO, reduced_mass, attacker_hardness))
-	apply_impulse(-normal_out * reduced_mass * closing, point - global_position)
+	apply_impulse(-normal_out * reduced_mass * closing * (1.0 + clampf(restitution, 0.0, 0.95)), point - global_position)
 
 
 ## Closing speed etc. of ship-ship contacts. Godot calls this every physics step.
@@ -838,8 +842,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		if other == null or not other.alive:
 			continue
 		var key := other.get_instance_id()
-		if now - float(_ram_times.get(key, -10.0)) < Data.RAM_COOLDOWN:
-			continue
+		var cooling := now - float(_ram_times.get(key, -10.0)) < Data.RAM_COOLDOWN   # damage is limited by the cooldown, bounces are not
 		var point := state.get_contact_local_position(i)
 		var mine := shape_find_owner(state.get_contact_local_shape(i))
 		var theirs := other.shape_find_owner(state.get_contact_collider_shape(i))
@@ -854,24 +857,77 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		var v_other := other.velocity_at(frame - 1, point)
 		var v_rel := v_other - v_me
 		var closing := v_rel.dot(-n_out)
-		if closing <= 0.0:
+		if closing <= 0.0 or (cooling and closing < 0.05):
 			continue
-		_ram_times[key] = now
 		var other_mod := int(their_shape.get_meta("module"))
 		var hardness := float(MaterialCatalog.info(other.design.material_of(other_mod))["hardness"])
-		# A hit hard enough to dent either hull LODGES the ships in each other instead of bouncing them apart.
 		var my_hard := float(MaterialCatalog.info(design.material_of(int(my_shape.get_meta("module"))))["hardness"])
+		var reduced := mass * other.mass / (mass + other.mass)
+		var my_info := MaterialCatalog.info(design.material_of(int(my_shape.get_meta("module"))))
+		var their_info := MaterialCatalog.info(other.design.material_of(other_mod))
+		var e := 0.0 if is_lodged_with(other) else _restitution(closing, my_info, their_info)
+		if e > 0.0:
+			# one impulse at the CENTRE of the whole contact patch (not at one of its points): a flat face landing on a
+			# flat face then bounces straight back, instead of tipping over onto the other points of the patch
+			var pc := point
+			var nc := n_out
+			var cnt := 1
+			for j in state.get_contact_count():
+				if j == i or state.get_contact_collider_object(j) != other:
+					continue
+				var pj := state.get_contact_local_position(j)
+				var nj := state.get_contact_local_normal(j)
+				pc += pj
+				nc += nj if nj.dot(pj - global_position) >= 0.0 else -nj
+				cnt += 1
+			_bounce(state, other, pc / cnt, -nc.normalized(), closing * e)
+		if cooling:
+			continue
+		_ram_times[key] = now
+		# A hit hard enough to dent either hull LODGES the ships in each other instead of bouncing them apart.
 		if closing > RammingDamage.threshold_speed(MaterialCatalog.info(design.material_of(int(my_shape.get_meta("module")))), hardness) \
 				or closing > RammingDamage.threshold_speed(MaterialCatalog.info(other.design.material_of(other_mod)), my_hard):
 			_lodge_into(other, point)
-		var reduced := mass * other.mass / (mass + other.mass)
 		_pending_hits.append(DamageHit.ramming(int(my_shape.get_meta("module")), closing, point, n_out, v_rel, reduced, hardness, other))
 		# The other ship is simulated by ANOTHER player. On their PC our ship is only a copy that has already been
 		# stopped by their copy of us, so THEY never feel a hard hit. We therefore tell them (see receive_ram).
 		if not other.is_multiplayer_authority() and closing > 1.0:
 			var my_hardness := float(MaterialCatalog.info(design.material_of(int(my_shape.get_meta("module"))))["hardness"])
 			_pending_remote_hits.append({"other": other, "module": other_mod, "point": point, "normal": -n_out,
-				"closing": closing, "mass": reduced, "hardness": my_hardness})
+				"closing": closing, "mass": reduced, "hardness": my_hardness, "restitution": e})
+
+
+## Coefficient of restitution of a hull-hull hit: springy materials give back some of the closing speed, but only up to the
+## speed at which the harder-hit hull starts to dent; a hit above that dents and lodges (plastic hit = no rebound).
+## Because only elastic hits bounce, the rebound speed is e * closing and the energy given back is e^2 of the energy.
+func _restitution(closing: float, mat_a: Dictionary, mat_b: Dictionary) -> float:
+	var e0 := 0.5 * (float(mat_a.get("restitution", 0.3)) + float(mat_b.get("restitution", 0.3)))
+	var yield_speed := minf(RammingDamage.threshold_speed(mat_a, float(mat_b["hardness"])), RammingDamage.threshold_speed(mat_b, float(mat_a["hardness"])))
+	if closing > yield_speed:
+		return 0.0                 # a dent: the ships lodge in each other (see _lodge_into), nothing rebounds
+	return minf(e0, Data.BOUNCE_MAX_SPEED / maxf(closing, 0.001))
+
+
+## The rebound: the engine has already removed the closing speed at the contact (it bounces nothing), so give `rebound`
+## m/s of separating speed back. The impulse is the one a real rigid-body hit would have: it uses the effective mass at the
+## contact point (both masses AND both moments of inertia), so an off-centre hit also spins the ships. Each ship's owner
+## applies the impulse to ITS OWN body only, and the two halves add up to exactly `rebound`.
+## `push_dir` points from the other ship into this one.
+func _bounce(state: PhysicsDirectBodyState3D, other: Ship, point: Vector3, push_dir: Vector3, rebound: float) -> void:
+	var n := push_dir.normalized()
+	var ra := point - global_position
+	var inv_a := state.inverse_inertia_tensor
+	var k := state.inverse_mass + n.dot((inv_a * ra.cross(n)).cross(ra))
+	var inv_m_b := 1.0 / maxf(other.mass, 0.001)
+	k += inv_m_b
+	var other_state := PhysicsServer3D.body_get_direct_state(other.get_rid())
+	if other_state != null:
+		var rb := point - other.global_position
+		k += n.dot((other_state.inverse_inertia_tensor * rb.cross(n)).cross(rb))
+	if k <= 0.0 or not is_finite(k):
+		return
+	var j := rebound / k
+	state.apply_impulse(n * j, ra)
 
 
 ## Stick to `other` at world point `p` (a hard ram). Each ship's owner glues ITS OWN body to the other's copy, so no force
@@ -1335,7 +1391,7 @@ func _physics_process(dt: float) -> void:
 		var victim := r["other"] as Ship
 		if is_instance_valid(victim) and multiplayer.has_multiplayer_peer():
 			victim.receive_ram.rpc_id(victim.get_multiplayer_authority(), r["module"], r["point"], r["normal"],
-				r["closing"], r["mass"], r["hardness"])
+				r["closing"], r["mass"], r["hardness"], r["restitution"])
 	_update_flames()
 
 
