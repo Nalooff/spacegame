@@ -9,7 +9,9 @@ func check(c: bool, what: String) -> void:
 
 func _ready() -> void:
 	var d := ShipDesign.from_blob(ShipDesign.read_blob("res://ships/Brick.json"))
-	check(d.details.is_empty() and d.finish.is_empty(), "old ships have no details and the default finish")
+	d.finish = {}
+	d.clear_details()                # the premade ships are painted now; a ship without any details must still work
+	check(d.details.is_empty() and d.finish.is_empty(), "a ship without details has the default finish")
 	var dt := DetailCatalog.make(DetailCatalog.WINDOW, Vector3(1, 2, 3), Vector3(0, 0, 1), 2.0, 0.5)
 	dt["c"] = Color(0.2, 0.4, 0.6)
 	d.add_detail(dt)
@@ -27,6 +29,7 @@ func _ready() -> void:
 	check(bad["k"] == DetailCatalog.KIND_COUNT - 1 and (bad["p"] as Vector3).is_finite() and bad["w"] >= 0.01 and bad["h"] <= 400.0 and bad["g"] <= 1.0, "bad detail data is clamped")
 	# module removal keeps references right
 	var e := ShipDesign.from_blob(ShipDesign.read_blob("res://ships/Brick.json"))
+	e.clear_details()
 	var a := DetailCatalog.make(DetailCatalog.LIGHT, Vector3.ZERO, Vector3.UP)
 	a["m"] = 3
 	var f := DetailCatalog.make(DetailCatalog.LIGHT, Vector3.ZERO, Vector3.UP)

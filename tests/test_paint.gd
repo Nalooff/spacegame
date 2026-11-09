@@ -9,6 +9,8 @@ func check(c: bool, what: String) -> void:
 
 func _ready() -> void:
 	var d := ShipDesign.from_blob(ShipDesign.read_blob("res://ships/Brick.json"))
+	for i in d.modules.size():       # the premade ships are auto-painted now: start from bare modules
+		d.clear_paint(i)
 	var type_col := ModuleCatalog.color_of(d.modules[0]["type"])
 	check(d.module_color(0) == type_col, "an unpainted module has the colour of its type")
 	d.set_paint(0, Color(0.2, 0.4, 0.8), Color(1, 1, 0), 3, 0.5)
@@ -40,9 +42,11 @@ func _ready() -> void:
 	for n in ship.find_children("*", "MeshInstance3D", true, false):
 		var m := (n as MeshInstance3D).material_override as ShaderMaterial
 		if m != null:
-			if (m.get_shader_parameter("pattern") as int) == 3:
+			var pv: Variant = m.get_shader_parameter("pattern")
+			if pv != null and int(pv) == 3:
 				found = true
-			if (m.get_shader_parameter("mark_axis") as Vector3) != Vector3.ZERO:
+			var mv: Variant = m.get_shader_parameter("mark_axis")
+			if mv != null and (mv as Vector3) != Vector3.ZERO:
 				marks += 1
 	check(found, "the hull shader got the pattern")
 	check(marks > 0, "thrusters / barrels / turrets carry a direction mark (%d meshes)" % marks)
