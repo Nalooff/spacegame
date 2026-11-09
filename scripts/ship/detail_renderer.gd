@@ -132,7 +132,8 @@ func _add_text(dt: Dictionary) -> void:
 	l.pixel_size = float(dt["h"]) / 64.0
 	l.alpha_cut = Label3D.ALPHA_CUT_OPAQUE_PREPASS
 	add_child(l)
-	var wid := l.get_aabb().size.x
+	# (Label3D.get_aabb() is empty until the next frame, so the width is measured from the font itself)
+	var wid := (fnt if fnt != null else ThemeDB.fallback_font).get_string_size(l.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 64).x * l.pixel_size
 	if wid > float(dt["w"]) and wid > 0.0:
 		l.pixel_size *= float(dt["w"]) / wid
 	var n: Vector3 = dt["n"]

@@ -4,8 +4,17 @@ extends RefCounted
 ## flat surface it was put on. If it overhangs an edge (text longer than the plate, a stripe running off a corner)
 ## it is shrunk until it fits. Works on the triangles of the module the detail sits on.
 
-const SAMPLES_X := [-0.5, -0.25, 0.0, 0.25, 0.5]
-const SAMPLES_Y := [-0.5, 0.0, 0.5]
+const SAMPLES_X := [-0.5, -0.42, -0.33, -0.25, -0.17, -0.08, 0.0, 0.08, 0.17, 0.25, 0.33, 0.42, 0.5]
+const SAMPLES_Y := [-0.5, -0.25, 0.0, 0.25, 0.5]
+
+
+## The width the text really takes on the hull (the renderer shrinks it to `w` when it is longer).
+static func text_width(dt: Dictionary) -> float:
+	var fnt := FontCatalog.get_font(int(dt.get("f", 0)))
+	if fnt == null:
+		fnt = ThemeDB.fallback_font
+	var wid := fnt.get_string_size(str(dt.get("t", "")), HORIZONTAL_ALIGNMENT_LEFT, -1, 64).x * float(dt["h"]) / 64.0
+	return minf(float(dt["w"]), wid) if wid > 0.0 else float(dt["w"])
 
 
 ## `tris` = triangle corner list (3 per triangle) of the module under the detail. Returns false when not even a tiny
@@ -15,6 +24,8 @@ static func fit(dt: Dictionary, tris: PackedVector3Array) -> bool:
 	var p: Vector3 = dt["p"]
 	var w: float = dt["w"]
 	var h: float = dt["h"]
+	if int(dt["k"]) == DetailCatalog.TEXT:
+		w = text_width(dt) * 1.1       # fit the letters themselves (plus a margin), not the box the user asked for
 	var tol := maxf(0.05, minf(w, h) * 0.03)
 	var good: Array = []
 	for i in range(0, tris.size() - 2, 3):
@@ -31,7 +42,7 @@ static func fit(dt: Dictionary, tris: PackedVector3Array) -> bool:
 		return false
 	var fr := DetailCatalog.frame(n, float(dt["a"]))
 	var stripe: bool = int(dt["k"]) == DetailCatalog.STRIPE
-	for attempt in 16:
+	for attempt in 24:
 		var ok := true
 		for sx in SAMPLES_X:
 			for sy in SAMPLES_Y:
@@ -44,9 +55,9 @@ static func fit(dt: Dictionary, tris: PackedVector3Array) -> bool:
 			dt["w"] = w
 			dt["h"] = h
 			return true
-		w *= 0.85
+		w *= 0.9
 		if not stripe:
-			h *= 0.85
+			h *= 0.9
 	return false
 
 
