@@ -13,6 +13,7 @@ var normal: Vector3 = Vector3.UP           # world, points OUT of the hit ship
 var relative_velocity: Vector3 = Vector3.ZERO  # attacker velocity as seen by the victim
 var effective_mass: float = 0.0            # ramming: reduced mass of both ships (kg)
 var attacker_hardness: float = 50.0        # ramming: hardness of what hit us
+var sharpness: float = 1.0                 # ramming: 1 = blunt (wide contact patch) .. Data.HULL_SHARP_MAX = a point; sharp hits dent and penetrate sooner
 var direction: Vector3 = Vector3.ZERO      # world direction the damage travelled (bullet velocity); ZERO = into the hull
 var reach: float = 0.0                     # metres it travelled inside the ship (0 = estimated from the damage)
 var dents: bool = true                     # false = the blast's SECOND-HAND hits (splash): they hurt but do not bend the hull again

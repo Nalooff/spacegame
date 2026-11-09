@@ -73,6 +73,117 @@ static func _glow_material(c: Color) -> StandardMaterial3D:
 	return mat
 
 
+## BULLET vs BULLET, once per physics frame: a swept test of every pair of nearby bullets of different ships (sorted along x so
+## only neighbours are compared). Flak shells have a PROXIMITY FUSE: they burst near an enemy bullet.
+func _physics_process(dt: float) -> void:
+	var act: Array[Projectile] = []
+	for i in get_child_count() - BEAM_POOL_SIZE:
+		var p := get_child(i) as Projectile
+		if p != null and p.active:
+			act.append(p)
+	if act.size() < 2:
+		return
+	act.sort_custom(func(a: Projectile, b: Projectile) -> bool: return a.global_position.x < b.global_position.x)
+	for i in act.size():
+		var a := act[i]
+		for j in range(i + 1, act.size()):
+			var b := act[j]
+			if b.global_position.x - a.global_position.x > BROAD_MARGIN:
+				break
+			if a.active and b.active:
+				_meet(a, b, dt)
+
+
+const BROAD_MARGIN := 90.0
+
+func _meet(a: Projectile, b: Projectile, dt: float) -> void:
+	if a.shooter == b.shooter and is_instance_valid(a.shooter):
+		return
+	var a_energy := a.damage_type == &"energy"
+	var b_energy := b.damage_type == &"energy"
+	var d := b.global_position - a.global_position
+	var w := b.velocity - a.velocity
+	var ww := w.length_squared()
+	var t := clampf(-d.dot(w) / ww, 0.0, dt) if ww > 0.000001 else 0.0
+	var closest := d + w * t
+	var dist2 := closest.length_squared()
+	# proximity fuse
+	for pair in [[a, b], [b, a]]:
+		var f: Projectile = pair[0]
+		if f.splash > 0.0 and f.damage_type == &"explosive" and dist2 < f.splash * f.splash * 0.12 and f.active:
+			f.global_position += f.velocity * t
+			f.airburst()
+			return
+	if a_energy != b_energy:
+		return                               # solid bullets and plasma/energy bolts pass through each other
+	var reach := a.radius + b.radius + Data.BULLET_HIT_SLACK
+	if dist2 > reach * reach:
+		return
+	var n := closest.normalized() if closest.length_squared() > 0.000001 else (d.normalized() if d.length_squared() > 0.000001 else Vector3.UP)
+	var vn := w.dot(n)
+	if vn >= 0.0:
+		return                               # already moving apart
+	var pa := a.global_position + a.velocity * t
+	var pb := b.global_position + b.velocity * t
+	a.global_position = pa
+	b.global_position = pb
+	var ma := a.mass
+	var mb := b.mass
+	if a_energy and b_energy:                # two energy bolts cancel each other out, the stronger one keeps the rest
+		var left := absf(a.damage - b.damage)
+		var stronger := a if a.damage >= b.damage else b
+		a.deactivate()
+		b.deactivate()
+		if left > a.damage * 0.1 + b.damage * 0.1:
+			stronger.reactivate_with(left)
+		return
+	# a shell bursts when it hits anything
+	for pair in [[a, b], [b, a]]:
+		var sh: Projectile = pair[0]
+		var other: Projectile = pair[1]
+		if sh.damage_type == &"explosive" and sh.active:
+			var share := sh.mass / (sh.mass + other.mass)
+			other.velocity += (sh.velocity - other.velocity) * share * 0.5
+			other.damage *= 0.5
+			sh.airburst()
+			return
+	# solid on solid: a much lighter bullet is smashed, comparable ones bounce off each other (partly dented)
+	var j := -(1.0 + 0.25) * vn / (1.0 / ma + 1.0 / mb)
+	if ma > mb * 4.0 or mb > ma * 4.0:
+		var light := a if ma < mb else b
+		var heavy := b if ma < mb else a
+		heavy.velocity += (light.velocity - heavy.velocity) * (light.mass / (light.mass + heavy.mass))
+		heavy.damage *= 0.9
+		light.deactivate()
+		return
+	a.velocity -= n * (j / ma)
+	b.velocity += n * (j / mb)
+	for p in [a, b]:
+		(p as Projectile).damage *= 0.6
+		(p as Projectile).knock_off()
+
+
+## An explosion of an air-bursting shell: bullets of other ships inside its radius are shredded (light ones) or thrown aside.
+func blast(shell: Projectile) -> void:
+	var centre := shell.global_position
+	for i in get_child_count() - BEAM_POOL_SIZE:
+		var b := get_child(i) as Projectile
+		if b == null or not b.active or b == shell or (b.shooter == shell.shooter and is_instance_valid(shell.shooter)):
+			continue
+		var dist := b.global_position.distance_to(centre)
+		if dist >= shell.splash:
+			continue
+		var w := 1.0 - dist / shell.splash
+		var dv := shell.damage * 2.0 * w / b.mass
+		if w > 0.45 and b.mass < shell.mass * 3.0 or dv > b.velocity.length() * 0.6:
+			b.deactivate()
+		else:
+			var away := (b.global_position - centre).normalized()
+			b.velocity += away * dv
+			b.damage *= 1.0 - 0.5 * w
+			b.knock_off()
+
+
 func _process(dt: float) -> void:
 	for i in _beams.size():
 		if _beam_left[i] > 0.0:
@@ -83,7 +194,7 @@ func _process(dt: float) -> void:
 
 ## Wakes up the next free bullet (round robin). Recycles the oldest if all are in flight.
 func spawn_shot(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: StringName = &"kinetic",
-		size: float = TRACER_RADIUS, life: float = 4.0, splash: float = 0.0, hue: float = 0.1, pierce: float = 0.0) -> void:
+		size: float = TRACER_RADIUS, life: float = 4.0, splash: float = 0.0, hue: float = 0.1, pierce: float = 0.0, mass_kg: float = 0.0) -> void:
 	var count := get_child_count() - BEAM_POOL_SIZE
 	if count <= 0:
 		return
@@ -91,11 +202,11 @@ func spawn_shot(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: 
 		var p := get_child((_next + i) % count) as Projectile
 		if p != null and not p.active:
 			_next = (_next + i + 1) % count
-			p.activate(pos, vel, from_ship, dmg, dtype, size, life, splash, hue, pierce)
+			p.activate(pos, vel, from_ship, dmg, dtype, size, life, splash, hue, pierce, mass_kg)
 			return
 	var oldest := get_child(_next % count) as Projectile
 	_next = (_next + 1) % count
-	oldest.activate(pos, vel, from_ship, dmg, dtype, size, life, splash, hue, pierce)
+	oldest.activate(pos, vel, from_ship, dmg, dtype, size, life, splash, hue, pierce, mass_kg)
 
 
 ## One beam tick. The ray goes through modules: every module it crosses takes damage, which falls off with the

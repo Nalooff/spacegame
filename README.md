@@ -316,3 +316,10 @@ Hull-hull hits are now resolved like real rigid bodies (`Ship._integrate_forces`
 - Multiplayer: the rammed player's PC receives the restitution in `receive_ram` and adds it to its own push.
 
 Tune in `Data` (`HULL_FRICTION`, `BOUNCE_MAX_SPEED`) and `MaterialCatalog`. Test: `tests/test_bounce.tscn`.
+
+## Collisions: bullets, hulls, and bullets against bullets
+
+- **Bullet vs hull** (`Projectile._hit_module`): the impact angle (from the surface normal) matters. A flat hit does full damage; a slanted one does less (cos) and meets more armour (thickness / cos); a grazing one **ricochets** - it bounces off with 75 % of its sideways speed, does only a scratch (`Data.GLANCE_DAMAGE`) and flies on. Harder hulls turn bullets away earlier, fast and armour-piercing bullets later (`Data.RICOCHET_*`). Explosive shells burst on contact, energy bolts never ricochet (they spread over a slanted hull). Every hit also pushes the ship with the bullet's momentum (bullet mass = recoil / speed). The ricochet dice are reproducible from the position, so every player's copy of a bullet agrees.
+- **Hull vs hull** (`Ship._integrate_forces`): besides bounce/friction (above), the *contact patch* sets how sharp the hit is. A corner or edge touching a face is a few points over a tiny area: its dent threshold falls by `sqrt(sharpness)` (up to x2 lower) and the dent goes deeper (`DamageHit.sharpness`, `Data.HULL_*`). A face on a face is blunt and just bounces.
+- **Bullet vs bullet** (`ProjectilePool._physics_process`): swept test of nearby bullets of different ships. A heavy shell smashes a light bullet, comparable bullets bounce off each other and are dented, two energy bolts cancel each other, solid bullets and plasma pass through each other. Flak shells (explosive with a splash radius) have a **proximity fuse** and burst near enemy bullets (or at the end of their life), wrecking or deflecting everything inside their radius.
+- Tests: `tests/test_bullets_phys.tscn`, `tests/test_bounce.tscn`.

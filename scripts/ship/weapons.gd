@@ -62,7 +62,7 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 	var speeds := PackedFloat32Array()
 	var damages := PackedFloat32Array()
 	var kinds := PackedInt32Array()
-	var extras := PackedFloat32Array()     # per bullet: size, lifetime, splash radius, tracer hue, penetration
+	var extras := PackedFloat32Array()     # per bullet: size, lifetime, splash radius, tracer hue, penetration, mass (kg)
 	var b_origins := PackedVector3Array()
 	var b_dirs := PackedVector3Array()
 	var b_dmg := PackedFloat32Array()
@@ -107,7 +107,9 @@ func try_fire(aim_point: Vector3, power_factor: float, only: PackedInt32Array = 
 				speeds.append(r.muzzle_speed * (1.0 + r.speed_jitter * _rng.randf_range(-1.0, 1.0)))
 				damages.append(r.damage / r.pellets)
 				kinds.append(r.damage_type)
-				extras.append_array(PackedFloat32Array([r.bullet_size, r.lifetime, r.splash, r.tracer_hue, r.pierce]))
+				var spd: float = speeds[speeds.size() - 1]
+				var mass_kg: float = r.recoil / maxf(spd * r.pellets, 1.0) if r.recoil > 0.0 else (r.damage / r.pellets) * Data.BULLET_KG_PER_DAMAGE
+				extras.append_array(PackedFloat32Array([r.bullet_size, r.lifetime, r.splash, r.tracer_hue, r.pierce, maxf(mass_kg, 0.01)]))
 			if r.recoil > 0.0 and ship.has_method("apply_impulse"):
 				var o: Vector3 = shot["origin"]
 				ship.apply_impulse(-(shot["base"] as Vector3) * r.recoil, o - ship.global_position)
@@ -163,10 +165,11 @@ func fire(origins: PackedVector3Array, dirs: PackedVector3Array, speeds: PackedF
 	if pool == null:
 		return
 	for i in mini(origins.size(), mini(speeds.size(), damages.size())):
-		var e := i * 5
-		var has_e := extras.size() >= e + 5
+		var e := i * 6
+		var has_e := extras.size() >= e + 6
 		pool.spawn_shot(origins[i], dirs[i] * speeds[i] + ship_vel, ship, damages[i], DamageRegistry.weapon_type_id(kinds[i] if i < kinds.size() else 0),
-			extras[e] if has_e else 0.3, extras[e + 1] if has_e else 4.0, extras[e + 2] if has_e else 0.0, extras[e + 3] if has_e else 0.1, extras[e + 4] if has_e else 0.0)
+			extras[e] if has_e else 0.3, extras[e + 1] if has_e else 4.0, extras[e + 2] if has_e else 0.0, extras[e + 3] if has_e else 0.1, extras[e + 4] if has_e else 0.0,
+			extras[e + 5] if has_e else damages[i] * Data.BULLET_KG_PER_DAMAGE)
 
 
 @rpc("authority", "call_local", "unreliable")
