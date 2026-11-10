@@ -52,6 +52,10 @@ var out_throttle: PackedFloat32Array = PackedFloat32Array()
 var out_f_rcs: Vector3 = Vector3.ZERO
 var out_tau: Vector3 = Vector3.ZERO
 
+var facing := Vector3.ZERO               ## GOTO: world direction the nose should point once it has ARRIVED (ZERO = do not care)
+var facing_ok: bool = false              ## arrived and pointing along `facing` (within a few degrees)
+var _a_retro := 0.0                      ## m/s2 the ship can brake with WITHOUT turning round (retro thrusters + RCS)
+var _no_flip := false                    ## true: it can brake without turning (so it does not: a 2 km ship must not pirouette)
 var _a_eff := 0.0
 var _arcs_eff := 0.0
 var _alpha_eff := 1.0
@@ -75,11 +79,19 @@ func configure(s: Ship) -> void:
 	var cap := maxf(ship.gyro.omega_cap, 0.001)                 # a ship that is limited to a slow turn rate needs longer
 	_t_flip = maxf(_t_flip, (PI / cap + cap / maxf(_alpha_eff, 0.0001)) * 1.1)
 	out_throttle.resize(ship.alloc.n)
+	# how hard can it push BACKWARDS (against its best axis) as it is? If that is a real brake, it brakes like that
+	var u := ship.alloc.u_best
+	var probe := ship.alloc.allocate(-u * maxf(ship.alloc.f_best, 1.0), PackedFloat32Array())
+	var back := maxf(-ship.alloc.force_of(probe).dot(u), 0.0)
+	_a_retro = maxf(back / ship.mass * pr, _arcs_eff)
+	_no_flip = _a_retro >= 0.1 * _a_eff and _a_retro > 0.0
 	_goal = ship.global_transform.basis * ship.alloc.u_best
 	_att_axis = ship.alloc.u_best
 
 
-func go_to(p: Vector3, by_player: bool = false) -> void:
+func go_to(p: Vector3, by_player: bool = false, face: Vector3 = Vector3.ZERO) -> void:
+	facing = face.normalized() if face.length_squared() > 1e-8 else Vector3.ZERO
+	facing_ok = false
 	heading = Vector3.ZERO
 	target = p
 	mode = Mode.GOTO
@@ -190,7 +202,7 @@ func brake() -> void:
 	if sp < 0.05:
 		go_to(ship.global_position)
 		return
-	var stop_dist: float = sp * _t_flip + sp * sp / (2.0 * maxf(brake_frac_main * _a_eff, 0.05))
+	var stop_dist: float = (0.0 if _no_flip else sp * _t_flip) + sp * sp / (2.0 * maxf(brake_frac_main * (_a_retro if _no_flip else _a_eff), 0.05))
 	go_to(ship.global_position + v / sp * stop_dist)
 
 
@@ -209,11 +221,11 @@ func is_active() -> bool:
 
 
 func _desired_speed(d: float, speed: float) -> float:
-	var a_m := brake_frac_main * _a_eff
+	var a_m := brake_frac_main * (_a_retro if _no_flip else _a_eff)
 	var a_r := brake_frac_rcs * _arcs_eff
 	var v_f := sqrt(2.0 * a_r * d_fine)
 	if d > d_fine:
-		var margin := d_margin + _t_flip * speed
+		var margin := d_margin + (0.0 if _no_flip else _t_flip * speed)
 		return sqrt(v_f * v_f + 2.0 * a_m * maxf(d - d_fine - margin, 0.0))
 	return minf(sqrt(2.0 * a_r * d), k_pos_fine * d * 3.0)
 
@@ -274,14 +286,21 @@ func update(dt: float) -> void:
 	var a_cmd := (kv * (v_des - v_rel)).limit_length(_a_eff)
 	var a_mag := a_cmd.length()
 	var big_push := a_mag > 0.8 * _arcs_eff and s.alloc.f_best > 0.0
+	_att_axis = s.alloc.u_best
+	var f_dir_body := (b.transposed() * a_cmd).normalized() if a_mag > 1e-9 else Vector3.ZERO
+	# BRAKING with a thruster that already points the right way: do not turn the ship round for it
+	var braking := _no_flip and speed > 0.05 and a_cmd.dot(v_rel) < 0.0 and f_dir_body.dot(_att_axis) < 0.5
 	if big_push:
 		_goal = a_cmd / a_mag
-
-	_att_axis = s.alloc.u_best
+	if braking:
+		_goal = b * _att_axis                  # keep the nose where it is
+	var near_end := d < maxf(d_fine * 4.0, 2.0 * speed * speed / maxf(_a_retro if _no_flip else _a_eff, 0.01))
+	if facing != Vector3.ZERO and (near_end and speed < 0.3 or d < d_fine * 4.0):
+		_goal = facing                         # arrived: only now turn to the wanted heading
 	var faced := _apply_facing(dt)
 	var tau_att := _attitude_torque(b)
 	var f_des := s.mass * (b.transposed() * a_cmd)
-	if big_push and (faced or att_error < deg_to_rad(align_gate_deg)):
+	if big_push and (faced or braking or att_error < deg_to_rad(align_gate_deg)):
 		out_throttle = s.alloc.allocate(f_des, out_throttle)
 	else:
 		out_throttle.fill(0.0)
@@ -307,6 +326,7 @@ func update(dt: float) -> void:
 		phase = "ACCEL"
 
 	on_target = d < 0.05 and speed < 0.05
+	facing_ok = on_target and (facing == Vector3.ZERO or (b * _att_axis).angle_to(facing) < deg_to_rad(3.0))
 	if on_target:
 		_settle += dt
 		if _settle >= 1.0 and not _arrived_sent:

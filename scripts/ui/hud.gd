@@ -82,7 +82,7 @@ func _process(dt: float) -> void:
 		ap_text = tr("ON TARGET") if ap.on_target else tr("%s  dist %.1f m") % [ap.phase, ap.distance]
 	%FlightLabel.text = tr("Speed  %7.2f m/s\nVel    (%.1f, %.1f, %.1f)\nPos    (%.1f, %.1f, %.1f)\nAutopilot: %s\nFlight assist: %s") % [
 		v.length(), v.x, v.y, v.z, p.x, p.y, p.z, ap_text, tr("ON") if ship.flight_assist else tr("OFF (T)")]
-	%FireStateLabel.text = (tr("WEAPONS FREE") if ship.weapons_free else tr("WEAPONS HOLD (hold LMB to fire)")) if ship.stations.is_commander_mode() else ""
+	%FireStateLabel.text = (tr("WEAPONS FREE") if ship.weapons_free else tr("WEAPONS HOLD (click your ship / H)")) if ship.stations.is_commander_mode() else ""
 	%CommanderBar.value = ship.commander_ratio() * 100.0
 	%PowerBar.value = clampf(100.0 * ship.electricity.supply_w / maxf(ship.electricity.demand_w, 1.0), 0.0, 100.0)
 	%PowerLabel.text = tr("Electricity  %.0f / %.0f kW%s") % [ship.electricity.demand_w / 1000.0, ship.electricity.supply_w / 1000.0,
@@ -131,7 +131,7 @@ func _refresh_help() -> void:
 		3: tr("G move circle: cursor = x,z   hold ALT = height   click = fly there   Esc cancel     (keys WASD / arrows still fly)"),
 		4: tr("Double click space = fly that way   R lock   Z approach   O orbit   K keep at range   [ ] range     (keys still fly)"),
 	}
-	%ControlsHelpLabel.text = str(lines.get(Prefs.scheme, "")) + "\n" + tr("LMB fire (commander mode: hold LMB to fire at the lock)   R lock next enemy   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P exploded 3D plan   X brake   T flight-assist   M tactical map   H weapons free   Tab scoreboard   J aim at next module   Y crew")
+	%ControlsHelpLabel.text = str(lines.get(Prefs.scheme, "")) + "\n" + tr("LMB: click a ship or contact for its menu; in a gun station LMB fires   R lock next enemy   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P exploded 3D plan   X brake   T flight-assist   M tactical map   H weapons free   Tab scoreboard   J aim at next module   Y crew")
 
 
 func _on_scoreboard_pressed() -> void:

@@ -79,7 +79,7 @@ func _text() -> String:
 		0: return head + "\n" + tr("Fly around: use the keys listed at the bottom of the screen. X brakes. Move about 40 m.")
 		1: return head + "\n" + tr("A target drone is ahead of you. Turn towards it: it shows as a red marker.")
 		2: return head + "\n" + tr("Press %s to lock the drone.") % key("lock_target")
-		3: return head + "\n" + tr("Hold the left mouse button to fire at it. In commander mode the guns follow the lock; the circle shows where to aim.")
+		3: return head + "\n" + tr("Click your ship and choose Weapons free (or press H) to fire at it. The guns follow the lock; the circle shows where to aim.")
 		4: return head + "\n" + tr("Press %s to aim at one of its modules (near enough to see it), and keep firing.") % key("target_module")
 		5: return head + "\n" + tr("Destroy the drone.")
 		6: return head + "\n" + tr("A new drone is coming. Ram it hard: fly into it fast. Your hull lodges in it and leaves a hole.")

@@ -1641,7 +1641,8 @@ func _auto_gunnery(k: float) -> void:
 	var dist: float = c["dist"]
 	# HALF AUTOMATIC: radar locks and the turrets keep aiming, but the guns only fire when the player says so
 	# (hold the left mouse button over the 3D view, or switch WEAPONS FREE on with H).
-	var trigger := weapons_free or (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not Data.cursor_busy and get_viewport().gui_get_hovered_control() == null)
+	# (the left mouse button does NOT fire in commander mode: it opens the ship menu; only weapons-free or a gun station fires)
+	var trigger := weapons_free
 	fire_ready = dist <= Data.AUTO_FIRE_RANGE
 	if fire_ready and trigger:
 		weapons.try_fire(lead, k)
@@ -1783,7 +1784,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_H \
 			and not (get_viewport().gui_get_focus_owner() is LineEdit):
 		weapons_free = not weapons_free
-		BusEvent.notify.emit(tr("WEAPONS FREE: the guns fire on their own") if weapons_free else tr("WEAPONS HOLD: hold the left mouse button to fire"))
+		BusEvent.notify.emit(tr("WEAPONS FREE: the guns fire on their own") if weapons_free else tr("WEAPONS HOLD: the guns wait for your order (click your ship, or H)"))
 
 
 # ----------------------------------------------------------------- visuals

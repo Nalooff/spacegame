@@ -129,7 +129,7 @@ func _choose(ship: Ship) -> Dictionary:
 	if enemy and not is_done("lock"):
 		return {"id": "lock", "text": tr("An enemy is near: press %s to lock it. Your guns then aim ahead of it.") % _key("lock_target")}
 	if ship.detection.locked != null and not is_done("fire"):
-		return {"id": "fire", "text": tr("Hold the left mouse button to fire. The circle shows where to aim; H = weapons free in commander mode.")}
+		return {"id": "fire", "text": tr("Click your ship and choose Weapons free to fire (or press H). The circle shows where to aim.")}
 	if ship.detection.locked != null and _locked_time > 15.0 and not is_done("module"):
 		return {"id": "module", "text": tr("Press %s to aim at one module of the target (when close enough to see it).") % _key("target_module")}
 	if _alive_time > 40.0 and not is_done("map"):

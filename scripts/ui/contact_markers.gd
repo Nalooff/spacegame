@@ -31,8 +31,7 @@ func _draw() -> void:
 		if ship.stations.walking:
 			draw_rect(Rect2(size.x * 0.5 - 100.0, 112.0, 200.0 * ship.stations.walk_progress(), 5.0), Color(0.7, 0.9, 1.0))
 		elif not ship.stations.is_commander_mode():
-			draw_line(Vector2(size.x * 0.5 - 8, size.y * 0.5), Vector2(size.x * 0.5 + 8, size.y * 0.5), Color(1, 1, 1, 0.6), 1.0)   # crosshair
-			draw_line(Vector2(size.x * 0.5, size.y * 0.5 - 8), Vector2(size.x * 0.5, size.y * 0.5 + 8), Color(1, 1, 1, 0.6), 1.0)
+			_crosshair(get_viewport().get_visible_rect().size * 0.5 if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else get_viewport().get_mouse_position())
 	var det := ship.detection
 	var radars := det.working_radars().size()
 	var header := "DETECTION  view %.0f m%s   %d contact%s" % [Data.VIEW_RANGE,
@@ -91,3 +90,13 @@ func _bracket(p: Vector2, col: Color, filled: bool) -> void:
 			draw_line(corner, corner - Vector2(0, sy * 6.0), col, 2.0)
 	if filled:
 		draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), col)
+
+
+## Gun-station aiming point: a ring with a gap cross and a centre dot, so the player sees how well the barrel is on the lead circle.
+func _crosshair(c: Vector2) -> void:
+	var col := Color(1.0, 1.0, 1.0, 0.9)
+	draw_arc(c, 14.0, 0.0, TAU, 32, Color(0, 0, 0, 0.5), 3.0)
+	draw_arc(c, 14.0, 0.0, TAU, 32, col, 1.5)
+	for d in [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]:
+		draw_line(c + d * 6.0, c + d * 24.0, col, 1.5)
+	draw_circle(c, 1.8, col)

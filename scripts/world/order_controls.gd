@@ -19,6 +19,11 @@ var _ring: MeshInstance3D
 var _drop: MeshInstance3D          ## the vertical line + shadow ring at the ship's height
 var _label: Label3D
 var _ring_mesh: TorusMesh
+var _menu: ShipMenu
+var _stage: int = 0                ## 0 = choosing the point, 1 = choosing the heading to end up facing
+var _want_face: bool = false
+var _facing: Vector3 = Vector3.ZERO
+var _arrow: MeshInstance3D
 
 
 func _ready() -> void:
@@ -32,6 +37,20 @@ func _ready() -> void:
 	_label.pixel_size = 0.0009
 	_label.modulate = RING_COLOR
 	add_child(_label)
+	_arrow = MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.02
+	cyl.bottom_radius = 0.02
+	cyl.height = 1.0
+	_arrow.mesh = cyl
+	var am := StandardMaterial3D.new()
+	am.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	am.albedo_color = RING_COLOR
+	am.no_depth_test = true
+	_arrow.material_override = am
+	add_child(_arrow)
+	_menu = ShipMenu.new()
+	add_child(_menu)
 	_show(false)
 
 
@@ -53,6 +72,7 @@ func _make_ring(col: Color) -> MeshInstance3D:
 
 func _show(on: bool) -> void:
 	_ring.visible = on
+	_arrow.visible = on and _stage == 1
 	_drop.visible = on
 	_label.visible = on
 
@@ -105,12 +125,21 @@ func _cam() -> Camera3D:
 
 func _process(_dt: float) -> void:
 	_ship = _local()
-	if active and (_ship == null or Prefs.scheme != FlightControls.Scheme.POINT_CIRCLE):
+	if active and _ship == null:
 		_close()
 	if not active:
 		return
 	var cam := _cam()
 	if cam == null:
+		return
+	if _stage == 1:                                      # choosing the final heading: the arrow follows the cursor
+		var m1 := get_viewport().get_mouse_position()
+		var h1 := plane_point(cam.project_ray_origin(m1), cam.project_ray_normal(m1), point.y)
+		if h1["ok"]:
+			var dv: Vector3 = (h1["point"] as Vector3) - point
+			if dv.length() > 0.5:
+				_facing = dv.normalized()
+		_update_visual(cam)
 		return
 	if not Input.is_key_pressed(KEY_ALT):                # x, z follow the cursor on the plane at the circle's height
 		var m := get_viewport().get_mouse_position()
@@ -132,11 +161,23 @@ func _update_visual(cam: Camera3D) -> void:
 	_label.text = "x %.0f  y %.0f  z %.0f   %.0f m%s" % [point.x, point.y, point.z, point.distance_to(_ship.global_position),
 		"   [ALT: height]" if Input.is_key_pressed(KEY_ALT) else "   [hold ALT: height]"]
 	_show(true)
+	if _stage == 1:
+		var len_a := clampf(dist * 0.25, 20.0, 4000.0)
+		_arrow.global_position = point + _facing * len_a * 0.5
+		_arrow.global_basis = Basis.looking_at(_facing, Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5)
+		_arrow.scale = Vector3(r * 0.6, len_a, r * 0.6)
+		_label.text += "   " + tr("click: end up facing this way")
 
 
-func open_circle() -> void:
+## `face`: after the point, ask for the heading the ship should end up facing (it avoids turning on the way).
+func open_circle(face: bool = false) -> void:
+	if _ship == null:
+		_ship = _local()
 	if _ship == null:
 		return
+	_want_face = face
+	_stage = 0
+	_facing = -_ship.global_basis.z
 	active = true
 	Data.cursor_busy = true
 	point = _ship.global_position
@@ -149,6 +190,7 @@ func open_circle() -> void:
 
 func _close() -> void:
 	active = false
+	_stage = 0
 	Data.cursor_busy = false
 	_show(false)
 
@@ -158,7 +200,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if ship == null or get_viewport().gui_get_focus_owner() is LineEdit:
 		return
 	var scheme := Prefs.scheme
-	if scheme == FlightControls.Scheme.POINT_CIRCLE:
+	if active:
+		_circle_input(event, ship)
+	elif _try_menu(event, ship):
+		return
+	elif scheme == FlightControls.Scheme.POINT_CIRCLE:
 		_circle_input(event, ship)
 	elif scheme == FlightControls.Scheme.EVE_ORDERS:
 		_eve_input(event, ship)
@@ -180,7 +226,11 @@ func _circle_input(event: InputEvent, ship: Ship) -> void:
 	elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
-			ship.autopilot.go_to(point, true)
+			if _want_face and _stage == 0:
+				_stage = 1
+				get_viewport().set_input_as_handled()
+				return
+			ship.autopilot.go_to(point, true, _facing if _stage == 1 else Vector3.ZERO)
 			order_given.emit("Flying to (%.0f, %.0f, %.0f)" % [point.x, point.y, point.z])
 			BusEvent.notify.emit(tr("Flying to (%.0f, %.0f, %.0f)") % [point.x, point.y, point.z])
 			_close()
@@ -190,6 +240,60 @@ func _circle_input(event: InputEvent, ship: Ship) -> void:
 	elif event.is_action_pressed("toggle_autopilot_panel") or (event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE):
 		_close()
 		get_viewport().set_input_as_handled()
+
+
+## Left click in commander mode: on a contact = its menu, on your own ship = the ship menu. True if it opened one.
+func _try_menu(event: InputEvent, ship: Ship) -> bool:
+	if not (event is InputEventMouseButton) or not ship.stations.is_commander_mode():
+		return false
+	var mb := event as InputEventMouseButton
+	if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed or mb.double_click or Data.cursor_busy:
+		return false
+	if get_viewport().gui_get_hovered_control() != null:
+		return false
+	var cam := _cam()
+	if cam == null:
+		return false
+	var m := get_viewport().get_mouse_position()
+	var tgt := pick_contact_on_screen(ship.detection.contacts, cam, m)
+	if tgt != null:
+		_menu.open_at(_menu.contact_entries(ship, tgt), m, tgt.pilot_name)
+		get_viewport().set_input_as_handled()
+		return true
+	var o := cam.project_ray_origin(m)
+	var d := cam.project_ray_normal(m)
+	var radius := maxf(ship.design.extent_length() * 0.35, 6.0) if ship.design != null else 12.0
+	if ray_hits_sphere(o, d, ship.global_position, radius):
+		_menu.open_at(_menu.own_ship_entries(ship, self), m, ship.pilot_name)
+		get_viewport().set_input_as_handled()
+		return true
+	return false
+
+
+## The contact (any ship the radar shows, friend or foe) whose marker is within `px` pixels of the click, nearest first.
+static func pick_contact_on_screen(contacts: Array, cam: Camera3D, at: Vector2, px: float = 26.0) -> Ship:
+	var best: Ship = null
+	var best_d := px
+	for c in contacts:
+		var sh: Variant = c.get("ship")
+		if not is_instance_valid(sh) or not (sh is Ship):
+			continue
+		var wp: Vector3 = c.get("est_pos", (sh as Ship).global_position)
+		if cam.is_position_behind(wp):
+			continue
+		var dpx := cam.unproject_position(wp).distance_to(at)
+		if dpx < best_d:
+			best_d = dpx
+			best = sh
+	return best
+
+
+static func ray_hits_sphere(o: Vector3, d: Vector3, c: Vector3, r: float) -> bool:
+	var oc := c - o
+	var t := oc.dot(d)
+	if t < 0.0:
+		return oc.length() < r
+	return (oc - d * t).length() <= r
 
 
 func _eve_input(event: InputEvent, ship: Ship) -> void:
