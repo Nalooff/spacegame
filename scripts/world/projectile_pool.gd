@@ -73,28 +73,71 @@ static func _glow_material(c: Color) -> StandardMaterial3D:
 	return mat
 
 
-## BULLET vs BULLET, once per physics frame: a swept test of every pair of nearby bullets of different ships (sorted along x so
-## only neighbours are compared). Flak shells have a PROXIMITY FUSE: they burst near an enemy bullet.
+## BULLET vs BULLET, once per physics frame. Cheap on purpose (a Dreadnought fires hundreds of bullets):
+##  * nothing to do unless bullets of at least two different shooters are in the air;
+##  * the bullets are put in a 3D hash grid (cells of CELL m, more than one frame of travel) and only bullets of
+##    DIFFERENT shooters in the same or a neighbouring cell are tested with a swept test.
+## Flak shells have a PROXIMITY FUSE: they burst near an enemy bullet.
 func _physics_process(dt: float) -> void:
+	_acc += dt                                   # every second frame, sweeping the time of both
+	_skip = not _skip
+	if _skip:
+		return
+	dt = _acc
+	_acc = 0.0
+	_tests = 0
 	var act: Array[Projectile] = []
+	var first: Object = null
+	var multi := false
 	for i in get_child_count() - BEAM_POOL_SIZE:
 		var p := get_child(i) as Projectile
-		if p != null and p.active:
-			act.append(p)
-	if act.size() < 2:
+		if p == null or not p.active:
+			continue
+		if act.is_empty():
+			first = p.shooter
+		elif not multi and p.shooter != first:
+			multi = true
+		act.append(p)
+	if not multi:
 		return
-	act.sort_custom(func(a: Projectile, b: Projectile) -> bool: return a.global_position.x < b.global_position.x)
-	for i in act.size():
-		var a := act[i]
-		for j in range(i + 1, act.size()):
-			var b := act[j]
-			if b.global_position.x - a.global_position.x > BROAD_MARGIN:
-				break
-			if a.active and b.active:
-				_meet(a, b, dt)
+	var cells := {}
+	for p in act:
+		var key := Vector3i((p.global_position / CELL).floor())
+		if cells.has(key):
+			(cells[key] as Array).append(p)
+		else:
+			cells[key] = [p]
+	for key: Vector3i in cells:
+		var here: Array = cells[key]
+		for i in here.size():                                  # inside the cell
+			for j in range(i + 1, here.size()):
+				_meet_if_hostile(here[i], here[j], dt)
+		for off: Vector3i in HALF_NEIGHBOURS:                 # and with the forward neighbours (each pair of cells once)
+			var other: Variant = cells.get(key + off)
+			if other == null:
+				continue
+			for pa in here:
+				for pb in other:
+					_meet_if_hostile(pa, pb, dt)
 
 
-const BROAD_MARGIN := 90.0
+var _acc := 0.0
+var _skip := false
+var _tests := 0
+const MAX_TESTS := 1200                         # per pass: the cost of a busy battle can never run away
+const CELL := 100.0
+const HALF_NEIGHBOURS: Array[Vector3i] = [
+	Vector3i(1, 0, 0), Vector3i(-1, 1, 0), Vector3i(0, 1, 0), Vector3i(1, 1, 0),
+	Vector3i(-1, -1, 1), Vector3i(0, -1, 1), Vector3i(1, -1, 1), Vector3i(-1, 0, 1), Vector3i(0, 0, 1), Vector3i(1, 0, 1),
+	Vector3i(-1, 1, 1), Vector3i(0, 1, 1), Vector3i(1, 1, 1)]
+
+
+func _meet_if_hostile(a: Projectile, b: Projectile, dt: float) -> void:
+	if _tests >= MAX_TESTS or a.shooter == b.shooter or not a.active or not b.active:
+		return
+	_tests += 1
+	_meet(a, b, dt)
+
 
 func _meet(a: Projectile, b: Projectile, dt: float) -> void:
 	if a.shooter == b.shooter and is_instance_valid(a.shooter):
@@ -111,7 +154,8 @@ func _meet(a: Projectile, b: Projectile, dt: float) -> void:
 	for pair in [[a, b], [b, a]]:
 		var f: Projectile = pair[0]
 		if f.splash > 0.0 and f.damage_type == &"explosive" and dist2 < f.splash * f.splash * 0.12 and f.active:
-			f.global_position += f.velocity * t
+			a.global_position += a.velocity * t           # both at the moment of closest approach
+			b.global_position += b.velocity * t
 			f.airburst()
 			return
 	if a_energy != b_energy:

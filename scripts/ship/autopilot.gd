@@ -72,6 +72,8 @@ func configure(s: Ship) -> void:
 	_arcs_eff = ship.rcs.force_max / ship.mass * pr
 	_alpha_eff = ship.gyro.alpha_max * pr
 	_t_flip = 2.0 * sqrt(PI / (0.6 * _alpha_eff)) * 0.75 + 0.2 # time budget for the 180 degree flip
+	var cap := maxf(ship.gyro.omega_cap, 0.001)                 # a ship that is limited to a slow turn rate needs longer
+	_t_flip = maxf(_t_flip, (PI / cap + cap / maxf(_alpha_eff, 0.0001)) * 1.1)
 	out_throttle.resize(ship.alloc.n)
 	_goal = ship.global_transform.basis * ship.alloc.u_best
 	_att_axis = ship.alloc.u_best
@@ -227,7 +229,7 @@ func _attitude_torque(b: Basis) -> Vector3:
 	else:
 		axis /= sn
 	var alpha := 0.6 * _alpha_eff
-	var w_des := minf(sqrt(2.0 * alpha * att_error), 9.0 * att_error)
+	var w_des := minf(minf(sqrt(2.0 * alpha * att_error), 9.0 * att_error), ship.gyro.omega_cap)
 	var bt := b.transposed()
 	var w_body := bt * (axis * w_des)
 	var omega_body := bt * ship.angular_velocity

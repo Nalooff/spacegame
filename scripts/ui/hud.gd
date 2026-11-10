@@ -19,7 +19,7 @@ func _ready() -> void:
 	$HudRoot.add_child(HintBar.new())
 	Prefs.changed.connect(_refresh_help)
 	_refresh_help()
-	_on_local_ship_changed(Data.local_ship)
+	_on_local_ship_changed(Data.local_ship if is_instance_valid(Data.local_ship) else null)
 
 
 # ------------------------------------------------------------- BusEvent listeners
@@ -131,7 +131,7 @@ func _refresh_help() -> void:
 		3: tr("G move circle: cursor = x,z   hold ALT = height   click = fly there   Esc cancel     (keys WASD / arrows still fly)"),
 		4: tr("Double click space = fly that way   R lock   Z approach   O orbit   K keep at range   [ ] range     (keys still fly)"),
 	}
-	%ControlsHelpLabel.text = tr("%s\nLMB fire (commander mode: hold LMB to fire at the lock)   R lock next enemy   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P exploded 3D plan   X brake   T flight-assist   M tactical map   H weapons free   Tab scoreboard   J aim at next module   Y crew") % lines.get(Prefs.scheme, "")
+	%ControlsHelpLabel.text = str(lines.get(Prefs.scheme, "")) + "\n" + tr("LMB fire (commander mode: hold LMB to fire at the lock)   R lock next enemy   RMB drag orbit camera   Wheel zoom\nV commander/crew mode   F next station   P exploded 3D plan   X brake   T flight-assist   M tactical map   H weapons free   Tab scoreboard   J aim at next module   Y crew")
 
 
 func _on_scoreboard_pressed() -> void:

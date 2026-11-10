@@ -122,6 +122,7 @@ var _hull_thread: Thread = null
 var _chunk_thread: Thread = null
 var _pending_dents: Array = []            # dents received before the hull was ready
 var _hull_ready: bool = false
+var _ship_len: float = 0.0        # longest side of the design (m), measured once
 var _cmd_throttle: PackedFloat32Array = PackedFloat32Array()
 # ---- collision bookkeeping (see _integrate_forces)
 var _hist_frame: Array[int] = [-1, -1, -1, -1]       # physics frame of each history slot
@@ -263,7 +264,9 @@ func _rebuild_systems() -> void:
 		_thr_module.append(mi)
 	alloc.setup(powers, dirs, poss)
 	rcs.configure(alloc.f_best)
-	gyro.configure(alloc.worst_torque, inertia, design.gyro_scale)
+	if _ship_len <= 0.0:
+		_ship_len = design.extent_length()
+	gyro.configure(alloc.worst_torque, inertia, design.gyro_scale, _ship_len)
 	_thrust_full_w = thrust_full_w
 	_configure_electricity()
 	detection.configure(self)
@@ -1761,7 +1764,7 @@ func _manual_command(m: Dictionary) -> Array:
 	var rot: Vector3 = m["rot"]
 	var tau: Vector3
 	if flight_assist:
-		var w_des := rot * 1.2 * electricity.ratio
+		var w_des := rot * gyro.omega_cap * electricity.ratio
 		var omega_body := b.transposed() * angular_velocity
 		tau = inertia * (6.0 * (w_des - omega_body)) - tau_thr
 	else:

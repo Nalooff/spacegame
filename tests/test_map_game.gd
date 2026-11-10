@@ -30,5 +30,7 @@ func _ready() -> void:
 	check(me != null and me.alive, "the Dreadnought exists")
 	if me != null:
 		check(me.global_position.length() > 1000.0, "it starts out on the big ring (%.0f m from the middle)" % me.global_position.length())
+	var rig := world.get_node_or_null("CameraRig")
+	check(rig != null and float(rig.get("_dist")) > 1000.0, "the chase camera starts a kilometre or more away from a 2 km ship (%.0f m)" % (float(rig.get("_dist")) if rig != null else 0.0))
 	print("FAILS: %d" % fails)
 	get_tree().quit(1 if fails > 0 else 0)

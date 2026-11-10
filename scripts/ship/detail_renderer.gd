@@ -138,7 +138,7 @@ func _add_text(dt: Dictionary) -> void:
 		l.pixel_size *= float(dt["w"]) / wid
 	var n: Vector3 = dt["n"]
 	var b := DetailCatalog.frame(n, float(dt["a"]))
-	l.transform = Transform3D(b, (dt["p"] as Vector3) + n * (0.03 + float(dt["h"]) * 0.01))
+	l.transform = Transform3D(b, (dt["p"] as Vector3) + n * (0.015 + float(dt["h"]) * 0.0008))
 	_texts.append([l, int(dt["m"])])
 
 

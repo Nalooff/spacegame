@@ -83,7 +83,7 @@ func build() -> void:
 	# ---- main engines
 	for sx in [-1.0, 1.0]:
 		for y in [55.0, -30.0]:
-			thruster(Vector3(sx * 70.0, y, 1015), 38.0, 70.0, Vector3(0, 0, -1))
+			thruster(Vector3(sx * 70.0, y, 1015), 38.0, 70.0, Vector3(0, 0, -1), "ion")  # ion drives: a 39-megatonne ship accelerates slowly
 	# ---- manoeuvring thrusters (RCS): on every flank, top and bottom
 	for z in [-760.0, -400.0, 0.0, 700.0]:
 		var face_x := 111.0 if z < -600.0 else (135.0 if z < 600.0 else 156.0)

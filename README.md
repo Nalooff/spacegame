@@ -323,3 +323,11 @@ Tune in `Data` (`HULL_FRICTION`, `BOUNCE_MAX_SPEED`) and `MaterialCatalog`. Test
 - **Hull vs hull** (`Ship._integrate_forces`): besides bounce/friction (above), the *contact patch* sets how sharp the hit is. A corner or edge touching a face is a few points over a tiny area: its dent threshold falls by `sqrt(sharpness)` (up to x2 lower) and the dent goes deeper (`DamageHit.sharpness`, `Data.HULL_*`). A face on a face is blunt and just bounces.
 - **Bullet vs bullet** (`ProjectilePool._physics_process`): swept test of nearby bullets of different ships. A heavy shell smashes a light bullet, comparable bullets bounce off each other and are dented, two energy bolts cancel each other, solid bullets and plasma pass through each other. Flak shells (explosive with a splash radius) have a **proximity fuse** and burst near enemy bullets (or at the end of their life), wrecking or deflecting everything inside their radius.
 - Tests: `tests/test_bullets_phys.tscn`, `tests/test_bounce.tscn`.
+
+## Heavy ships, camera and performance (10 Nov 2026)
+
+- **Weight**: turning is now size-aware (`ShipGyroscope`): the guaranteed turn acceleration falls as (30 m / length)^1.5 and the fastest turn the pilot or autopilot may ask for as (30 m / length)^0.75. Ships up to 30 m are unchanged (2 rad/s2, 1.2 rad/s); the 2.2 km Dreadnought turns at 0.003 rad/s2 and tops out at 0.047 rad/s (about 10 s of full stick gets it to 0.03 rad/s). The Dreadnought's main engines are now ion drives: 0.5 m/s2 forward (a fighter has 2.8), 0.22 braking, 0.12 sideways. `tests/test_weight.tscn`.
+- **Camera**: the chase camera's start distance, minimum, maximum and zoom range follow the ship's length (a 2 km ship is watched from about 2 km; the wheel zooms in proportion).
+- **Lag fix**: the bullet-vs-bullet pass took ~80 ms per frame with a few hundred bullets in the air (a Dreadnought's turrets). It now returns at once unless two shooters' bullets exist, uses a 3D hash grid, runs every second physics frame and has a per-pass test budget.
+- **Text decals** sit closer to the hull (a 40 m text used to float ~0.4 m above it).
+- **HUD fixes**: no more "not all arguments converted" error in the controls help (the translated help text is no longer formatted with `%`), and the HUD no longer reads a freed ship when it starts; unused-signal warnings in `bus_event.gd` silenced.

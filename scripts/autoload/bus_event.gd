@@ -1,3 +1,4 @@
+@warning_ignore_start("unused_signal")
 extends Node
 ## Autoload "BusEvent": a global signal hub. Nodes announce things here and any other node
 ## can listen, so scripts do not need to know about each other.
