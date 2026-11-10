@@ -89,12 +89,45 @@ func _spawn_for_peer(id: int) -> void:
 	var n := spawn_points.get_child_count()
 	var marker := spawn_points.get_child(_spawn_index % n) as Marker3D
 	_spawn_index += 1
-	# a capital ship needs more room than a fighter: push its start point out so ships do not overlap
-	var pos := marker.global_position
-	var need := _ship_length(entry["ship"]) * 1.3
-	if need > _spawn_radius and _spawn_radius > 100.0:
-		pos = pos.normalized() * minf(need, 2800.0)
+	# Start point: along this slot's direction of the ring, pushed out until the new ship's bounding sphere
+	# is clear of every ship already in the arena (a Super Star Destroyer must never spawn inside anyone).
+	var len_new := _ship_length(entry["ship"])
+	var dir := marker.global_position
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.1 else Vector3.RIGHT
+	var pos := _clear_spot(dir, len_new)
+	Data.note_ship_size(len_new)
 	spawner.spawn({"peer": id, "design": entry["ship"], "name": entry["name"], "pos": pos})
+
+
+## First point along `dir` (from the arena centre outward) where a ship of length `len_new` does not touch any
+## ship already there (sphere radius = half the length, plus a gap of a quarter length each).
+func _clear_spot(dir: Vector3, len_new: float, others: Array = []) -> Vector3:
+	var r_new := len_new * 0.5
+	var step := maxf(r_new * 0.25, 10.0)
+	var d := maxf(_spawn_radius, r_new * 1.6)
+	if others.is_empty() and ships_root != null:
+		for sh in ships_root.get_children():
+			if sh is Ship:
+				others.append([sh.global_position, _ship_length_of_node(sh) * 0.5])
+	for _i in 400:
+		var p := dir * d
+		var ok := true
+		for o in others:
+			var gap: float = (r_new + float(o[1])) * 1.25 + 20.0
+			if p.distance_to(o[0]) < gap:
+				ok = false
+				break
+		if ok:
+			return p
+		d += step
+	return dir * d
+
+
+func _ship_length_of_node(sh: Ship) -> float:
+	if sh.design != null:
+		return sh.design.extent_length()
+	return 20.0
 
 
 func _ship_length(design_name: String) -> float:

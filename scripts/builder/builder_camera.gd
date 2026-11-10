@@ -80,6 +80,7 @@ func set_orthographic(on: bool) -> void:
 ## Smoothly-less "frame this": centre the view on `point` and zoom so `radius` fits.
 func focus_on(point: Vector3, radius: float) -> void:
 	pivot = point
+	max_distance = maxf(max_distance, radius * 4.0)
 	distance = clampf(radius * 3.0, min_distance, max_distance)
 	_apply()
 
@@ -87,9 +88,9 @@ func focus_on(point: Vector3, radius: float) -> void:
 func _apply() -> void:
 	position = pivot
 	rotation = Vector3(pitch, yaw, 0.0)
-	camera.position = Vector3(0, 0, 150.0 if orthographic else distance)   # orthographic: far back so nothing is cut
+	camera.position = Vector3(0, 0, maxf(150.0, distance * 2.0) if orthographic else distance)   # orthographic: far back so nothing is cut
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE
 	camera.size = distance * 0.9        # orthographic: how many metres fit on screen (zoom = distance)
-	camera.near = 0.05
-	camera.far = 600.0
+	camera.near = clampf(distance * 0.02, 0.05, 200.0)       # a 50 km ship needs a far and a near plane that grow with the zoom
+	camera.far = maxf(600.0, distance * 60.0 + (150.0 if orthographic else 0.0) * 0.0 + maxf(150.0, distance * 2.0))
 	view_changed.emit()

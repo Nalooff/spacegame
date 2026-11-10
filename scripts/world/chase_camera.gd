@@ -34,6 +34,9 @@ func _fit_to_ship() -> void:
 	max_dist = maxf(300.0, ship_len * 6.0)
 	_dist = clampf(maxf(Prefs.cam_dist, ship_len * 0.9), min_dist, max_dist)
 	_dist_set = true
+	var cam := $Pivot/Camera3D as Camera3D                  # depth range grows with the ship: 50 km hulls, 0.05 m details
+	cam.near = clampf(ship_len * 0.0005, 0.05, 25.0)
+	cam.far = maxf(30000.0, ship_len * 40.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:

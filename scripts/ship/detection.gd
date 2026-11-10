@@ -4,7 +4,7 @@ extends Node
 ##
 ## HOW A SHIP IS DETECTED
 ##   * By VIEW (always, no radar needed): anything within Data.VIEW_RANGE. Ships farther than that are not even RENDERED
-##     (see Ship.set_rendered), and ships farther than Data.NET_RANGE do not even exchange data (Ship._net_filter).
+##     (see Ship.set_rendered), and ships farther than Data.net_range do not even exchange data (Ship._net_filter).
 ##   * By RADAR (the external Radar modules of the ship, they use this module):
 ##       electronic radar  looks at the ELECTRICITY the target uses       (Ship.sig_elec)
 ##       thermal radar     looks at the HEAT the target gives off         (Ship.sig_heat): thrusters, firing weapons...
@@ -86,7 +86,7 @@ func scan() -> void:
 			continue
 		var dist := mine.distance_to(other.global_position)
 		other.set_rendered(dist <= Data.VIEW_RANGE)
-		if other.is_wreck() or dist > Data.NET_RANGE:
+		if other.is_wreck() or dist > Data.net_range:
 			continue
 		var best_how := ""
 		var best_prec := 0.0
@@ -95,7 +95,7 @@ func scan() -> void:
 			best_prec = Data.VIEW_PRECISION * (1.0 - 0.5 * dist / Data.VIEW_RANGE)
 		for r in radars:
 			var eff := radar_range(r, other)
-			if dist <= minf(eff, Data.NET_RANGE):
+			if dist <= minf(eff, Data.net_range):
 				var prec: float = float(r["precision"]) * (1.0 - 0.5 * dist / maxf(eff, 1.0))
 				if prec > best_prec:
 					best_prec = prec

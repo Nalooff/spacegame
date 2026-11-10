@@ -99,7 +99,7 @@ var alive: bool = true:
 
 var _got_first_sync: bool = false
 var _last_sync_ms: int = 0
-var net_far: Dictionary = {}               # peer id -> true while that peer's ship is beyond Data.NET_RANGE (no data is sent to it)
+var net_far: Dictionary = {}               # peer id -> true while that peer's ship is beyond Data.net_range (no data is sent to it)
 var _thr_elec: PackedFloat32Array = PackedFloat32Array()   # per thruster: watts of electricity per newton
 var _thr_heat: PackedFloat32Array = PackedFloat32Array()   # per thruster: watts of heat per newton
 var _net_timer: float = 0.0
@@ -153,6 +153,7 @@ func _ready() -> void:
 	props = design.compute_props()
 	# recentre so the body origin is the centre of mass (cached sums are shifted, not recomputed)
 	design.translate_all(-(props["com"] as Vector3))
+	Data.note_ship_size(design.extent_length())
 	props = design.compute_props()
 
 	mass = props["mass"]
@@ -192,7 +193,7 @@ func _ready() -> void:
 
 	weapons.configure(self)
 	_rebuild_systems()
-	$TransformSync.add_visibility_filter(_net_filter)     # no data for peers whose ship is beyond Data.NET_RANGE
+	$TransformSync.add_visibility_filter(_net_filter)     # no data for peers whose ship is beyond Data.net_range
 	$StateSync.add_visibility_filter(_net_filter)
 	Net.world_peers_changed.connect(_refresh_net_visibility)
 	_setup_flames()
@@ -280,7 +281,7 @@ func _rebuild_systems() -> void:
 		flames.multimesh.instance_count = alloc.n
 
 
-## Ships that stopped sending data (beyond Data.NET_RANGE) are ghosts of where they were: not drawn, not detected.
+## Ships that stopped sending data (beyond Data.net_range) are ghosts of where they were: not drawn, not detected.
 func is_stale() -> bool:
 	return not Net.players.is_empty() and not is_multiplayer_authority() and Time.get_ticks_msec() - _last_sync_ms > 1500
 
@@ -326,7 +327,7 @@ func _update_net_visibility() -> void:
 				break
 		if theirs == null:
 			continue
-		var far := global_position.distance_to(theirs.global_position) > Data.NET_RANGE
+		var far := global_position.distance_to(theirs.global_position) > Data.net_range
 		if net_far.get(peer, false) != far:
 			net_far[peer] = far
 			$TransformSync.update_visibility(peer)
