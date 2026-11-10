@@ -626,6 +626,8 @@ func set_faces_array(mi: int, faces: Array) -> void:
 ## Move every vertex (and keep the cached physical sums valid, so nothing has to be recomputed).
 func translate_all(offset: Vector3) -> void:
 	vertices = Transform3D(Basis.IDENTITY, offset) * vertices
+	for dt in details:         # the paint / decals / lights move with the hull (they are positions in the same space)
+		dt["p"] = (dt["p"] as Vector3) + offset
 	for k in plan.get("free", {}):      # free corridor nodes move with the ship
 		var f: Array = plan["free"][k]
 		f[0] += offset.x

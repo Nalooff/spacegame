@@ -114,5 +114,13 @@ func _ready() -> void:
 	for i in 8: await get_tree().physics_frame
 	var det := ship.find_child("Details", true, false) as DetailRenderer
 	check(det != null and det.get_child_count() > 0, "the game ship draws its detail meshes")
+	# the game re-centres a ship on its centre of mass: the paint must move with the hull
+	var tdsg := ShipDesign.from_blob(ShipDesign.read_blob("res://ships/Brick.json"))
+	if tdsg.details.is_empty():
+		tdsg.add_detail(DetailCatalog.make(DetailCatalog.WINDOW, Vector3(1, 2, 3), Vector3.UP))
+	var p_before: Vector3 = tdsg.details[0]["p"]
+	var v0: Vector3 = tdsg.vertices[0]
+	tdsg.translate_all(Vector3(5, -2, 7))
+	check(((tdsg.details[0]["p"] as Vector3) - p_before).is_equal_approx(Vector3(5, -2, 7)) and (tdsg.vertices[0] - v0).is_equal_approx(Vector3(5, -2, 7)), "re-centring the ship moves its paint with the hull")
 	print("FAILS: %d" % fails)
 	get_tree().quit(1 if fails > 0 else 0)

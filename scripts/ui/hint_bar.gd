@@ -18,17 +18,16 @@ var _alive_time: float = 0.0
 
 func _ready() -> void:
 	name = "HintBar"
-	set_anchors_preset(Control.PRESET_CENTER_TOP)
-	grow_horizontal = Control.GROW_DIRECTION_BOTH
-	offset_top = 64
+	# (placed by hand every frame in _place(): the parent has no size, so anchors would centre the bar on x = 0 and cut it off)
+	top_level = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = SettingsScreen.make_theme()
 	add_theme_stylebox_override("panel", SettingsScreen._box(Color(0.05, 0.07, 0.11, 0.85), 10, Color(1.0, 0.8, 0.3, 0.6), 1, Vector4(14, 8, 14, 8)))
 	_label = Label.new()
-	_label.add_theme_font_size_override("font_size", 15)
+	_label.add_theme_font_size_override("font_size", 18)
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_label.custom_minimum_size = Vector2(520, 0)
+	_label.custom_minimum_size = Vector2(600, 0)
 	add_child(_label)
 	visible = false
 
@@ -47,7 +46,17 @@ static func _key(action: String) -> String:
 	return TutorialMission.key(action)
 
 
+## Centred under the top edge of the WINDOW, always fully on screen (and never wider than it).
+func _place() -> void:
+	var vp := get_viewport_rect().size
+	_label.custom_minimum_size.x = clampf(vp.x - 80.0, 200.0, 600.0)
+	size = Vector2(minf(size.x, vp.x - 20.0), size.y)
+	global_position = Vector2(clampf((vp.x - size.x) * 0.5, 10.0, maxf(vp.x - size.x - 10.0, 10.0)), 120.0)
+
+
 func _process(dt: float) -> void:
+	if visible:
+		_place()
 	_timer += dt
 	for k in _cool.keys():
 		_cool[k] = maxf(float(_cool[k]) - dt, 0.0)
