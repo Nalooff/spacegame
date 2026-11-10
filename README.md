@@ -331,3 +331,15 @@ Tune in `Data` (`HULL_FRICTION`, `BOUNCE_MAX_SPEED`) and `MaterialCatalog`. Test
 - **Lag fix**: the bullet-vs-bullet pass took ~80 ms per frame with a few hundred bullets in the air (a Dreadnought's turrets). It now returns at once unless two shooters' bullets exist, uses a 3D hash grid, runs every second physics frame and has a per-pass test budget.
 - **Text decals** sit closer to the hull (a 40 m text used to float ~0.4 m above it).
 - **HUD fixes**: no more "not all arguments converted" error in the controls help (the translated help text is no longer formatted with `%`), and the HUD no longer reads a freed ship when it starts; unused-signal warnings in `bus_event.gd` silenced.
+
+## Orders by mouse (Nebulous style)
+- **Left click does not fire.** In commander (third-person) mode, left click on **your ship** opens its menu (Move: go to a point / go to a
+  point *and face a direction* / cruise forward until stopped; Stop: brake or cancel the order and keep drifting; Weapons: free / hold / lock;
+  flight assist; map, plan, crew mode). Left click on a **contact** (a marker on the screen) opens its menu: target, target and open fire,
+  approach, keep range, orbit, ram, brake. Keys still work as shortcuts (G, X, H, R, Z, O, K, M, P, V).
+- LMB fires only in a gun station / module control mode, where a **crosshair** is drawn at the aim point (the mouse).
+- **Arrival heading:** "go to a point and face a direction": click the point, then the heading. The ship does not turn on the way; a ship
+  with real retro thrust (the Dreadnought) brakes *without* turning round and only turns to the wanted heading once it has arrived.
+- **Huge ships (up to 50 km):** start points are pushed out until no ships overlap (`GameWorld._clear_spot`), the net range, camera near/far
+  and the builder camera range grow with the biggest ship.
+- The exploded 3D plan caches module geometry and draws each module's edges in one call (Dreadnought: script time 11 ms per picture).

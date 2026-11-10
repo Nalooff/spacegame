@@ -132,6 +132,7 @@ func rebuild() -> void:
 		plan = ship.plan_state.plan
 	else:
 		plan = ShipPlan.generate(design, _adj)
+	_cache_ok = false
 	_elbow_cache.clear()
 	_outline_cache.clear()
 	_pts3.clear()
@@ -1008,6 +1009,101 @@ func _draw_sheet(font: Font) -> void:
 
 
 ## Isometric projection of a ship-space point, after the turn of the model.
+# ---- cached geometry for the exploded 3D view (computing these per frame made a 2000-vertex ship crawl)
+var _cache_cen: Array = []
+var _cache_pts: Array = []
+var _cache_edges: Array = []
+var _cache_edge_pts: Array = []
+var _cache_owner: Dictionary = {}
+var _cache_ok: bool = false
+var _redraw_t: float = 0.0
+const ISO_MAX_EDGES := 600        ## a module with more edges than this is drawn with every n-th one (a hull plate cloud needs no more)
+
+
+func _iso_cache_check() -> void:
+	if _cache_ok and _cache_cen.size() == design.modules.size():
+		return
+	_cache_cen.clear()
+	_cache_pts.clear()
+	_cache_edges.clear()
+	_cache_edge_pts.clear()
+	for mi in design.modules.size():
+		var cen0 := design.module_centroid(mi)
+		_cache_cen.append(cen0)
+		var pts := design.module_points(mi)
+		var step := maxi(1, int(pts.size() / 400.0))      # the outline (convex hull) of a few hundred points is the same picture
+		var keep := PackedVector3Array()
+		for k in range(0, pts.size(), step):
+			keep.append(pts[k] - cen0)
+		_cache_pts.append(keep)
+		var es := design.module_edges(mi)
+		if es.size() > ISO_MAX_EDGES:
+			var st := int(ceil(float(es.size()) / ISO_MAX_EDGES))
+			var thin: Array[Vector2i] = []
+			for k in range(0, es.size(), st):
+				thin.append(es[k])
+			es = thin
+		_cache_edges.append(es)
+		var ep := PackedVector3Array()
+		for e in es:
+			ep.append(design.vertices[e.x] - cen0)
+			ep.append(design.vertices[e.y] - cen0)
+		_cache_edge_pts.append(ep)
+	_cache_owner.clear()
+	if plan != null:
+		for ei in plan.edges.size():
+			var ed: Dictionary = plan.edges[ei]
+			var om := int(ed["module"])
+			if om < 0:
+				om = int(plan.nodes[ed["a"]]["module"])
+			if not _cache_owner.has(om):
+				_cache_owner[om] = []
+			(_cache_owner[om] as Array).append(ei)
+	_cache_ok = true
+
+
+func _cen_of(mi: int) -> Vector3:
+	_iso_cache_check()
+	return _cache_cen[mi]
+
+
+func _ipts_of(mi: int) -> PackedVector3Array:
+	_iso_cache_check()
+	return _cache_pts[mi]
+
+
+func _iedges_of(mi: int) -> Array[Vector2i]:
+	_iso_cache_check()
+	return _cache_edges[mi]
+
+
+## The end points of the module's edges, flat (a0, b0, a1, b1 ...), minus the module centre.
+func _iedge_pts_of(mi: int) -> PackedVector3Array:
+	_iso_cache_check()
+	return _cache_edge_pts[mi]
+
+
+## Projects points (relative to the module centre) with scale `k` onto the screen: `base` + iso(p) * k. One loop, no calls.
+func _iso_points(pts: PackedVector3Array, k: float, base: Vector2) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	out.resize(pts.size())
+	var c := cos(_iso_yaw)
+	var sn := sin(_iso_yaw)
+	var i := 0
+	for p in pts:
+		var x := p.x * c - p.z * sn
+		var z := p.x * sn + p.z * c
+		out[i] = Vector2(base.x + (x - z) * 0.866 * k, base.y + ((x + z) * 0.5 - p.y) * k)
+		i += 1
+	return out
+
+
+func _edges_by_owner() -> Dictionary:
+	_iso_cache_check()
+	return _cache_owner
+
+
+
 func _iso(p: Vector3) -> Vector2:
 	var c := cos(_iso_yaw)
 	var sn := sin(_iso_yaw)
@@ -1031,10 +1127,10 @@ func _draw_iso(font: Font) -> void:
 	var centre := Vector3.ZERO
 	var cnt := 0
 	for mi in plan.rooms:
-		centre += design.module_centroid(mi)
+		centre += _cen_of(mi)
 		cnt += 1
 	for mi in plan.spaces:
-		centre += design.module_centroid(mi)
+		centre += _cen_of(mi)
 		cnt += 1
 	centre /= maxf(cnt, 1)
 	var avg_h := 0.0
@@ -1044,7 +1140,7 @@ func _draw_iso(font: Font) -> void:
 	var gap := explode * (avg_h + 2.0)
 	var offs: Array[Vector3] = []
 	for mi in n:
-		var c := design.module_centroid(mi)
+		var c := _cen_of(mi)
 		offs.append(Vector3((c.x - centre.x) * 0.35 * explode, _mod_layer(mi) * gap, (c.z - centre.z) * 0.35 * explode))
 	for bi in plan.rooms:                          # a barrel travels with its turret base
 		for bar in design.barrels_of(bi):
@@ -1058,8 +1154,7 @@ func _draw_iso(font: Font) -> void:
 	for mi in n:
 		if design.modules[mi]["type"] == ModuleCatalog.LOOSE or (ship != null and mi < ship.module_hp.size() and ship.module_hp[mi] < 0.0):
 			continue
-		for p in design.module_points(mi):
-			var q := _iso(p + offs[mi])                  # the fit ignores the hover push, so the picture does not jump
+		for q in _iso_points(_ipts_of(mi), 1.0, _iso(_cen_of(mi) + offs[mi])):    # the fit ignores the hover push, so the picture does not jump
 			lo = lo.min(q)
 			hi = hi.max(q)
 		var is_room := design.is_room(mi)
@@ -1074,33 +1169,41 @@ func _draw_iso(font: Font) -> void:
 	_iso_scale = sc
 	# Drawing order (painter's algorithm): deck by deck from the lowest; inside a deck the hull / armour first, then the rooms and outside
 	# parts on top of it; then by depth. The hovered module is always drawn last, so it is never hidden.
+	var depth_of: Dictionary = {}
+	for oi in order:
+		depth_of[oi] = _iso_depth(_cen_of(oi) + offs[oi] + _iso_push.get(oi, Vector3.ZERO))
+	var layer_of: Dictionary = {}
+	var class_of: Dictionary = {}
+	for oi in order:
+		layer_of[oi] = _mod_layer(oi)
+		class_of[oi] = 1 if (design.is_room(oi) or not ModuleCatalog.CORRIDOR_TYPES.has(design.modules[oi]["type"])) else 0
 	order.sort_custom(func(a: int, b: int) -> bool:
 		var ha := a == _iso_hover
 		var hb := b == _iso_hover
 		if ha != hb:
 			return hb
-		if _mod_layer(a) != _mod_layer(b):
-			return _mod_layer(a) < _mod_layer(b)
-		var ca := 1 if (design.is_room(a) or not ModuleCatalog.CORRIDOR_TYPES.has(design.modules[a]["type"])) else 0
-		var cb := 1 if (design.is_room(b) or not ModuleCatalog.CORRIDOR_TYPES.has(design.modules[b]["type"])) else 0
-		if ca != cb:
-			return ca < cb
-		return _iso_depth(design.module_centroid(a) + offs[a] + _iso_push.get(a, Vector3.ZERO)) < _iso_depth(design.module_centroid(b) + offs[b] + _iso_push.get(b, Vector3.ZERO)))
+		if layer_of[a] != layer_of[b]:
+			return layer_of[a] < layer_of[b]
+		if class_of[a] != class_of[b]:
+			return class_of[a] < class_of[b]
+		return depth_of[a] < depth_of[b])
 	_iso_hits.clear()
+	var in_order: Dictionary = {}
+	for oi in order:
+		in_order[oi] = true
 	_iso_offs = offs
 	var placed: Dictionary = {}                      # module -> {cen, g, off}: corridors and labels are drawn after ALL modules
 	for mi in order:
 		var t: String = design.modules[mi]["type"]
 		var room := design.is_room(mi)
-		var cen := design.module_centroid(mi)
+		var cen := _cen_of(mi)
 		var g: float = _iso_grow.get(mi, 1.0)
 		var off: Vector3 = offs[mi] + _iso_push.get(mi, Vector3.ZERO)
 		var hovered := mi == _iso_hover
 		placed[mi] = {"cen": cen, "g": g, "off": off}
 		var r := _ratio(mi) if (room or ModuleCatalog.EXTERNAL_TYPES.has(t)) else 1.0
-		var proj := PackedVector2Array()
-		for p in design.module_points(mi):
-			proj.append(_iso(cen + (p - cen) * g + off) * sc + org)
+		var base := _iso(cen + off) * sc + org          # screen position of the module centre
+		var proj := _iso_points(_ipts_of(mi), g * sc, base)
 		var hull2 := Geometry2D.convex_hull(proj) if proj.size() >= 3 else PackedVector2Array()
 		if hull2.size() >= 3:
 			var solid_fill := room or ModuleCatalog.EXTERNAL_TYPES.has(t)
@@ -1111,27 +1214,22 @@ func _draw_iso(font: Font) -> void:
 		if hovered:
 			col = Color(col, 1.0)
 		var w := (2.4 if hovered else 1.6) if room else (1.8 if hovered else 1.0)
-		for e in design.module_edges(mi):
-			var ea := _iso(cen + (design.vertices[e.x] - cen) * g + off) * sc + org
-			var eb := _iso(cen + (design.vertices[e.y] - cen) * g + off) * sc + org
-			draw_line(ea, eb, col if r > 0.0 or not room else Color(0.6, 0.6, 0.65), w, true)
+		var seg := _iso_points(_iedge_pts_of(mi), g * sc, base)     # all the edges of the module in ONE draw call
+		if seg.size() >= 2:
+			draw_multiline(seg, col if r > 0.0 or not room else Color(0.6, 0.6, 0.65), w, seg.size() < 1500)
 		if hovered and hull2.size() >= 3:
 			draw_polyline(_closed(hull2), Color(_ink, 0.25), 6.0, true)
 
 	# corridors, then the codes: on top of every module so nothing is hidden by a module drawn later
 	if show_rooms:
+		var by_owner := _edges_by_owner()
 		for mi in order:
 			var pl: Dictionary = placed[mi]
 			var pcen: Vector3 = pl["cen"]
 			var pg: float = pl["g"]
 			var poff: Vector3 = pl["off"]
-			for ei in plan.edges.size():
+			for ei in by_owner.get(mi, []):
 				var ed: Dictionary = plan.edges[ei]
-				var owner_m := int(ed["module"])
-				if owner_m < 0:
-					owner_m = int(plan.nodes[ed["a"]]["module"])
-				if owner_m != mi:
-					continue
 				var pa: Vector3 = plan.nodes[ed["a"]]["pos"]
 				var pb: Vector3 = plan.nodes[ed["b"]]["pos"]
 				var er := _edge_ratio(ei)
@@ -1148,7 +1246,7 @@ func _draw_iso(font: Font) -> void:
 			var ids := str(nd["key"]).substr(1).split("_")
 			var ma := int(ids[0])
 			var mb := int(ids[1])
-			if ma >= offs.size() or mb >= offs.size() or not order.has(ma) or not order.has(mb):
+			if ma >= offs.size() or mb >= offs.size() or not in_order.has(ma) or not in_order.has(mb):
 				continue
 			var pj: Vector3 = nd["pos"]
 			var a := _iso(pj + offs[ma] + _iso_push.get(ma, Vector3.ZERO)) * sc + org
@@ -1175,7 +1273,7 @@ func _draw_iso(font: Font) -> void:
 			if f["hp"] <= 0.0:
 				continue
 			var fm := ship.crew.module_of(ship, f)
-			if fm < 0 or fm >= offs.size() or not order.has(fm):
+			if fm < 0 or fm >= offs.size() or not in_order.has(fm):
 				continue
 			var fq := _iso((f["pos"] as Vector3) + offs[fm] + _iso_push.get(fm, Vector3.ZERO)) * sc + org
 			draw_circle(fq, 4.5, Color(1.0, 0.2, 0.2))
@@ -1186,7 +1284,7 @@ func _draw_iso(font: Font) -> void:
 			if m["hp"] <= 0.0:
 				continue
 			var cm := ship.crew.module_of(ship, m)
-			if cm < 0 or cm >= offs.size() or not order.has(cm):
+			if cm < 0 or cm >= offs.size() or not in_order.has(cm):
 				continue
 			var cq := _iso((m["pos"] as Vector3) + offs[cm] + _iso_push.get(cm, Vector3.ZERO)) * sc + org
 			var cc := Color(0.3, 0.9, 0.4)
@@ -1250,11 +1348,11 @@ func _process(dt: float) -> void:
 	var reach := 1.0
 	var hv := Vector3.ZERO
 	if _iso_hover >= 0 and _iso_hover < n:
-		hv = design.module_centroid(_iso_hover)
+		hv = _cen_of(_iso_hover)
 		var lo := Vector3(INF, INF, INF)
 		var hi := Vector3(-INF, -INF, -INF)
 		for mi in n:
-			var c := design.module_centroid(mi)
+			var c := _cen_of(mi)
 			lo = lo.min(c)
 			hi = hi.max(c)
 		reach = maxf((hi - lo).length(), 1.0)
@@ -1266,7 +1364,7 @@ func _process(dt: float) -> void:
 			if mi == _iso_hover:
 				target_grow = 1.1
 			elif _mod_layer(mi) >= 0:
-				var away := design.module_centroid(mi) + _iso_offs_of(mi) - (hv + _iso_offs_of(_iso_hover))
+				var away := _cen_of(mi) + _iso_offs_of(mi) - (hv + _iso_offs_of(_iso_hover))
 				var d := away.length()
 				if d > 0.01:
 					target_push = away / d * reach * 0.16 * clampf(1.0 - d / (reach * 1.2), 0.08, 1.0) * explode
@@ -1278,7 +1376,9 @@ func _process(dt: float) -> void:
 			moving = true
 		_iso_push[mi] = nxt
 		_iso_grow[mi] = ng
-	if moving or (ship != null and is_instance_valid(ship) and ship.crew.active()):      # the crew walks
+	_redraw_t += dt
+	if (moving or (ship != null and is_instance_valid(ship) and ship.crew.active())) and _redraw_t >= 1.0 / 40.0:      # the crew walks
+		_redraw_t = 0.0                      # at most 40 pictures a second: a big ship's drawing is not free
 		queue_redraw()
 
 
