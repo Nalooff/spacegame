@@ -45,7 +45,7 @@ var game_running: bool = false       # the host has started the game (clients le
 signal late_join_changed
 var ready_msec: Dictionary = {}     # host: peer id -> Time.get_ticks_msec() when that peer's world reported ready (kept so a host that loads later still spawns them)
 var _missing_msec: Dictionary = {}
-var world_peers: Dictionary = {}     # once the game runs: the peers that have (or are loading) the world. Nothing is replicated to the others (late joiners still in the lobby).
+var world_peers: Dictionary = {}     # once the game runs: the peers whose world has loaded (reported ready). Nothing is replicated to the others (late joiners still in the lobby).
 signal world_peers_changed
 
 ## SCOREBOARD. peer id (the pilot) -> {name, kills, deaths, damage (dealt), taken}. The HOST keeps it and sends it to everybody.
@@ -979,8 +979,7 @@ func start_game() -> bool:
 	game_running = true
 	ready_msec.clear()
 	world_peers.clear()
-	for id in players:
-		world_peers[id] = true
+	world_peers[1] = true            # peers are added when THEIR world reports ready: a spawn sent to a peer that is still loading is lost for good
 	sync_world_peers.rpc(world_peers.keys(), true)
 	if not late_join:
 		_close_lobby()

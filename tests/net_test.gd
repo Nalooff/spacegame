@@ -4,7 +4,10 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var role: String = args[0]
 	Data.player_name = role
-	var json := ShipDesign.read_blob("res://ships/%s.json" % args[1])
+	var path := "res://ships/%s.json" % args[1]
+	if not FileAccess.file_exists(path):
+		path = "res://ships/%s.ship" % args[1]
+	var json := ShipDesign.read_blob(path)
 	if role == "host":
 		print("[host] hosting: ", Net.host_lobby("Smoke test", false, ""))
 		Net.submit_ship(json)
