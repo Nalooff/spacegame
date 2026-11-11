@@ -32,6 +32,11 @@ func _ready() -> void:
 	print("hovering (animating): %.1f ms per frame" % ((Time.get_ticks_usec() - t0) / 60000.0))
 	pv.canvas._iso_hover = -1
 	for i in 20: await get_tree().process_frame
+	if OS.get_environment("TILT") != "":
+		pv.canvas._iso_pitch = deg_to_rad(65.0)
+		pv.canvas._iso_yaw = 1.0
+		pv.canvas._iso_zoom_at(3.0, Vector2(800, 450))
+		for i in 10: await get_tree().process_frame
 	if OS.get_environment("OUT") != "":
 		get_viewport().get_texture().get_image().save_png(OS.get_environment("OUT"))
 	get_tree().quit()

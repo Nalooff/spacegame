@@ -70,6 +70,9 @@ var _grid := Color(1, 1, 1, 0.045)
 var explode: float = 1.0              ## ISO: how far the decks / modules are pulled apart (0 = assembled)
 var _iso_yaw: float = 0.0             ## ISO: turn of the model (drag with the mouse)
 var _iso_zoom: float = 1.0
+var _panning_iso: bool = false
+var _iso_pitch: float = deg_to_rad(30.0)   ## ISO: how far the view looks down (drag up/down)
+var _iso_pan: Vector2 = Vector2.ZERO      ## ISO: shift of the picture (right or middle mouse drag)
 var _dragging_iso: bool = false
 var _iso_hover: int = -1               ## ISO: module under the mouse
 var _iso_push: Dictionary = {}         ## ISO: module -> how far it is pushed away from the hovered one (animated)
@@ -90,6 +93,7 @@ var _sheet_pass: bool = false          ## true while the Sheet view draws its de
 
 
 func _ready() -> void:
+	clip_contents = true                  # the exploded picture may be zoomed far past the frame
 	if layers.is_empty():
 		register_layer("below", "Deck below", Callable(self, "_layer_below"))      # first: it is drawn underneath everything
 		register_layer("structure", "Hull", Callable(self, "_layer_structure"))
@@ -1087,13 +1091,16 @@ func _iedge_pts_of(mi: int) -> PackedVector3Array:
 func _iso_points(pts: PackedVector3Array, k: float, base: Vector2) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	out.resize(pts.size())
-	var c := cos(_iso_yaw)
-	var sn := sin(_iso_yaw)
+	var ya := _iso_yaw + PI * 0.25
+	var c := cos(ya)
+	var sn := sin(ya)
+	var sp := sin(_iso_pitch)
+	var cp := cos(_iso_pitch)
 	var i := 0
 	for p in pts:
-		var x := p.x * c - p.z * sn
-		var z := p.x * sn + p.z * c
-		out[i] = Vector2(base.x + (x - z) * 0.866 * k, base.y + ((x + z) * 0.5 - p.y) * k)
+		var rx := p.x * c - p.z * sn
+		var rz := p.x * sn + p.z * c
+		out[i] = Vector2(base.x + rx * k, base.y + (rz * sp - p.y * cp) * k)
 		i += 1
 	return out
 
@@ -1104,18 +1111,19 @@ func _edges_by_owner() -> Dictionary:
 
 
 
+## Screen position (before zoom) of a model point: turned by the yaw, then looked at from `_iso_pitch` above the horizon.
 func _iso(p: Vector3) -> Vector2:
-	var c := cos(_iso_yaw)
-	var sn := sin(_iso_yaw)
-	var x := p.x * c - p.z * sn
-	var z := p.x * sn + p.z * c
-	return Vector2((x - z) * 0.866, (x + z) * 0.5 - p.y * 1.0)
+	var ya := _iso_yaw + PI * 0.25
+	var rx := p.x * cos(ya) - p.z * sin(ya)
+	var rz := p.x * sin(ya) + p.z * cos(ya)
+	return Vector2(rx, rz * sin(_iso_pitch) - p.y * cos(_iso_pitch))
 
 
+## How near the viewer a point is (bigger = nearer), for the back-to-front order.
 func _iso_depth(p: Vector3) -> float:
-	var c := cos(_iso_yaw)
-	var sn := sin(_iso_yaw)
-	return (p.x * c - p.z * sn) + (p.x * sn + p.z * c)
+	var ya := _iso_yaw + PI * 0.25
+	var rz := p.x * sin(ya) + p.z * cos(ya)
+	return rz * cos(_iso_pitch) + p.y * sin(_iso_pitch)
 
 
 ## EXPLODED ISOMETRIC: every deck lifted above the one below, modules pushed outwards, the corridors drawn inside their
@@ -1165,7 +1173,7 @@ func _draw_iso(font: Font) -> void:
 	var extent := (hi - lo).max(Vector2(1, 1))
 	var avail := size - Vector2(120, 130)
 	var sc := minf(avail.x / extent.x, avail.y / extent.y) * _iso_zoom
-	var org := Vector2(size.x * 0.5, 62.0 + avail.y * 0.5 + 10.0) - (lo + hi) * 0.5 * sc
+	var org := Vector2(size.x * 0.5, 62.0 + avail.y * 0.5 + 10.0) - (lo + hi) * 0.5 * sc + _iso_pan
 	_iso_scale = sc
 	# Drawing order (painter's algorithm): deck by deck from the lowest; inside a deck the hull / armour first, then the rooms and outside
 	# parts on top of it; then by depth. The hovered module is always drawn last, so it is never hidden.
@@ -1670,25 +1678,47 @@ func _dashed_circle(c: Vector2, r: float) -> void:
 
 
 # ----------------------------------------------------------------- editing (builder)
+## Zoom by `f` keeping the model point under `at` where it is (so you can dive into one module of a 2 km ship).
+func _iso_zoom_at(f: float, at: Vector2) -> void:
+	var nz := clampf(_iso_zoom * f, 0.1, 200.0)
+	f = nz / _iso_zoom
+	var avail := size - Vector2(120, 130)
+	var c0 := Vector2(size.x * 0.5, 62.0 + avail.y * 0.5 + 10.0)
+	_iso_pan = at - c0 - (at - c0 - _iso_pan) * f
+	_iso_zoom = nz
+	queue_redraw()
+
+
 func _gui_input(event: InputEvent) -> void:
 	if view == View.ISO:
 		if event is InputEventMouseButton:
 			var mb_iso := event as InputEventMouseButton
-			if mb_iso.button_index == MOUSE_BUTTON_LEFT or mb_iso.button_index == MOUSE_BUTTON_RIGHT:
-				_dragging_iso = mb_iso.pressed
+			if mb_iso.button_index == MOUSE_BUTTON_LEFT:
+				_dragging_iso = mb_iso.pressed                   # turn and tilt the model
+			elif mb_iso.button_index == MOUSE_BUTTON_RIGHT or mb_iso.button_index == MOUSE_BUTTON_MIDDLE:
+				_panning_iso = mb_iso.pressed                    # slide the picture
 			elif mb_iso.pressed and mb_iso.button_index == MOUSE_BUTTON_WHEEL_UP:
-				_iso_zoom = minf(_iso_zoom * 1.1, 4.0)
-				queue_redraw()
+				_iso_zoom_at(1.15, mb_iso.position)
 			elif mb_iso.pressed and mb_iso.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-				_iso_zoom = maxf(_iso_zoom / 1.1, 0.3)
-				queue_redraw()
+				_iso_zoom_at(1.0 / 1.15, mb_iso.position)
 		elif event is InputEventMouseMotion:
-			_mouse = (event as InputEventMouseMotion).position
+			var mm := event as InputEventMouseMotion
+			_mouse = mm.position
 			if _dragging_iso:
-				_iso_yaw += (event as InputEventMouseMotion).relative.x * 0.01
+				_iso_yaw += mm.relative.x * 0.01
+				_iso_pitch = clampf(_iso_pitch + mm.relative.y * 0.008, deg_to_rad(-85.0), deg_to_rad(85.0))
+				_iso_hover = -1
+			elif _panning_iso:
+				_iso_pan += mm.relative
 				_iso_hover = -1
 			else:
 				_iso_hover = _iso_pick(_mouse)
+			queue_redraw()
+		elif event is InputEventKey and (event as InputEventKey).pressed and (event as InputEventKey).keycode == KEY_HOME:
+			_iso_yaw = 0.0
+			_iso_pitch = deg_to_rad(30.0)
+			_iso_pan = Vector2.ZERO
+			_iso_zoom = 1.0
 			queue_redraw()
 		return
 	if event is InputEventMouseMotion:

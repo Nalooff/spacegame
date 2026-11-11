@@ -3,7 +3,7 @@
  "   (yours)",
  "   F: next station (%.1f s walk)",
  "   [color=orange]NO LINK: cannot be ordered[/color]",
- "   drag to rotate the view, wheel to zoom",
+ "   left drag: turn and tilt   right drag: move   wheel: zoom at the cursor   Home: reset",
  "  (LAN)",
  "  (Steam)",
  "  (crew)",

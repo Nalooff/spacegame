@@ -93,6 +93,7 @@ func _ready() -> void:
 	else:
 		new_ship()
 	on_design_changed()
+	frame_design()
 
 
 # =====================================================================
@@ -121,7 +122,36 @@ func on_selection_changed() -> void:
 	BusEvent.builder_selection_changed.emit()
 
 
+## Metres per grid square / per new shape / per axis marker: 1 for a fighter, 75 for a 2 km ship.
+func world_unit() -> float:
+	return maxf(design.extent_length() / 30.0, 1.0) if design != null else 1.0
+
+
+## Zoom out so the whole ship is in view (loading a big ship must not leave the camera inside it).
+func frame_design() -> void:
+	if design == null or design.vertices.is_empty():
+		return
+	var lo := Vector3(INF, INF, INF)
+	var hi := Vector3(-INF, -INF, -INF)
+	for v in design.vertices:
+		lo = lo.min(v)
+		hi = hi.max(v)
+	camera_rig.focus_on((lo + hi) * 0.5, maxf((hi - lo).length() * 0.5, 3.0))
+
+
+func _update_grid() -> void:
+	var g := get_node_or_null("GroundGrid") as MeshInstance3D
+	if g == null:
+		return
+	# lines 1 m apart for a small ship; for a big one 10 m, 100 m, 1 km ... whatever suits the zoom
+	var unit := pow(10.0, floorf(log(maxf(camera_rig.distance / 9.0, 1.0)) / log(10.0)))
+	(g.material_override as ShaderMaterial).set_shader_parameter("unit", unit)
+	g.scale = Vector3(unit, 1.0, unit) * maxf(1.0, camera_rig.distance / (9.0 * unit) * 0.5)
+	g.position.y = 0.0
+
+
 func _on_camera_moved() -> void:
+	_update_grid()
 	if is_node_ready() and view != null:
 		view.redraw_dots(self)
 
@@ -735,6 +765,7 @@ func _try_auto_link(moved: int) -> void:
 
 func add_module(type: String, primitive: String, half_size: Vector3, segments: int) -> void:
 	checkpoint()
+	half_size *= world_unit()                                  # a new shape is as big as the ship it joins
 	var centre := camera_rig.pivot.snapped(Vector3.ONE * maxf(snap_step, 0.05))
 	var mi := design.add_module(type, primitive, centre, half_size, segments, new_module_preset)
 	mode = Mode.OBJECT
@@ -803,6 +834,7 @@ func selected_part() -> Dictionary:
 ## selected vertices (each selected vertex takes the nearest base vertex of the new shape, best match first).
 func add_shape(type: String, primitive: String, half_size: Vector3, segments: int, axis: int, at_selection: bool) -> void:
 	checkpoint()
+	half_size *= world_unit()
 	var centre := camera_rig.pivot.snapped(Vector3.ONE * maxf(snap_step, 0.05))
 	var shape_basis := axis_basis(axis)
 	var part := {}
@@ -2128,6 +2160,7 @@ func load_from(path: String) -> void:
 	design = loaded
 	clear_selection()
 	on_design_changed()
+	frame_design()
 	say("Loaded '%s'." % design.ship_name)
 
 

@@ -181,17 +181,18 @@ func _redraw_overlay(b: ShipBuilder) -> void:
 			_line(im, d.vertices[e.x], d.vertices[e.y], color)
 	# world axes and the forward (-Z) marker
 	if b.overlays["axes"]:
-		_line(im, Vector3.ZERO, Vector3.RIGHT, Color(0.9, 0.2, 0.2))
-		_line(im, Vector3.ZERO, Vector3.UP, Color(0.2, 0.9, 0.2))
-		_line(im, Vector3.ZERO, Vector3.BACK, Color(0.3, 0.4, 1.0))
-		_line(im, Vector3.ZERO, Vector3(0, 0, -1.4), Color.WHITE)
+		var u := b.world_unit()
+		_line(im, Vector3.ZERO, Vector3.RIGHT * u, Color(0.9, 0.2, 0.2))
+		_line(im, Vector3.ZERO, Vector3.UP * u, Color(0.2, 0.9, 0.2))
+		_line(im, Vector3.ZERO, Vector3.BACK * u, Color(0.3, 0.4, 1.0))
+		_line(im, Vector3.ZERO, Vector3(0, 0, -1.4 * u), Color.WHITE)
 	# thruster arrows: cyan = direction it pushes the ship, orange stub = exhaust
 	for mi in d.modules.size():
 		if d.modules[mi]["type"] != ModuleCatalog.THRUSTER or not b.overlays["thrusters"] or b.is_hidden(mi):
 			continue
 		var c := d.module_centroid(mi)
 		var dir: Vector3 = (d.modules[mi]["dir"] as Vector3).normalized()
-		var length := 1.0 + 0.5 * clampf(d.thruster_power(mi) / 500000.0, 0.0, 4.0)
+		var length := (1.0 + 0.5 * clampf(d.thruster_power(mi) / 500000.0, 0.0, 4.0)) * b.world_unit()
 		_line(im, c, c + dir * length, THRUSTER_ARROW_COLOR)
 		_line(im, c, c - dir * 0.3, EXHAUST_COLOR)
 	# exhaust cones (no-go zones): modules inside them block saving

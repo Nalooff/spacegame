@@ -23,7 +23,7 @@ ambient_light_color = Color(0.75, 0.8, 0.95, 1)
 ambient_light_energy = 0.7
 
 [sub_resource type="Shader" id="Shader_grid"]
-code = "shader_type spatial;\nrender_mode unshaded, blend_mix, depth_draw_never, cull_disabled;\nvarying vec3 wp;\nvoid vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }\nvoid fragment() {\n	vec2 g = abs(fract(wp.xz - 0.5) - 0.5) / fwidth(wp.xz);\n	float l = 1.0 - min(min(g.x, g.y), 1.0);\n	ALBEDO = vec3(0.4, 0.6, 0.9);\n	ALPHA = l * 0.28;\n}\n"
+code = "shader_type spatial;\nrender_mode unshaded, blend_mix, depth_draw_never, cull_disabled;\nuniform float unit = 1.0;\nvarying vec3 wp;\nvoid vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }\nvoid fragment() {\n	vec2 q = wp.xz / unit;\n	vec2 g = abs(fract(q - 0.5) - 0.5) / fwidth(q);\n	float l = 1.0 - min(min(g.x, g.y), 1.0);\n	ALBEDO = vec3(0.4, 0.6, 0.9);\n	ALPHA = l * 0.28;\n}\n"
 
 [sub_resource type="ShaderMaterial" id="Mat_grid"]
 shader = SubResource("Shader_grid")

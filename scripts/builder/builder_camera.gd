@@ -6,7 +6,7 @@ extends Node3D
 signal view_changed
 
 @export var min_distance: float = 1.5
-@export var max_distance: float = 80.0
+@export var max_distance: float = 400000.0      # a 50 km ship must fit on screen; near/far planes follow the zoom (see _apply)
 
 ## While true (e.g. during a G/R/S transform) the camera ignores the mouse.
 var locked: bool = false

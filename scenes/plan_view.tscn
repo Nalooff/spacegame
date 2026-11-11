@@ -167,7 +167,7 @@ value = 1.0
 
 [node name="ExplodeHint" type="Label" parent="PlanMargin/PlanColumn/ExplodeRow"]
 layout_mode = 2
-text = "   drag to rotate the view, wheel to zoom"
+text = "   left drag: turn and tilt   right drag: move   wheel: zoom at the cursor   Home: reset"
 
 [node name="PlanCanvas" type="Control" parent="PlanMargin/PlanColumn"]
 unique_name_in_owner = true
