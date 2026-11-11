@@ -343,3 +343,12 @@ Tune in `Data` (`HULL_FRICTION`, `BOUNCE_MAX_SPEED`) and `MaterialCatalog`. Test
 - **Huge ships (up to 50 km):** start points are pushed out until no ships overlap (`GameWorld._clear_spot`), the net range, camera near/far
   and the builder camera range grow with the biggest ship.
 - The exploded 3D plan caches module geometry and draws each module's edges in one call (Dreadnought: script time 11 ms per picture).
+
+## More premade ships (original designs, `tools/gen_ships.gd`)
+Quadwing (four-wing strike fighter, 17 m), Orb Interceptor (sphere fighter with an armour ring, 11 m), Hammerhead (1.2 km, a wide
+gun beam on the bow), Nautilus (1 km, a shell of shrinking rings with a ring of guns round its mouth), Spearhead (1.75 km, 78% of the
+Dreadnought: a long lance, swept barbs with the broadside). All big ones have real retro thrust, so they brake without turning.
+Regenerate with `SAVE=1 godot --headless --path . res://tools/gen_ships.tscn` (`WHICH=Name` for one).
+
+Exploded plan (P): left drag turns and tilts, right/middle drag moves, wheel zooms at the cursor, Home resets.
+Builder: zoom range, grid, new-shape size and the axis markers scale with the ship; loading a ship frames it whole.
