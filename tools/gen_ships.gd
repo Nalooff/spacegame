@@ -200,55 +200,125 @@ func nautilus() -> void:
 		turret(Vector3(0, float(r[2]) + float(r[1]) - 3.0, float(r[0])), 5.0, "flak", 1, 0.5, 14.0, -1.0, "light")
 
 
-# ---------------------------------------------------------------------------------------------------- Spearhead (~1740 m)
+# ---------------------------------------------------------------------------------------------------- Spearhead (~1.75 km)
+## An original wedge-shaped battleship: a long flat arrowhead of stacked plates, stepped terraces, a tall bridge tower flanked by two
+## shield domes, a ventral dish, sponsons with the brakes, a row of engines, and several hundred small hull details.
+const WZ0 := -820.0            ## z of the first wedge plate
+const WP := 82.0               ## pitch of the plates (each is 90 m long, so they overlap by 8 m)
+
+
+func _wz(i: int) -> float:
+	return WZ0 + float(i) * WP
+
+
+func _wf(z: float) -> float:
+	return clampf((z - WZ0) / WP, 0.0, 16.0)
+
+
+func _wedge_w(i: int) -> float:
+	return 18.0 + float(i) / 16.0 * 210.0
+
+
+func _wedge_h(i: int) -> float:
+	return 26.0 + float(i) / 16.0 * 14.0
+
+
+func _top_at(z: float, x: float) -> float:
+	var n := int(roundf(_wf(z)))                                          # the plate this point is over
+	var w := _wedge_w(n)
+	var h := _wedge_h(n)
+	if n >= 9 and absf(x) < w * 0.6 - 8.0:
+		return h + 17.0
+	if n >= 5 and absf(x) < w * 0.8 - 8.0:
+		return h + 7.0
+	return h
+
+
+func gbox(c: Vector3, h: Vector3, type: String = ModuleCatalog.ARMOR) -> void:
+	d.add_module(type, "box", c, h, 1, "", Basis.IDENTITY)
+
+
 func spearhead() -> void:
 	d.ship_name = "Spearhead"
-	box(H, Vector3(0, 0, 130), Vector3(80, 58, 440))                    # main body
-	box(H, Vector3(0, 0, 560), Vector3(105, 70, 120))                   # engine block
-	nose(H, Vector3(0, 0, -480), 80.0, 200.0, 58.0)                     # the lance: two long tapering sections and a neck
-	box(H, Vector3(0, 0, -690), Vector3(40, 30, 30))
-	nose(H, Vector3(0, 0, -840), 44.0, 120.0, 32.0)
-	box(A, Vector3(0, 62, 60), Vector3(70, 8, 420), "composite")        # dorsal armour spine
-	for sx in [-1.0, 1.0]:                                              # the barbs: swept-back blades carrying the broadside
-		var yaw := Basis(Vector3.UP, sx * 0.14)
-		box(H, Vector3(sx * 190.0, 0, -20), Vector3(125, 22, 340), "", yaw)
-		box(A, Vector3(sx * 258.0, 0, -50), Vector3(10, 26, 330), "", yaw)
-		box(H, Vector3(sx * 150.0, -10, 420), Vector3(70, 30, 100))
-		for y in [18.0, -18.0]:
-			thruster(Vector3(sx * 75.0, y * 2.1, 730.0), 30.0, 60.0, Vector3(0, 0, -1), "ion")
-			thruster(Vector3(sx * 170.0, y * 1.4, 560.0), 22.0, 50.0, Vector3(0, 0, -1), "ion")
-	thruster(Vector3(0, 0, 730.0), 34.0, 60.0, Vector3(0, 0, -1), "ion")
-	box(H, Vector3(0, 85, 260), Vector3(60, 30, 130))                   # command tower
-	box(H, Vector3(0, 135, 280), Vector3(40, 22, 80))
-	commander(Vector3(0, 173, 285), Vector3(30, 18, 34), "bridge")
-	commander(Vector3(0, 0, 130), Vector3(28, 24, 40))
-	commander(Vector3(0, 0, -250), Vector3(18, 14, 30))
-	commander(Vector3(0, 10, 640), Vector3(26, 20, 30))
-	box(ModuleCatalog.ENGINE_ROOM, Vector3(0, 0, 600), Vector3(36, 36, 36), "control")
-	radar(Vector3(0, 188, 285), 14.0)
-	radar(Vector3(0, 26, -760), 5.0)
-	antenna(Vector3(0, 225, 300), 1.4, 36.0)
-	for sx in [-1.0, 1.0]:
-		box(ModuleCatalog.AIRLOCK, Vector3(sx * 82.0, 0, 300), Vector3(6, 14, 14), "standard")
-		box(ModuleCatalog.AIRLOCK, Vector3(sx * 82.0, 0, 420), Vector3(6, 14, 14), "standard")
-		box(ModuleCatalog.POD_BAY, Vector3(sx * 83.0, 0, 500), Vector3(7, 8, 14), "standard")
-		pod(Vector3(sx * 40.0, 0, -690), Vector3(sx, 0, 0), 10.0, 14.0)
-		pod(Vector3(sx * 105.0, 0, 655), Vector3(sx, 0, 0), 13.0, 18.0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	for i in 17:                                                          # the wedge: each plate wider and a little taller than the one ahead
+		box(H, Vector3(0, 0, _wz(i)), Vector3(_wedge_w(i), _wedge_h(i), 45.0))
+	nose(H, Vector3(0, 0, _wz(0) - 114.0), 18.0, 70.0, 26.0)              # the point
+	for i in range(5, 17):                                                # terraces
+		box(H, Vector3(0, _wedge_h(i) + 3.0, _wz(i)), Vector3(_wedge_w(i) * 0.8, 5.0, 45.0))
+	for i in range(9, 17):
+		box(H, Vector3(0, _wedge_h(i) + 12.0, _wz(i)), Vector3(_wedge_w(i) * 0.6, 5.0, 45.0))
+	box(H, Vector3(0, 0, 580), Vector3(232, 46, 50))                      # engine block and engines
+	for x in [-160.0, -80.0, 0.0, 80.0, 160.0]:
+		thruster(Vector3(x, 0, 680), 34.0, 60.0, Vector3(0, 0, -1), "ion")
+	for sx in [-1.0, 1.0]:                                                # sponsons: the brakes and the manoeuvring pods
+		box(H, Vector3(sx * 243.0, 0, 150), Vector3(60, 30, 140))
+		pod(Vector3(sx * 243.0, 0, 10), Vector3(0, 0, -1), 30.0, 45.0, "ion")
+		pod(Vector3(sx * 232.0, 0, 580), Vector3(sx, 0, 0), 13.0, 18.0)
+		pod(Vector3(sx * 303.0, 0, 150), Vector3(sx, 0, 0), 13.0, 18.0)
+		pod(Vector3(sx * 31.0, 0, _wz(1)), Vector3(sx, 0, 0), 11.0, 16.0)
 		for sy in [-1.0, 1.0]:
-			pod(Vector3(sx * 60.0, sy * (70.0 if sy > 0 else 58.0), -200.0), Vector3(0, sy, 0), 13.0, 18.0)
-			pod(Vector3(sx * 60.0, sy * 70.0, 640.0), Vector3(0, sy, 0), 13.0, 18.0)
-		pod(Vector3(sx * 143.0, 0, -357.0), Vector3(0, 0, -1), 30.0, 45.0, "ion")   # brakes on the barb tips
-	# weapons: heavy battery on the spine, broadside on the barbs, point defence all along
-	for z in [-250.0, -100.0, 50.0]:
-		turret(Vector3(0, 64, z), 22.0, "cannon", 2, 2.2, 100.0)
-	turret(Vector3(0, 66, 640), 20.0, "cannon", 2, 2.0, 90.0, 1.0)
+			pod(Vector3(sx * 100.0, sy * 46.0, 580), Vector3(0, sy, 0), 13.0, 18.0)
+			pod(Vector3(sx * 243.0, sy * 30.0, 150), Vector3(0, sy, 0), 13.0, 18.0)
+	for sy in [-1.0, 1.0]:
+		pod(Vector3(0, sy * _wedge_h(1), _wz(1)), Vector3(0, sy, 0), 11.0, 16.0)
+	# the bridge tower, flanked by two shield domes
+	box(H, Vector3(0, 85, 260), Vector3(110, 30, 150))
+	box(H, Vector3(0, 135, 300), Vector3(70, 22, 100))
+	commander(Vector3(0, 176, 330), Vector3(34, 18, 40), "bridge")
 	for sx in [-1.0, 1.0]:
-		for z in [-170.0, -40.0, 90.0]:
-			turret(Vector3(sx * (190.0 + 0.14 * (z + 20.0)), 20, z), 14.0, "cannon", 2, 1.6, 70.0, -1.0)
-		for z in [-120.0, 20.0, 170.0]:
-			turret(Vector3(sx * (250.0 + 0.14 * (z + 20.0)), 20, z), 8.0, "autocannon", 2, 0.8, 28.0, -1.0, "light")
-		for z in [-300.0, 200.0, 400.0]:
-			turret(Vector3(sx * 40.0, 66, z), 5.0, "flak", 1, 0.5, 14.0, -1.0, "light")
+		d.add_module(H, "dome", Vector3(sx * 80.0, 102, 300), Vector3(34, 34, 34), 12, "", Basis.IDENTITY)
+	radar(Vector3(0, 190, 330), 14.0)
+	antenna(Vector3(0, 225, 350), 1.4, 36.0)
+	commander(Vector3(0, 0, 100), Vector3(28, 24, 40))
+	commander(Vector3(0, 0, -300), Vector3(16, 14, 30))
+	commander(Vector3(0, 10, 480), Vector3(26, 20, 30))
+	box(ModuleCatalog.ENGINE_ROOM, Vector3(0, 0, 420), Vector3(36, 36, 36), "control")
+	for sx in [-1.0, 1.0]:
+		box(ModuleCatalog.AIRLOCK, Vector3(sx * 243.0, 0, 230), Vector3(66, 14, 14), "standard")
+		box(ModuleCatalog.POD_BAY, Vector3(sx * 243.0, 0, 100), Vector3(66, 8, 14), "standard")
+	cyl(H, Vector3(0, -_wedge_h(3) - 10.0, -560.0), 70.0, 14.0, Vector3(0, 1, 0), "", 24)      # ventral dish near the bow
+	d.add_module(A, "dome", Vector3(0, -_wedge_h(3) - 22.0, -560.0), Vector3(48, 48, 48), 12, "", Basis(Vector3.RIGHT, PI))
+	for i in [7, 9, 11, 13, 15]:                                          # heavy twins down the terraces
+		var z: float = _wz(i)
+		for sx in [-1.0, 1.0]:
+			turret(Vector3(sx * _wedge_w(i) * 0.4, _top_at(z, _wedge_w(i) * 0.4) - 4.0, z), 18.0, "cannon", 2, 2.0, 90.0)
+	for i in range(4, 17):                                                # medium guns along the edges
+		var z: float = _wz(i) + 30.0
+		for sx in [-1.0, 1.0]:
+			var x: float = sx * _wedge_w(i) * 0.72
+			turret(Vector3(x, _top_at(z, x) - 3.0, z), 9.0, "autocannon", 2, 0.8, 28.0, -1.0, "light")
+	for k in 26:                                                          # point defence
+		var z2 := rng.randf_range(-640.0, 520.0)
+		var wz := _wedge_w(int(roundf(_wf(z2))))
+		var x2 := rng.randf_range(-wz * 0.85, wz * 0.85)
+		if absf(z2 - 300.0) < 160.0 and absf(x2) < 140.0:
+			continue
+		turret(Vector3(x2, _top_at(z2, x2) - 2.0, z2), 4.5, "flak", 1, 0.5, 14.0, -1.0, "light")
+	turret(Vector3(0, 42, 580), 20.0, "cannon", 2, 2.0, 90.0, 1.0)
+	for k in 260:                                                         # hull detail: slabs, vents, pipes and fins over every surface
+		var z3 := rng.randf_range(-760.0, 540.0)
+		var w3 := _wedge_w(int(roundf(_wf(z3))))
+		var h3 := _wedge_h(int(roundf(_wf(z3))))
+		var hx := rng.randf_range(2.0, 7.0)
+		var hy := rng.randf_range(1.0, 3.0)
+		var hz := rng.randf_range(2.0, 9.0)
+		var side := rng.randf()
+		if side < 0.7:
+			var x3 := rng.randf_range(-w3 * 0.9, w3 * 0.9)
+			if absf(z3 - 300.0) < 160.0 and absf(x3) < 140.0:
+				continue
+			var yt := _top_at(z3, x3)
+			if rng.randf() < 0.25:
+				cyl(A, Vector3(x3, yt + 1.0, z3), rng.randf_range(1.5, 4.0), rng.randf_range(2.0, 4.0), Vector3(0, 1, 0), "", 6)
+			else:
+				gbox(Vector3(x3, yt + hy - 1.0, z3), Vector3(hx, hy, hz))
+		elif side < 0.85:
+			var sgn := -1.0 if rng.randf() < 0.5 else 1.0
+			gbox(Vector3(sgn * (w3 + hx - 1.0), rng.randf_range(-h3 * 0.7, h3 * 0.7), z3), Vector3(hx, rng.randf_range(2.0, 6.0), hz))
+		else:
+			gbox(Vector3(rng.randf_range(-w3 * 0.9, w3 * 0.9), -h3 - hy + 1.0, z3), Vector3(hx, hy, hz))
 
 
 func _ready() -> void:
@@ -276,6 +346,9 @@ func _ready() -> void:
 				fwd += float(t["power"])
 			elif dv.z > 0.9:
 				back += float(t["power"])
+		if OS.get_environment("DBG") != "":
+			for k in OS.get_environment("DBG").split(","):
+				print("  module ", k, " ", d.modules[int(k)]["type"], " ", d.module_centroid(int(k)).snapped(Vector3.ONE))
 		print("%s: modules %d  vertices %d  length %.0f m  mass %s kg  fwd %.3f m/s2  retro %.3f m/s2  problems %d" % [n, d.modules.size(), d.vertices.size(), d.extent_length(), str(snappedf(props["mass"], 1.0)), fwd / props["mass"], back / props["mass"], errs.size()])
 		for e in errs:
 			var parts: PackedStringArray = e.split(" ")
@@ -285,7 +358,7 @@ func _ready() -> void:
 			print("   PROBLEM: ", e.left(200), extra)
 		if OS.get_environment("SAVE") != "":
 			if OS.get_environment("NO_PAINT") == "":
-				var styles := {"Quadwing": 1, "Orb Interceptor": 2, "Hammerhead": 5, "Nautilus": 6, "Spearhead": 7}
+				var styles := {"Quadwing": 1, "Orb Interceptor": 2, "Hammerhead": 5, "Nautilus": 6, "Spearhead": 0}
 				AutoPaint.apply(d, {"style": styles[n], "seed": 5, "density": 1.0, "wear": 0.35})
 			print("   saved: ", error_string(d.save_premade()))
 	get_tree().quit()
