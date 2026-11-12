@@ -32,7 +32,11 @@ func thruster(c: Vector3, r: float, half_len: float, push: Vector3, preset: Stri
 	return mi
 
 
+var _tp: Array = []            ## turrets placed so far (the hull detail keeps clear of them)
+
+
 func turret(c: Vector3, r: float, preset_barrel: String, n: int, barrel_r: float, barrel_len: float, fwd: float = -1.0, mount: String = "heavy") -> int:
+	_tp.append([c, r])
 	var tb := d.add_module(ModuleCatalog.TURRET, "dome", c, Vector3(r, maxf(r * 0.8, 1.25), r), 10, mount)
 	d.modules[tb]["dir"] = Vector3.UP
 	var ids: Array = []
@@ -200,11 +204,14 @@ func nautilus() -> void:
 		turret(Vector3(0, float(r[2]) + float(r[1]) - 3.0, float(r[0])), 5.0, "flak", 1, 0.5, 14.0, -1.0, "light")
 
 
-# ---------------------------------------------------------------------------------------------------- Spearhead (~1.75 km)
-## An original wedge-shaped battleship: a long flat arrowhead of stacked plates, stepped terraces, a tall bridge tower flanked by two
-## shield domes, a ventral dish, sponsons with the brakes, a row of engines, and several hundred small hull details.
-const WZ0 := -820.0            ## z of the first wedge plate
-const WP := 82.0               ## pitch of the plates (each is 90 m long, so they overlap by 8 m)
+# ---------------------------------------------------------------------------------------------------- Spearhead (~1.8 km)
+## An original capital ship that mixes two looks: a DEEP BOW with stepped terraces rising towards a mast (the long arrowhead of a
+## star destroyer) and a WIDE STERN with two tall bridge towers, flank gun sponsons and a row of engines (a battle-cruiser's back).
+const WZ0 := -820.0            ## z of the first plate
+const WP := 72.0               ## pitch of the plates (each is 80 m long, so they overlap by 8 m)
+const NP := 21                 ## number of plates
+const TOWER_Z := 470.0         ## the two stern towers
+const MAST_I := 3              ## the bow mast stands on this plate
 
 
 func _wz(i: int) -> float:
@@ -212,104 +219,147 @@ func _wz(i: int) -> float:
 
 
 func _wf(z: float) -> float:
-	return clampf((z - WZ0) / WP, 0.0, 16.0)
+	return clampf((z - WZ0) / WP, 0.0, float(NP - 1))
 
 
-func _wedge_w(i: int) -> float:
-	return 18.0 + float(i) / 16.0 * 210.0
+func _wedge_w(i: int) -> float:                                       ## half width: a slim arrow at the bow, spreading towards the stern
+	return 50.0 + 200.0 * pow(float(i) / float(NP - 1), 1.2)
 
 
-func _wedge_h(i: int) -> float:
-	return 26.0 + float(i) / 16.0 * 14.0
+func _wedge_h(i: int) -> float:                                       ## half height: deep at the bow, flatter behind
+	return 100.0 - 56.0 * minf(float(i) / 11.0, 1.0) + maxf(float(i) - 12.0, 0.0) * 0.6
+
+
+const TIER_I := [10, 8, 6, 4]                                         ## the terrace t covers the plates up to this one
+func _tier_w(t: int) -> float:
+	return 0.85 - 0.13 * float(t)
 
 
 func _top_at(z: float, x: float) -> float:
-	var n := int(roundf(_wf(z)))                                          # the plate this point is over
+	var n := int(roundf(_wf(z)))                                      # the plate this point is over
 	var w := _wedge_w(n)
-	var h := _wedge_h(n)
-	if n >= 9 and absf(x) < w * 0.6 - 8.0:
-		return h + 17.0
-	if n >= 5 and absf(x) < w * 0.8 - 8.0:
-		return h + 7.0
-	return h
+	var top := _wedge_h(n)
+	for t in 4:
+		if n <= int(TIER_I[t]) and absf(x) < w * _tier_w(t) - 8.0:
+			top = _wedge_h(n) + 8.0 + 12.0 * float(t)
+	return top
 
 
 func gbox(c: Vector3, h: Vector3, type: String = ModuleCatalog.ARMOR) -> void:
 	d.add_module(type, "box", c, h, 1, "", Basis.IDENTITY)
 
 
+func _near_turret(x: float, y: float, z: float) -> bool:
+	for t in _tp:
+		var c: Vector3 = t[0]
+		if Vector2(c.x - x, c.z - z).length() < float(t[1]) + 14.0 and absf(c.y - y) < 45.0:
+			return true
+	return false
+
+
+func _in_tower_zone(z: float, x: float) -> bool:
+	var hn := _wz(MAST_I)
+	return (absf(z - TOWER_Z) < 130.0 and absf(x) < 170.0) or (absf(z - hn) < 50.0 and absf(x) < 40.0) or (absf(z - _wz(1)) < 45.0 and absf(x) < 40.0)
+
+
 func spearhead() -> void:
 	d.ship_name = "Spearhead"
+	_tp.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 77
-	for i in 17:                                                          # the wedge: each plate wider and a little taller than the one ahead
-		box(H, Vector3(0, 0, _wz(i)), Vector3(_wedge_w(i), _wedge_h(i), 45.0))
-	nose(H, Vector3(0, 0, _wz(0) - 114.0), 18.0, 70.0, 26.0)              # the point
-	for i in range(5, 17):                                                # terraces
-		box(H, Vector3(0, _wedge_h(i) + 3.0, _wz(i)), Vector3(_wedge_w(i) * 0.8, 5.0, 45.0))
-	for i in range(9, 17):
-		box(H, Vector3(0, _wedge_h(i) + 12.0, _wz(i)), Vector3(_wedge_w(i) * 0.6, 5.0, 45.0))
-	box(H, Vector3(0, 0, 580), Vector3(232, 46, 50))                      # engine block and engines
-	for x in [-160.0, -80.0, 0.0, 80.0, 160.0]:
-		thruster(Vector3(x, 0, 680), 34.0, 60.0, Vector3(0, 0, -1), "ion")
-	for sx in [-1.0, 1.0]:                                                # sponsons: the brakes and the manoeuvring pods
-		box(H, Vector3(sx * 243.0, 0, 150), Vector3(60, 30, 140))
-		pod(Vector3(sx * 243.0, 0, 10), Vector3(0, 0, -1), 30.0, 45.0, "ion")
-		pod(Vector3(sx * 232.0, 0, 580), Vector3(sx, 0, 0), 13.0, 18.0)
-		pod(Vector3(sx * 303.0, 0, 150), Vector3(sx, 0, 0), 13.0, 18.0)
-		pod(Vector3(sx * 31.0, 0, _wz(1)), Vector3(sx, 0, 0), 11.0, 16.0)
+	for i in NP:                                                          # the hull: each plate wider than the one ahead, deep at the bow
+		box(H, Vector3(0, 0, _wz(i)), Vector3(_wedge_w(i), _wedge_h(i), 40.0))
+	nose(H, Vector3(0, 0, _wz(0) - 100.0), 50.0, 70.0, 100.0)              # the prow
+	for t in 4:                                                           # terraces: layers that stack higher towards the bow
+		for i in range(0, int(TIER_I[t]) + 1):
+			box(H, Vector3(0, _wedge_h(i) + 3.0 + 12.0 * float(t), _wz(i)), Vector3(_wedge_w(i) * _tier_w(t), 5.0, 40.0))
+	var ze := _wz(NP - 1) + 40.0                                          # engine block and engines
+	box(H, Vector3(0, 0, ze), Vector3(_wedge_w(NP - 1), 46, 50))
+	for x in [-190.0, -95.0, 0.0, 95.0, 190.0]:
+		thruster(Vector3(x, 0, ze + 100.0), 34.0, 60.0, Vector3(0, 0, -1), "ion")
+	var xs := _wedge_w(14) + 25.0                                         # flank sponsons: the gun batteries, brakes and manoeuvring pods
+	for sx in [-1.0, 1.0]:
+		box(H, Vector3(sx * xs, 0, 150), Vector3(55, 28, 110))
+		pod(Vector3(sx * xs, 0, 40), Vector3(0, 0, -1), 28.0, 42.0, "ion")
+		pod(Vector3(sx * (xs + 55.0), 0, 150), Vector3(sx, 0, 0), 13.0, 18.0)
+		pod(Vector3(sx * (_wedge_w(NP - 1) - 18.0), 0, ze), Vector3(sx, 0, 0), 13.0, 18.0)
+		pod(Vector3(sx * (_wedge_w(1) - 4.0), 0, _wz(1)), Vector3(sx, 0, 0), 11.0, 16.0)
 		for sy in [-1.0, 1.0]:
-			pod(Vector3(sx * 100.0, sy * 46.0, 580), Vector3(0, sy, 0), 13.0, 18.0)
-			pod(Vector3(sx * 243.0, sy * 30.0, 150), Vector3(0, sy, 0), 13.0, 18.0)
+			pod(Vector3(sx * 100.0, sy * 46.0, ze), Vector3(0, sy, 0), 13.0, 18.0)
+			pod(Vector3(sx * xs, sy * 28.0, 150), Vector3(0, sy, 0), 13.0, 18.0)
+		for z in [70.0, 150.0, 230.0]:                                    # a battery of heavy twins on each sponson
+			turret(Vector3(sx * xs, 24.0, z), 14.0, "cannon", 2, 1.6, 70.0)
+		box(ModuleCatalog.AIRLOCK, Vector3(sx * xs, 0, 215), Vector3(60, 12, 14), "standard")
+		box(ModuleCatalog.POD_BAY, Vector3(sx * xs, 0, 100), Vector3(60, 8, 14), "standard")
 	for sy in [-1.0, 1.0]:
 		pod(Vector3(0, sy * _wedge_h(1), _wz(1)), Vector3(0, sy, 0), 11.0, 16.0)
-	# the bridge tower, flanked by two shield domes
-	box(H, Vector3(0, 85, 260), Vector3(110, 30, 150))
-	box(H, Vector3(0, 135, 300), Vector3(70, 22, 100))
-	commander(Vector3(0, 176, 330), Vector3(34, 18, 40), "bridge")
+	# the stern towers (battle-cruiser style): two tall stacks leaning back, joined by a bridge deck
+	var n_t := int(roundf(_wf(TOWER_Z)))
+	var ht := _wedge_h(n_t)
 	for sx in [-1.0, 1.0]:
-		d.add_module(H, "dome", Vector3(sx * 80.0, 102, 300), Vector3(34, 34, 34), 12, "", Basis.IDENTITY)
-	radar(Vector3(0, 190, 330), 14.0)
-	antenna(Vector3(0, 225, 350), 1.4, 36.0)
+		var tx: float = sx * 75.0
+		box(H, Vector3(tx, ht + 55.0, TOWER_Z - 30.0), Vector3(40, 60, 70))
+		box(H, Vector3(tx, ht + 194.0, TOWER_Z), Vector3(34, 85, 56))
+		box(H, Vector3(tx, ht + 303.0, TOWER_Z + 25.0), Vector3(46, 30, 64))
+		turret(Vector3(tx, ht + 329.0, TOWER_Z + 25.0), 16.0, "cannon", 2, 1.8, 80.0)
+		radar(Vector3(tx, ht + 330.0, TOWER_Z - 25.0), 12.0)
+		antenna(Vector3(tx, ht + 360.0, TOWER_Z + 55.0), 1.2, 30.0)
+		d.add_module(H, "dome", Vector3(sx * 130.0, ht + 12.0, TOWER_Z - 60.0), Vector3(30, 30, 30), 12, "", Basis.IDENTITY)
+	box(H, Vector3(0, ht + 303.0, TOWER_Z + 20.0), Vector3(110, 14, 40))  # the deck between the towers
+	commander(Vector3(0, ht + 328.0, TOWER_Z + 20.0), Vector3(30, 12, 30), "bridge")
+	box(H, Vector3(0, ht + 80.0, TOWER_Z - 10.0), Vector3(90, 70, 50))    # the body that carries both towers
+	# the bow mast on the highest terrace
+	var zb := _wz(MAST_I)
+	var tb := _top_at(zb, 0.0)
+	box(H, Vector3(0, tb + 18.0, zb), Vector3(16, 24, 22))
+	box(H, Vector3(0, tb + 52.0, zb + 6.0), Vector3(10, 18, 14))
+	commander(Vector3(0, tb + 70.0, zb + 6.0), Vector3(12, 8, 12))
+	radar(Vector3(0, tb + 76.0, zb + 6.0), 7.0)
+	antenna(Vector3(0, tb + 98.0, zb + 6.0), 1.0, 24.0)
 	commander(Vector3(0, 0, 100), Vector3(28, 24, 40))
 	commander(Vector3(0, 0, -300), Vector3(16, 14, 30))
-	commander(Vector3(0, 10, 480), Vector3(26, 20, 30))
-	box(ModuleCatalog.ENGINE_ROOM, Vector3(0, 0, 420), Vector3(36, 36, 36), "control")
-	for sx in [-1.0, 1.0]:
-		box(ModuleCatalog.AIRLOCK, Vector3(sx * 243.0, 0, 230), Vector3(66, 14, 14), "standard")
-		box(ModuleCatalog.POD_BAY, Vector3(sx * 243.0, 0, 100), Vector3(66, 8, 14), "standard")
-	cyl(H, Vector3(0, -_wedge_h(3) - 10.0, -560.0), 70.0, 14.0, Vector3(0, 1, 0), "", 24)      # ventral dish near the bow
-	d.add_module(A, "dome", Vector3(0, -_wedge_h(3) - 22.0, -560.0), Vector3(48, 48, 48), 12, "", Basis(Vector3.RIGHT, PI))
-	for i in [7, 9, 11, 13, 15]:                                          # heavy twins down the terraces
+	commander(Vector3(0, 10, ze - 40.0), Vector3(26, 20, 30))
+	box(ModuleCatalog.ENGINE_ROOM, Vector3(0, 0, 540), Vector3(36, 36, 36), "control")
+	cyl(H, Vector3(0, -_wedge_h(4) - 10.0, _wz(4)), 40.0, 14.0, Vector3(0, 1, 0), "", 24)      # ventral dish near the bow
+	d.add_module(A, "dome", Vector3(0, -_wedge_h(4) - 22.0, _wz(4)), Vector3(30, 30, 30), 12, "", Basis(Vector3.RIGHT, PI))
+	for i in [1, 3, 5, 7, 9, 12, 15, 18]:                                 # heavy twins down the terraces and the back deck
 		var z: float = _wz(i)
 		for sx in [-1.0, 1.0]:
-			turret(Vector3(sx * _wedge_w(i) * 0.4, _top_at(z, _wedge_w(i) * 0.4) - 4.0, z), 18.0, "cannon", 2, 2.0, 90.0)
-	for i in range(4, 17):                                                # medium guns along the edges
+			var x: float = sx * _wedge_w(i) * 0.4
+			if _in_tower_zone(z, x):
+				continue
+			turret(Vector3(x, _top_at(z, x) - 4.0, z), 16.0 if i > 4 else 12.0, "cannon", 2, 1.8, 80.0)
+	for i in range(2, NP - 1):                                            # medium guns along the edges
 		var z: float = _wz(i) + 30.0
 		for sx in [-1.0, 1.0]:
 			var x: float = sx * _wedge_w(i) * 0.72
+			if _in_tower_zone(z, x):
+				continue
 			turret(Vector3(x, _top_at(z, x) - 3.0, z), 9.0, "autocannon", 2, 0.8, 28.0, -1.0, "light")
 	for k in 26:                                                          # point defence
-		var z2 := rng.randf_range(-640.0, 520.0)
+		var z2 := rng.randf_range(-640.0, ze - 60.0)
 		var wz := _wedge_w(int(roundf(_wf(z2))))
 		var x2 := rng.randf_range(-wz * 0.85, wz * 0.85)
-		if absf(z2 - 300.0) < 160.0 and absf(x2) < 140.0:
+		if _in_tower_zone(z2, x2):
 			continue
 		turret(Vector3(x2, _top_at(z2, x2) - 2.0, z2), 4.5, "flak", 1, 0.5, 14.0, -1.0, "light")
-	turret(Vector3(0, 42, 580), 20.0, "cannon", 2, 2.0, 90.0, 1.0)
-	for k in 260:                                                         # hull detail: slabs, vents, pipes and fins over every surface
-		var z3 := rng.randf_range(-760.0, 540.0)
-		var w3 := _wedge_w(int(roundf(_wf(z3))))
-		var h3 := _wedge_h(int(roundf(_wf(z3))))
+	turret(Vector3(0, 42, ze), 20.0, "cannon", 2, 2.0, 90.0, 1.0)
+	for k in 300:                                                         # hull detail: slabs, vents, pipes and fins over every surface
+		var z3 := rng.randf_range(-760.0, ze - 20.0)
+		var n3 := int(roundf(_wf(z3)))
+		var w3 := _wedge_w(n3)
+		var h3 := _wedge_h(n3)
 		var hx := rng.randf_range(2.0, 7.0)
 		var hy := rng.randf_range(1.0, 3.0)
 		var hz := rng.randf_range(2.0, 9.0)
 		var side := rng.randf()
 		if side < 0.7:
 			var x3 := rng.randf_range(-w3 * 0.9, w3 * 0.9)
-			if absf(z3 - 300.0) < 160.0 and absf(x3) < 140.0:
+			if _in_tower_zone(z3, x3):
 				continue
 			var yt := _top_at(z3, x3)
+			if _near_turret(x3, yt, z3):
+				continue
 			if rng.randf() < 0.25:
 				cyl(A, Vector3(x3, yt + 1.0, z3), rng.randf_range(1.5, 4.0), rng.randf_range(2.0, 4.0), Vector3(0, 1, 0), "", 6)
 			else:
