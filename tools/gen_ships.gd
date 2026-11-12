@@ -209,7 +209,9 @@ const Z0 := -740.0             ## z of the first slice (the prow)
 const P := 31.0                ## pitch of the slices (each is 40 m long, so they overlap by 4 m)
 const N := 48                  ## number of slices
 const TOP := 40.0              ## the flat top
-const TOWER_Z := 440.0         ## the stern towers
+const TOWER_Z := 585.0
+const ENG_Y := -35.0           ## height of the engine row (middle of the thick stern)
+const TCX := 64.0              ## the two towers stand this far from the middle         ## the stern towers
 const MAST_I := 8              ## the bow mast stands on this slice
 const TIER_I := [26, 20, 14, 9]                                       ## the terrace t covers the slices up to this one
 var _tp: Array = []            ## turrets placed so far (the hull detail keeps clear of them)
@@ -228,7 +230,7 @@ func _u(i: int) -> float:                                             ## 1 at th
 
 
 func _depth(i: int) -> float:                                         ## how far the keel hangs below the top: shallow at the stern, a steep sweep at the prow
-	return 70.0 + 310.0 * pow(_u(i), 2.5)
+	return 150.0 + 230.0 * pow(_u(i), 2.5)
 
 
 func _bot(i: int) -> float:
@@ -271,7 +273,7 @@ func _near_turret(x: float, y: float, z: float) -> bool:
 
 
 func _in_tower_zone(z: float, x: float) -> bool:
-	return (absf(z - TOWER_Z) < 150.0 and absf(x) < 190.0) or (absf(z - _sz(MAST_I)) < 50.0 and absf(x) < 40.0)
+	return (absf(z - TOWER_Z) < 150.0 and absf(x) < 150.0) or (absf(z - _sz(MAST_I)) < 50.0 and absf(x) < 40.0)
 
 
 func spearhead() -> void:
@@ -290,19 +292,19 @@ func spearhead() -> void:
 		for i in range(0, int(TIER_I[t]) + 1):
 			box(H, Vector3(0, TOP + 3.0 + 12.0 * float(t) + 3.5 - 3.5, _sz(i)), Vector3(_w(i) * _tier_w(t), 6.5, 20.0))
 	var ze := _sz(N - 1) + 20.0                                           # engine block and engines
-	box(H, Vector3(0, TOP - 35.0, ze), Vector3(_w(N - 1), 35.0, 50.0))
+	box(H, Vector3(0, ENG_Y, ze), Vector3(_w(N - 1), 75.0, 50.0))
 	for x in [-190.0, -95.0, 0.0, 95.0, 190.0]:
-		thruster(Vector3(x, TOP - 35.0, ze + 100.0), 34.0, 60.0, Vector3(0, 0, -1), "ion")
+		thruster(Vector3(x, ENG_Y, ze + 100.0), 40.0, 60.0, Vector3(0, 0, -1), "ion")
 	var xs := _w(int(roundf(_sf(150.0)))) + 25.0                          # flank sponsons: the gun batteries, brakes and manoeuvring pods
 	var ys := _ymid(150.0)
 	for sx in [-1.0, 1.0]:
 		box(H, Vector3(sx * xs, ys, 150), Vector3(55, 28, 110))
 		pod(Vector3(sx * xs, ys, 40), Vector3(0, 0, -1), 28.0, 42.0, "ion")
 		pod(Vector3(sx * (xs + 55.0), ys, 150), Vector3(sx, 0, 0), 13.0, 18.0)
-		pod(Vector3(sx * (_w(N - 1) - 18.0), TOP - 35.0, ze), Vector3(sx, 0, 0), 13.0, 18.0)
+		pod(Vector3(sx * (_w(N - 1) - 18.0), ENG_Y, ze), Vector3(sx, 0, 0), 13.0, 18.0)
 		pod(Vector3(sx * (_w(1) - 4.0), -20.0, _sz(1)), Vector3(sx, 0, 0), 11.0, 16.0)
 		for sy in [-1.0, 1.0]:
-			pod(Vector3(sx * 100.0, TOP if sy > 0.0 else TOP - 70.0, ze), Vector3(0, sy, 0), 13.0, 18.0)
+			pod(Vector3(sx * 100.0, TOP if sy > 0.0 else TOP - 150.0, ze), Vector3(0, sy, 0), 13.0, 18.0)
 			pod(Vector3(sx * xs, ys + sy * 28.0, 150), Vector3(0, sy, 0), 13.0, 18.0)
 		for z in [70.0, 150.0, 230.0]:                                    # a battery of heavy twins on each sponson
 			turret(Vector3(sx * xs, ys + 24.0, z), 14.0, "cannon", 2, 1.6, 70.0)
@@ -311,18 +313,21 @@ func spearhead() -> void:
 	pod(Vector3(0, TOP, _sz(1)), Vector3(0, 1, 0), 11.0, 16.0)
 	pod(Vector3(0, _bot(1), _sz(1)), Vector3(0, -1, 0), 11.0, 16.0)
 	# the stern towers: two tapering columns that lean back, fused at the base and parted higher up, with a bridge deck across the top
-	var k_top := 13
+	var k_top := 9
+	box(H, Vector3(0, TOP + 8.0, TOWER_Z + 20.0), Vector3(150.0, 14.0, 130.0))                # a stepped plinth the towers grow out of
+	box(H, Vector3(0, TOP + 30.0, TOWER_Z + 30.0), Vector3(118.0, 12.0, 105.0))
+	box(H, Vector3(0, TOP + 20.0, TOWER_Z - 85.0), Vector3(105.0, 3.0, 52.0), "", Basis(Vector3.RIGHT, -0.42))   # a ramp up the front of the plinth
 	for k in k_top:
 		var yk := TOP + 14.0 + 26.0 * float(k)
 		var zk := TOWER_Z + 4.0 * float(k)
-		var hx := 56.0 - 1.9 * float(k)                                   # each tower narrows as it climbs, so the gap between them opens
-		var hz := 78.0 - 3.6 * float(k)
+		var hx := 62.0 - 2.6 * float(k)                                   # each tower narrows as it climbs, so the gap between them opens
+		var hz := 92.0 - 5.0 * float(k)
 		for sx in [-1.0, 1.0]:
-			box(H, Vector3(sx * 58.0, yk, zk), Vector3(hx, 17.0, hz))
+			box(H, Vector3(sx * TCX, yk, zk), Vector3(hx, 17.0, hz))
 	var yh := TOP + 14.0 + 26.0 * float(k_top - 1) + 30.0                   # the heads
 	var zh := TOWER_Z + 4.0 * float(k_top - 1)
 	for sx in [-1.0, 1.0]:
-		var tx: float = sx * 58.0
+		var tx: float = sx * TCX
 		box(H, Vector3(tx, yh, zh + 10.0), Vector3(48.0, 20.0, 70.0))
 		turret(Vector3(tx, yh + 20.0, zh + 10.0), 16.0, "cannon", 2, 1.8, 80.0)
 		radar(Vector3(tx, yh + 18.0, zh - 40.0), 11.0)
@@ -330,6 +335,24 @@ func spearhead() -> void:
 		d.add_module(H, "dome", Vector3(sx * 135.0, TOP + 6.0, TOWER_Z - 55.0), Vector3(30, 30, 30), 12, "", Basis.IDENTITY)
 	box(H, Vector3(0, yh - 4.0, zh + 6.0), Vector3(90.0, 14.0, 44.0))     # the bridge deck between the heads
 	commander(Vector3(0, yh + 18.0, zh + 6.0), Vector3(30, 12, 28), "bridge")
+	for k in range(2, k_top):                                             # tower detail: panels on the outer and inner faces, ribs on the front
+		var yk2 := TOP + 14.0 + 26.0 * float(k)
+		var zk2 := TOWER_Z + 4.0 * float(k)
+		var hx2 := 62.0 - 2.6 * float(k)
+		var hz2 := 92.0 - 5.0 * float(k)
+		for sx in [-1.0, 1.0]:
+			gbox(Vector3(sx * (TCX + hx2 + 0.2), yk2 + rng.randf_range(-6.0, 6.0), zk2 + rng.randf_range(-hz2 * 0.5, hz2 * 0.5)), Vector3(1.2, rng.randf_range(6.0, 13.0), rng.randf_range(10.0, hz2 * 0.45)))
+			if k >= 6:
+				gbox(Vector3(sx * (TCX - hx2 - 0.2), yk2 + rng.randf_range(-6.0, 6.0), zk2 + rng.randf_range(-hz2 * 0.5, hz2 * 0.5)), Vector3(1.2, rng.randf_range(6.0, 13.0), rng.randf_range(10.0, hz2 * 0.45)))
+			gbox(Vector3(sx * TCX + rng.randf_range(-hx2 * 0.7, hx2 * 0.7), yk2 + rng.randf_range(-5.0, 5.0), zk2 - hz2 - 0.2), Vector3(rng.randf_range(5.0, 16.0), rng.randf_range(6.0, 12.0), 1.2))
+	for sx in [-1.0, 1.0]:                                                # vertical fins down the front of each tower, like a sail
+		for fx in [-30.0, 0.0, 30.0]:
+			gbox(Vector3(sx * TCX + fx, TOP + 85.0, TOWER_Z - 92.0 - 8.0), Vector3(2.5, 70.0, 10.0))
+		for j in 4:                                                       # small guns and domes around the head
+			var gx: float = sx * TCX + (float(j) - 1.5) * 26.0
+			turret(Vector3(gx, yh + 18.0, zh + 52.0), 4.5, "flak", 1, 0.5, 14.0, -1.0, "light")
+		for j in 3:
+			antenna(Vector3(sx * TCX + (float(j) - 1.0) * 30.0, yh + 44.0, zh - 20.0), 1.0, 26.0 + 8.0 * float(j))
 	# the bow mast on the highest terrace
 	var zb := _sz(MAST_I)
 	var tb := _top_at(zb, 0.0)
@@ -341,7 +364,7 @@ func spearhead() -> void:
 	commander(Vector3(0, -10, 100), Vector3(28, 24, 40))
 	commander(Vector3(0, -10, -300), Vector3(16, 14, 30))
 	commander(Vector3(0, TOP - 30.0, ze - 40.0), Vector3(26, 20, 30))
-	box(ModuleCatalog.ENGINE_ROOM, Vector3(0, TOP - 35.0, 540), Vector3(36, 30, 36), "control")
+	box(ModuleCatalog.ENGINE_ROOM, Vector3(0, ENG_Y, 540), Vector3(36, 30, 36), "control")
 	for i in [2, 6, 10, 14, 18, 22, 28, 33, 40]:                          # heavy twins down the terraces and the back deck
 		var z: float = _sz(i)
 		for sx in [-1.0, 1.0]:
@@ -364,6 +387,41 @@ func spearhead() -> void:
 			continue
 		turret(Vector3(x2, _top_at(z2, x2) - 2.0, z2), 4.5, "flak", 1, 0.5, 14.0, -1.0, "light")
 	turret(Vector3(0, TOP - 2.0, ze), 20.0, "cannon", 2, 2.0, 90.0, 1.0)
+	for i in [30, 33, 36, 39, 42, 45]:                                     # rear flank batteries: the stern is not empty
+		var zr: float = _sz(i)
+		for sx in [-1.0, 1.0]:
+			var xr: float = sx * _w(i) * 0.82
+			if not _near_turret(xr, TOP - 4.0, zr):
+				turret(Vector3(xr, TOP - 4.0, zr), 13.0, "cannon", 2, 1.5, 70.0)
+	var zr2 := 300.0                                                      # transverse ribs across the whole back deck
+	while zr2 < ze - 30.0:
+		var wr := _w(int(roundf(_sf(zr2)))) * 0.88
+		for sx in [-1.0, 1.0]:
+			var xc: float = sx * (150.0 + wr) * 0.5
+			if wr > 160.0 and not _near_turret(xc, TOP, zr2):
+				gbox(Vector3(xc, TOP + 0.9, zr2), Vector3((wr - 150.0) * 0.5, 1.6, 1.6))
+		zr2 += 22.0
+	for x in [-190.0, -95.0, 0.0, 95.0, 190.0]:                           # a bezel around each engine, and fins between them
+		cyl(A, Vector3(x, ENG_Y, ze + 36.0), 46.0, 7.0, Vector3(0, 0, 1), "", 16)
+	for x in [-142.0, -47.0, 47.0, 142.0]:
+		gbox(Vector3(x, ENG_Y, ze + 48.0), Vector3(3.0, 60.0, 22.0))
+	for k in 160:                                                         # dense hull detail over the whole back
+		var z4 := rng.randf_range(300.0, ze - 20.0)
+		var n4 := int(roundf(_sf(z4)))
+		var x4 := rng.randf_range(-_w(n4) * 0.92, _w(n4) * 0.92)
+		if _in_tower_zone(z4, x4):
+			continue
+		var y4 := _top_at(z4, x4)
+		if _near_turret(x4, y4, z4):
+			continue
+		if rng.randf() < 0.3:
+			var fh := rng.randf_range(2.0, 4.0)
+			gbox(Vector3(x4, y4 + fh - 1.0, z4), Vector3(rng.randf_range(1.0, 2.5), fh, rng.randf_range(6.0, 18.0)))    # fins
+		elif rng.randf() < 0.5:
+			cyl(A, Vector3(x4, y4 + 1.0, z4), rng.randf_range(2.0, 5.0), rng.randf_range(1.5, 3.0), Vector3(0, 1, 0), "", 8)             # vents
+		else:
+			var sh := rng.randf_range(0.8, 2.0)
+			gbox(Vector3(x4, y4 + sh - 1.0, z4), Vector3(rng.randf_range(5.0, 14.0), sh, rng.randf_range(5.0, 14.0)))   # slabs
 	for k in 240:                                                         # hull detail: thin panels, vents and fins (flat, not blocks)
 		var z3 := rng.randf_range(Z0 + 14.0, ze - 20.0)
 		var n3 := int(roundf(_sf(z3)))
