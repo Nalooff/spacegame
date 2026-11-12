@@ -26,6 +26,8 @@ var _queue: Array = []     # [module, chunk index] waiting for its mesh to be cr
 var _health: PackedFloat32Array = PackedFloat32Array()
 var _pivots: Dictionary = {}        # module -> Node3D its chunk meshes live in (turret barrels swivel as a whole)
 var _details: DetailRenderer = null
+var _lod_hidden := PackedByteArray()      # per module: 1 = too small to see from here, its meshes are hidden
+var _lod_level: int = 0
 var _scratch := PackedInt32Array()   # vertex id -> local index while building one chunk (all -1 between uses)
 
 
@@ -187,6 +189,7 @@ func attach(d: ShipDesign, prepared: Array) -> void:
 		for ci in info["chunk_faces"].size():
 			chunks.append({"faces": PackedInt32Array(info["chunk_faces"][ci]), "node": null, "arrays": info["arrays"][ci]})
 			_queue.append([mi, ci])
+		_lod_hidden.append(0)
 		_mods.append({"chunks": chunks, "face_chunk": info["face_chunk"], "lo": info["lo"], "size": info["size"],
 			"dims": info["dims"], "cells": cell_chunk, "material": mat})
 	if _details != null:
@@ -247,6 +250,33 @@ func _set_mark(mat: ShaderMaterial, d: ShipDesign, mi: int) -> void:
 	mat.set_shader_parameter("mark_color", col)
 
 
+## `cam` = the camera in ship space. A module whose angular radius (size / distance) is below `threshold` is not drawn.
+func update_lod(cam: Vector3, threshold: float) -> void:
+	for mi in _mods.size():
+		var m: Dictionary = _mods[mi]
+		var c: Vector3 = (m["lo"] as Vector3) + (m["size"] as Vector3) * 0.5
+		var r: float = (m["size"] as Vector3).length() * 0.5
+		var hid := 1 if r < threshold * maxf(cam.distance_to(c), 1.0) else 0
+		if hid != _lod_hidden[mi]:
+			_lod_hidden[mi] = hid
+			var ratio := _health[mi] if mi < _health.size() else 1.0
+			for chunk in m["chunks"]:
+				if chunk["node"] != null:
+					(chunk["node"] as MeshInstance3D).visible = ratio >= 0.0 and hid == 0
+
+
+## 0 = near: shadows and decals; 1 = far: no decals/text; 2 = a dot: no shadows either.
+func set_lod_level(level: int) -> void:
+	_lod_level = level
+	if _details != null:
+		_details.visible = level == 0
+	var sh := GeometryInstance3D.SHADOW_CASTING_SETTING_ON if level == 0 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for m in _mods:
+		for chunk in m["chunks"]:
+			if chunk["node"] != null:
+				(chunk["node"] as MeshInstance3D).cast_shadow = sh
+
+
 ## Create meshes now (small ships) instead of spreading them over frames.
 func flush() -> void:
 	while not _queue.is_empty():
@@ -276,7 +306,8 @@ func _make_next() -> void:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	node.mesh = mesh
 	node.material_override = _mods[job[0]]["material"]
-	node.visible = job[0] >= _health.size() or _health[job[0]] > 0.0
+	node.visible = (job[0] >= _health.size() or _health[job[0]] > 0.0) and _lod_hidden[job[0]] == 0
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _lod_level == 0 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	chunk["node"] = node
 	_place(job[0], node)
 
@@ -291,7 +322,7 @@ func set_health(ratios: PackedFloat32Array) -> void:
 		(_mods[mi]["material"] as ShaderMaterial).set_shader_parameter("damage", 1.0 - clampf(r, 0.0, 1.0))
 		for chunk in _mods[mi]["chunks"]:
 			if chunk["node"] != null:
-				(chunk["node"] as MeshInstance3D).visible = r >= 0.0   # dead wrecks (0) stay, GONE modules (< 0) vanish
+				(chunk["node"] as MeshInstance3D).visible = r >= 0.0 and _lod_hidden[mi] == 0   # dead wrecks (0) stay, GONE modules (< 0) vanish
 
 
 ## After a dent: `changed` = {module: PackedInt32Array of faces whose shape changed or that are new}.

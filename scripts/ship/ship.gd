@@ -99,6 +99,7 @@ var alive: bool = true:
 
 var _got_first_sync: bool = false
 var _last_sync_ms: int = 0
+var radius_m: float = 5.0                 ## half the ship's length: distances to a ship are measured to its hull, not to its middle
 var net_far: Dictionary = {}               # peer id -> true while that peer's ship is beyond Data.net_range (no data is sent to it)
 var _thr_elec: PackedFloat32Array = PackedFloat32Array()   # per thruster: watts of electricity per newton
 var _thr_heat: PackedFloat32Array = PackedFloat32Array()   # per thruster: watts of heat per newton
@@ -153,7 +154,7 @@ func _ready() -> void:
 	props = design.compute_props()
 	# recentre so the body origin is the centre of mass (cached sums are shifted, not recomputed)
 	design.translate_all(-(props["com"] as Vector3))
-	Data.note_ship_size(design.extent_length())
+	radius_m = design.extent_length() * 0.5
 	props = design.compute_props()
 
 	mass = props["mass"]
@@ -286,6 +287,26 @@ func is_stale() -> bool:
 	return not Net.players.is_empty() and not is_multiplayer_authority() and Time.get_ticks_msec() - _last_sync_ms > 1500
 
 
+var _lod_clock: float = 0.0
+var _lod_far: int = -1                    ## 0 = near (shadows, decals), 1 = far (hull only), 2 = a dot (nothing but the biggest parts)
+
+
+## Level of detail: the further a ship (or a module of it) is, the less of it is drawn. Angular size decides, so a 2 km ship
+## keeps its big parts from far away while its hundreds of small hull details (and the decals and text) vanish.
+func _update_lod() -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null or hull == null or not visible:
+		return
+	var local := global_transform.affine_inverse() * cam.global_position
+	var ang := radius_m / maxf(local.length(), 1.0)
+	var lvl := 0 if ang > 0.03 else (1 if ang > 0.004 else 2)
+	hull.update_lod(local, 0.006 if lvl < 2 else 0.012)
+	if lvl != _lod_far:
+		_lod_far = lvl
+		hull.set_lod_level(lvl)
+		flames.visible = lvl < 2 and alive
+
+
 ## Show / hide the whole ship (ships beyond Data.VIEW_RANGE are not drawn at all).
 func set_rendered(on: bool) -> void:
 	if visible != on:
@@ -327,7 +348,7 @@ func _update_net_visibility() -> void:
 				break
 		if theirs == null:
 			continue
-		var far := global_position.distance_to(theirs.global_position) > Data.net_range
+		var far := global_position.distance_to(theirs.global_position) - radius_m - theirs.radius_m > Data.net_range
 		if net_far.get(peer, false) != far:
 			net_far[peer] = far
 			$TransformSync.update_visibility(peer)
@@ -1337,6 +1358,10 @@ func role_bonus(mi: int) -> float:
 
 
 func _process(dt: float) -> void:
+	_lod_clock -= dt
+	if _lod_clock <= 0.0:
+		_lod_clock = 0.25 + float(get_instance_id() % 7) * 0.02          # ships take turns: no frame does every ship's work
+		_update_lod()
 	if alive and plan_state != null and is_multiplayer_authority():
 		hazards.tick(self, dt)
 		_board_step(dt)

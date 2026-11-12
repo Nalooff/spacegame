@@ -85,25 +85,27 @@ func scan() -> void:
 			other.set_rendered(false)
 			continue
 		var dist := mine.distance_to(other.global_position)
-		other.set_rendered(dist <= Data.VIEW_RANGE)
-		if other.is_wreck() or dist > Data.net_range:
+		var sdist := maxf(dist - other.radius_m, 0.0)                   # to its HULL, not to its middle: a 2 km ship is not "far" while you scrape its side
+		var vr := Data.view_range_for(other.radius_m * 2.0)
+		other.set_rendered(sdist <= vr)
+		if other.is_wreck() or sdist > Data.net_range:
 			continue
 		var best_how := ""
 		var best_prec := 0.0
-		if dist <= Data.VIEW_RANGE:
+		if sdist <= vr:
 			best_how = "view"
-			best_prec = Data.VIEW_PRECISION * (1.0 - 0.5 * dist / Data.VIEW_RANGE)
+			best_prec = Data.VIEW_PRECISION * (1.0 - 0.5 * sdist / vr)
 		for r in radars:
 			var eff := radar_range(r, other)
-			if dist <= minf(eff, Data.net_range):
-				var prec: float = float(r["precision"]) * (1.0 - 0.5 * dist / maxf(eff, 1.0))
+			if sdist <= minf(eff, Data.net_range):
+				var prec: float = float(r["precision"]) * (1.0 - 0.5 * sdist / maxf(eff, 1.0))
 				if prec > best_prec:
 					best_prec = prec
 					best_how = r["kind"]
 		if best_how == "":
 			continue
 		var acc := _acceleration(other)
-		var seen := dist <= Data.VIEW_RANGE
+		var seen := sdist <= vr
 		var aim_off := Vector3.ZERO                 # from the ship's centre to the point the guns aim at (world frame)
 		if seen:
 			if other == locked and target_module >= 0 and target_module < other.design.modules.size() and other.module_hp.size() > target_module and other.module_hp[target_module] >= 0.0:

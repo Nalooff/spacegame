@@ -115,13 +115,13 @@ const BEAM_TICK := 0.1               # seconds between beam damage ticks / netwo
 const BEAM_MODULE_COST := 2.5        # metres of penetration one module costs a beam (scaled by material hardness)
 # ---- detection (ShipDetection)
 const VIEW_RANGE := 1200.0           # without radar a ship sees (and RENDERS) other ships up to this far; farther ones are not drawn
-const NET_RANGE_MIN := 6000.0
-var net_range := NET_RANGE_MIN        # ships farther apart than this do not even exchange data; grows with the biggest ship in the arena
+const NET_RANGE := 6000.0             # ships whose HULLS are farther apart than this do not even exchange data (measured surface to surface)
+var net_range := NET_RANGE            # (a variable only so tests can change it; the same on every peer)
 
 
-## Called for every ship that appears: a 50 km ship must still be seen and synced from far enough away.
-func note_ship_size(length: float) -> void:
-	net_range = maxf(net_range, maxf(NET_RANGE_MIN, length * 4.0))
+## How far away (from its hull surface) a ship of this length is seen by eye: big ships are seen from much farther.
+func view_range_for(length: float) -> float:
+	return VIEW_RANGE + length * 3.0
 const VIEW_PRECISION := 0.9          # how exact a contact seen by eye is
 const ELEC_REF_W := 150000.0         # electronic radar: a target using this many watts is seen at the radar's base range
 const HEAT_REF_W := 1500000.0        # thermal radar: same, for the heat a target gives off

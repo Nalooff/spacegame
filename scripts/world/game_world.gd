@@ -96,7 +96,6 @@ func _spawn_for_peer(id: int) -> void:
 	dir.y = 0.0
 	dir = dir.normalized() if dir.length() > 0.1 else Vector3.RIGHT
 	var pos := _clear_spot(dir, len_new)
-	Data.note_ship_size(len_new)
 	spawner.spawn({"peer": id, "design": entry["ship"], "name": entry["name"], "pos": pos})
 
 
