@@ -230,7 +230,7 @@ func _u(i: int) -> float:                                             ## 1 at th
 
 
 func _depth(i: int) -> float:                                         ## how far the keel hangs below the top: shallow at the stern, a steep sweep at the prow
-	return 150.0 + 230.0 * pow(_u(i), 2.5)
+	return 150.0 + 290.0 * pow(_u(i), 4.0)
 
 
 func _bot(i: int) -> float:
