@@ -59,8 +59,15 @@ func _on_banner_timer_timeout() -> void:
 	%BannerLabel.text = ""
 
 
+var _label_clock: float = 0.0
+
+
 func _process(dt: float) -> void:
-	%PlayersLabel.text = _players_text()
+	_label_clock -= dt                 # the numbers are read by eye: ten updates a second are plenty (and formatting text costs)
+	var refresh := _label_clock <= 0.0
+	if refresh:
+		_label_clock = 0.1
+		%PlayersLabel.text = _players_text()
 	if not _feed.is_empty():
 		for e in _feed:
 			e[1] -= dt
@@ -72,7 +79,7 @@ func _process(dt: float) -> void:
 	if not is_instance_valid(ship):
 		%FlightLabel.text = tr("No ship yet...")
 		return
-	if not ship.alive:
+	if not ship.alive or not refresh:
 		return
 	var ap := ship.autopilot
 	var v := ship.linear_velocity

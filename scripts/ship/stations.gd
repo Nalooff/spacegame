@@ -83,7 +83,25 @@ func _eye_above(d: ShipDesign, mi: int, up: Vector3) -> Vector3:
 ## Like `_eye_above`, but tries several directions (the preferred one first) and keeps the
 ## one whose eye has the clearest view: an upside-down turret, or one buried in the hull,
 ## would otherwise put the camera inside other modules.
+var _eye_cache: Dictionary = {}     # module -> eye position (the search below is slow and runs again at every dent otherwise)
+
+
 func _clear_eye(d: ShipDesign, mi: int, preferred: Vector3) -> Vector3:
+	var key := [mi, preferred]
+	if _eye_cache.has(key) and _eye_cache_design == d:
+		return _eye_cache[key]
+	if _eye_cache_design != d:
+		_eye_cache.clear()
+		_eye_cache_design = d
+	var eye := _clear_eye_search(d, mi, preferred)
+	_eye_cache[key] = eye
+	return eye
+
+
+var _eye_cache_design: ShipDesign = null
+
+
+func _clear_eye_search(d: ShipDesign, mi: int, preferred: Vector3) -> Vector3:
 	var pref := preferred.normalized() if preferred.length() > 0.001 else Vector3.UP
 	var dirs: Array[Vector3] = [pref, Vector3.UP, -pref, Vector3.DOWN, Vector3.RIGHT, Vector3.LEFT, Vector3.BACK, Vector3.FORWARD]
 	var best := Vector3.ZERO

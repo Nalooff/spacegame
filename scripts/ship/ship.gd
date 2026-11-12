@@ -278,6 +278,7 @@ func _rebuild_systems() -> void:
 	_cmd_throttle.resize(alloc.n)
 	if throttles.size() != alloc.n:
 		throttles.resize(alloc.n)
+	_flames_dirty = true
 	if _flames_ready and flames.multimesh.instance_count != alloc.n:
 		flames.multimesh.instance_count = alloc.n
 
@@ -864,6 +865,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		return
 	_lodge_forces(state)
 	var now := Time.get_ticks_msec() * 0.001
+	var patches := {}
 	for i in state.get_contact_count():
 		var other := state.get_contact_collider_object(i) as Ship
 		if other == null or not other.alive:
@@ -894,24 +896,31 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		var their_info := MaterialCatalog.info(other.design.material_of(other_mod))
 		# the CONTACT PATCH: all contact points of this pair. A corner / edge touching a face is a few points over a tiny area
 		# (a sharp, concentrated hit that dents and penetrates sooner); a face on a face is a wide patch (a blunt hit).
-		var pc := point
-		var nc := n_out
-		var cnt := 1
-		for j in state.get_contact_count():
-			if j == i or state.get_contact_collider_object(j) != other:
-				continue
-			var pj := state.get_contact_local_position(j)
-			var nj := state.get_contact_local_normal(j)
-			pc += pj
-			nc += nj if nj.dot(pj - global_position) >= 0.0 else -nj
-			cnt += 1
-		pc /= cnt
-		var spread := 0.0
-		if cnt > 1:
+		var patch: Array = patches.get(key, [])
+		if patch.is_empty():                  # the contact patch is the same for every contact of this pair: work it out once per frame
+			var pc0 := Vector3.ZERO
+			var nc0 := Vector3.ZERO
+			var cnt0 := 0
 			for j in state.get_contact_count():
-				if state.get_contact_collider_object(j) == other:
-					spread += pc.distance_squared_to(state.get_contact_local_position(j))
-			spread = sqrt(spread / cnt)
+				if state.get_contact_collider_object(j) != other:
+					continue
+				var pj := state.get_contact_local_position(j)
+				var nj := state.get_contact_local_normal(j)
+				pc0 += pj
+				nc0 += nj if nj.dot(pj - global_position) >= 0.0 else -nj
+				cnt0 += 1
+			pc0 /= cnt0
+			var spread0 := 0.0
+			if cnt0 > 1:
+				for j in state.get_contact_count():
+					if state.get_contact_collider_object(j) == other:
+						spread0 += pc0.distance_squared_to(state.get_contact_local_position(j))
+				spread0 = sqrt(spread0 / cnt0)
+			patch = [pc0, nc0, spread0]
+			patches[key] = patch
+		var pc: Vector3 = patch[0]
+		var nc: Vector3 = patch[1]
+		var spread: float = patch[2]
 		var area := maxf(Data.HULL_POINT_AREA, PI * spread * spread)
 		var sharp := clampf(sqrt(Data.HULL_REF_AREA / area), 1.0, Data.HULL_SHARP_MAX)
 		var e := 0.0 if is_lodged_with(other) else _restitution(closing, my_info, their_info, sharp)
@@ -1814,10 +1823,18 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 # ----------------------------------------------------------------- visuals
+var _flames_key: PackedFloat32Array = PackedFloat32Array()    # the throttles the flames were last drawn for
+var _flames_dirty: bool = true
+
+
 func _update_flames() -> void:
 	var mm := flames.multimesh
 	if mm.instance_count != alloc.n:
 		return
+	if not _flames_dirty and throttles == _flames_key:
+		return                 # nothing changed: no need to touch hundreds of instances 60 times a second
+	_flames_dirty = false
+	_flames_key = throttles.duplicate()
 	for i in alloc.n:
 		var t: float = throttles[i] if i < throttles.size() else 0.0
 		var p: float = alloc.power[i]

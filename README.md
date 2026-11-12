@@ -359,3 +359,6 @@ Builder: zoom range, grid, new-shape size and the axis markers scale with the sh
 - Far modules, decals, text and flames are dropped by angular size (see `Ship._update_lod`); visibility is measured to the hull.
 - *Video → Automatic resolution* lowers the 3D resolution by itself under 40 FPS and restores it when the game is fast again.
 - `tests/prof_cpu.tscn` (headless) measures script and physics time with three capital ships.
+- Hits on a big ship no longer freeze it: the station-eye search is cached instead of re-run at every dent (it took 250 ms per hit), and ram contact patches are computed once per pair per frame.
+- Flames are only redrawn when the throttles change, and the HUD text refreshes ten times a second instead of every frame.
+- `tests/prof_ram.tscn` and `tests/prof_game.tscn` measure a ram between two capital ships and the per-frame cost of a real game.
