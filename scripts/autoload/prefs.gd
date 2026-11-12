@@ -38,6 +38,7 @@ var master_volume: float = 1.0
 var fullscreen: bool = false
 var vsync: bool = true
 var render_scale: float = 1.0
+var auto_scale: bool = true          ## lowers the 3D resolution by itself while the game runs under 40 FPS, and gives it back when it is fast again
 var max_fps: int = 0                 ## 0 = unlimited
 var show_fps: bool = false
 var ui_scale: float = 1.0
@@ -47,6 +48,9 @@ var hints_done: String = ""         ## comma separated ids of the hints the play
 var binds: Dictionary = {}           ## action -> physical keycode (only what the player changed)
 
 var _fps_label: Label
+var _dyn: float = 1.0                ## the automatic part of the 3D scale (0.6 .. 1)
+var _dyn_t: float = 0.0
+var _dyn_n: int = 0
 var _defaults_binds: Dictionary = {}
 
 
@@ -65,7 +69,7 @@ func _ready() -> void:
 func values() -> Dictionary:
 	return {"language": language, "scheme": scheme, "mouse_sens": mouse_sens, "invert_y": invert_y, "deadzone": deadzone, "lever_rate": lever_rate,
 		"order_range": order_range, "fov": fov, "cam_dist": cam_dist, "cam_sens": cam_sens, "cam_invert_y": cam_invert_y,
-		"master_volume": master_volume, "fullscreen": fullscreen, "vsync": vsync, "render_scale": render_scale, "max_fps": max_fps,
+		"master_volume": master_volume, "fullscreen": fullscreen, "vsync": vsync, "render_scale": render_scale, "auto_scale": auto_scale, "max_fps": max_fps,
 		"show_fps": show_fps, "ui_scale": ui_scale, "player_name": player_name, "hints_on": hints_on, "hints_done": hints_done}
 
 
@@ -125,7 +129,7 @@ func load_file(path: String = FILE) -> void:
 func reset_defaults() -> void:
 	set_values({"language": "", "scheme": 0, "mouse_sens": 1.0, "invert_y": false, "deadzone": 0.08, "lever_rate": 0.5, "order_range": 150.0, "fov": 70.0,
 		"cam_dist": 40.0, "cam_sens": 1.0, "cam_invert_y": false, "master_volume": 1.0, "fullscreen": false, "vsync": true,
-		"render_scale": 1.0, "max_fps": 0, "show_fps": false, "ui_scale": 1.0})
+		"render_scale": 1.0, "auto_scale": true, "max_fps": 0, "show_fps": false, "ui_scale": 1.0})
 	binds.clear()
 	apply_all()
 
@@ -164,7 +168,7 @@ func apply_all() -> void:
 	TranslationServer.set_locale(effective_language())
 	var root := get_tree().root
 	root.content_scale_factor = ui_scale
-	root.scaling_3d_scale = render_scale
+	root.scaling_3d_scale = render_scale * _dyn
 	Engine.max_fps = max_fps
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(master_volume, 0.0001)))
 	if DisplayServer.get_name() != "headless":
@@ -230,6 +234,33 @@ func _update_fps_label() -> void:
 		_fps_label.get_parent().visible = show_fps
 
 
-func _process(_dt: float) -> void:
+func _process(dt: float) -> void:
+	_auto_scale_step(dt)
 	if _fps_label != null and show_fps:
 		_fps_label.text = tr("%d FPS") % Engine.get_frames_per_second()
+
+
+## Dynamic resolution: the cheapest way to keep a crowded fight smooth. Looks at the average frame time twice a second.
+func _auto_scale_step(dt: float) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if not auto_scale:
+		if _dyn != 1.0:
+			_dyn = 1.0
+			get_tree().root.scaling_3d_scale = render_scale
+		return
+	_dyn_t += dt
+	_dyn_n += 1
+	if _dyn_t < 0.5:
+		return
+	var avg := _dyn_t / float(_dyn_n)
+	_dyn_t = 0.0
+	_dyn_n = 0
+	var want := _dyn
+	if avg > 1.0 / 40.0:
+		want = maxf(_dyn - 0.05, 0.6)
+	elif avg < 1.0 / 58.0 and (max_fps == 0 or max_fps > 70):
+		want = minf(_dyn + 0.025, 1.0)
+	if want != _dyn:
+		_dyn = want
+		get_tree().root.scaling_3d_scale = clampf(render_scale * _dyn, 0.3, 1.0)

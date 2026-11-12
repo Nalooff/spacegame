@@ -42,6 +42,11 @@ class Rig:
 	var muzzle_len: float       # pivot -> muzzle tip
 	var barrel_pts: PackedVector3Array = PackedVector3Array()
 	var node: Node3D            # BarrelPivot (visual)
+	var cand: Array = []            # the modules a swinging barrel could ever touch (cached, see _candidates)
+	var cand_ok: bool = false
+	var last_t: Vector3 = Vector3.ZERO   # the direction it was last aimed along: a settled turret facing the same way needs no new maths
+	var posed_yaw: float = 999.0     # what the visual node shows now: nothing is touched while the barrel stands still
+	var posed_pitch: float = 999.0
 	var last_shape_yaw: float = 999.0
 	var last_shape_pitch: float = 999.0
 	var aim_error: float = 3.14     # angle between the barrel and the TARGET
@@ -197,6 +202,8 @@ static func _touching(d: ShipDesign, base: int, barrel: int) -> bool:
 func _collect_others(d: ShipDesign) -> void:
 	# points of everything else, for the self-collision tests
 	_other_pts.clear()
+	for rg in rigs:
+		rg.cand_ok = false
 	for mi in d.modules.size():
 		var t: String = d.modules[mi]["type"]
 		if t == ModuleCatalog.LOOSE or t == ModuleCatalog.BARREL or t == ModuleCatalog.TURRET:
@@ -310,6 +317,9 @@ func track(dt: float) -> void:
 		if t.length() < 0.5:
 			continue
 		t = t.normalized()
+		if r.goal_error < 0.0002 and r.aim_error < 3.0 and (t - r.last_t).length_squared() < 1e-9:
+			continue
+		r.last_t = t
 		# the BEST direction this turret can reach (inside its arc), which is not the same as clamping yaw and pitch
 		# one by one: at the edge of the arc the best pitch is a different one.
 		var goal := _best_reachable(r, t)
@@ -433,6 +443,10 @@ func apply_angles(a: PackedFloat32Array, smooth: float) -> void:
 
 func _pose_all() -> void:
 	for r in rigs:
+		if r.yaw == r.posed_yaw and r.pitch == r.posed_pitch:
+			continue
+		r.posed_yaw = r.yaw
+		r.posed_pitch = r.pitch
 		var b := turn_basis(r, r.yaw, r.pitch)
 		if r.node != null:
 			r.node.transform = Transform3D(b, r.pivot)
@@ -454,12 +468,31 @@ func _barrel_blocked(r: Rig, yaw: float, pitch: float) -> bool:
 		pts.append(q)
 		lo = lo.min(q)
 		hi = hi.max(q)
-	return _hits_other(pts, lo, hi, -0.02)
+	return _hits_other(pts, lo, hi, -0.02, _candidates(r))
+
+
+## The modules within reach of this barrel (any yaw / pitch): a 1 km ship has hundreds, a barrel can touch a handful.
+func _candidates(r: Rig) -> Array:
+	if r.cand_ok:
+		return r.cand
+	var reach := 0.0
+	for p in r.barrel_pts:
+		reach = maxf(reach, (p - r.pivot).length())
+	reach += 0.3
+	r.cand = []
+	for mi in _other_pts:
+		var l: Vector3 = _other_lo[mi]
+		var h: Vector3 = _other_hi[mi]
+		var c := r.pivot.clamp(l, h)
+		if c.distance_to(r.pivot) <= reach:
+			r.cand.append(mi)
+	r.cand_ok = true
+	return r.cand
 
 
 ## True if the point set (with its bounding box) overlaps any ALIVE module that is not part of a turret.
-func _hits_other(pts: PackedVector3Array, lo: Vector3, hi: Vector3, margin: float) -> bool:
-	for mi in _other_pts:
+func _hits_other(pts: PackedVector3Array, lo: Vector3, hi: Vector3, margin: float, only: Variant = null) -> bool:
+	for mi in (only if only != null else _other_pts):
 		if ship.module_hp[mi] < 0.0:      # a dead wreck is still solid; only GONE modules do not block
 			continue
 		var l: Vector3 = _other_lo[mi]

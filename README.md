@@ -352,3 +352,10 @@ Regenerate with `SAVE=1 godot --headless --path . res://tools/gen_ships.tscn` (`
 
 Exploded plan (P): left drag turns and tilts, right/middle drag moves, wheel zooms at the cursor, Home resets.
 Builder: zoom range, grid, new-shape size and the axis markers scale with the ship; loading a ship frames it whole.
+
+### Performance tricks
+- Turret aiming only tests the modules a barrel can actually reach (cached per turret), and skips turrets that are already settled on their target.
+- The crew only scans for damage when something is actually damaged.
+- Far modules, decals, text and flames are dropped by angular size (see `Ship._update_lod`); visibility is measured to the hull.
+- *Video → Automatic resolution* lowers the 3D resolution by itself under 40 FPS and restores it when the game is fast again.
+- `tests/prof_cpu.tscn` (headless) measures script and physics time with three capital ships.

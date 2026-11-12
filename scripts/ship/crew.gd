@@ -180,15 +180,22 @@ func tick(ship: Ship, dt: float) -> bool:
 			noticed.erase(mi)
 		elif comms:
 			noticed[mi] = true
-	for m in members:
-		if m["hp"] <= 0.0:
+	var unnoticed: Array[int] = []              # damaged modules nobody knows about yet (usually none: no use scanning every module for every person)
+	for mi in ship.module_hp.size():
+		if noticed.has(mi) or ship.module_hp[mi] < 0.0 or mi >= ship.module_max_hp.size():
 			continue
-		for mi in ship.module_hp.size():
-			if noticed.has(mi) or ship.module_hp[mi] < 0.0 or mi >= ship.module_max_hp.size() or (ship.module_hp[mi] >= ship.module_max_hp[mi] * 0.98 and not _hazard_at(ship, mi)):
+		if ship.module_hp[mi] < ship.module_max_hp[mi] * 0.98 or _hazard_at(ship, mi):
+			unnoticed.append(mi)
+	if not unnoticed.is_empty():
+		for m in members:
+			if m["hp"] <= 0.0:
 				continue
-			if (ship.design.module_centroid(mi) as Vector3).distance_to(m["pos"]) < maxf(Data.CREW_NOTICE_RADIUS, ship.design.module_extent(mi).length() * 0.5):
-				noticed[mi] = true
-				_log("%s noticed damage on module %d" % [_name(m), mi])
+			for mi in unnoticed:
+				if noticed.has(mi):
+					continue
+				if (ship.design.module_centroid(mi) as Vector3).distance_to(m["pos"]) < maxf(Data.CREW_NOTICE_RADIUS, ship.design.module_extent(mi).length() * 0.5):
+					noticed[mi] = true
+					_log("%s noticed damage on module %d" % [_name(m), mi])
 	# boarders
 	if not foes.is_empty() and _step_foes(ship, step):
 		return true
@@ -250,6 +257,8 @@ func _step_member(ship: Ship, m: Dictionary, dt: float, workers: Dictionary) -> 
 
 ## The module an idle person should repair: damaged, known, reachable, not crowded; the nearest one.
 func _find_job(ship: Ship, m: Dictionary, workers: Dictionary) -> int:
+	if noticed.is_empty():
+		return -1
 	var dist := ship.plan_state.walk_from(m["node"])
 	var best := -1
 	var best_d := INF

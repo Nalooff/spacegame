@@ -306,6 +306,7 @@ func _build_video() -> void:
 	_check(p, "V-Sync", "vsync")
 	_section(p, "Performance")
 	_slider(p, "3D render scale", "render_scale", 0.5, 1.0, 0.05, "", "Lower = faster on weak graphics cards")
+	_check(p, "Automatic resolution (lowers it when the game lags)", "auto_scale")
 	_slider(p, "Maximum frames per second (0 = unlimited)", "max_fps", 0.0, 240.0, 10.0)
 	_slider(p, "Interface scale", "ui_scale", 0.75, 2.0, 0.05)
 	_check(p, "Show FPS counter", "show_fps")

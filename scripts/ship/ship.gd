@@ -300,7 +300,7 @@ func _update_lod() -> void:
 	var local := global_transform.affine_inverse() * cam.global_position
 	var ang := radius_m / maxf(local.length(), 1.0)
 	var lvl := 0 if ang > 0.03 else (1 if ang > 0.004 else 2)
-	hull.update_lod(local, 0.006 if lvl < 2 else 0.012)
+	hull.update_lod(local, 0.008 if lvl < 2 else 0.014)
 	if lvl != _lod_far:
 		_lod_far = lvl
 		hull.set_lod_level(lvl)
@@ -1119,6 +1119,7 @@ func _finish_hull(data: Dictionary, chunks: Array = []) -> void:
 	turrets.setup(self)
 	for r in turrets.rigs:
 		r.node = hull.add_pivot(r.barrel, r.pivot)     # the barrel meshes live in a pivot node that can swivel
+		r.posed_yaw = 999.0
 		if float(design.extra(r.barrel, "aim_set")) > 0.5:   # the designer chose another direction: the model points there too
 			var modelled := (design.module_centroid(r.barrel) - r.pivot).normalized()
 			var chosen := design.barrel_dir(r.barrel)
