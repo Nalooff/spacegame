@@ -205,9 +205,9 @@ func nautilus() -> void:
 ## An original capital ship mixing two looks. SIDE VIEW: a flat top and a huge keel that sweeps down in a concave curve to a vertical
 ## prow with a spike at its bottom (a star-destroyer's sail). PLAN VIEW: an arrowhead spreading to a wide stern, where two tall tapering
 ## bridge towers rise, fused together at their base (a battle-cruiser's back). The hull is cut into thin slices so it reads as smooth.
-const Z0 := -880.0             ## z of the first slice (the prow)
-const P := 36.0                ## pitch of the slices (each is 40 m long, so they overlap by 4 m)
-const N := 50                  ## number of slices
+const Z0 := -740.0             ## z of the first slice (the prow)
+const P := 31.0                ## pitch of the slices (each is 40 m long, so they overlap by 4 m)
+const N := 48                  ## number of slices
 const TOP := 40.0              ## the flat top
 const TOWER_Z := 440.0         ## the stern towers
 const MAST_I := 8              ## the bow mast stands on this slice
@@ -357,7 +357,7 @@ func spearhead() -> void:
 				continue
 			turret(Vector3(x, _top_at(z, x) - 3.0, z), 9.0, "autocannon", 2, 0.8, 28.0, -1.0, "light")
 	for k in 26:                                                          # point defence
-		var z2 := rng.randf_range(-640.0, ze - 60.0)
+		var z2 := rng.randf_range(Z0 + 120.0, ze - 60.0)
 		var wz := _w(int(roundf(_sf(z2))))
 		var x2 := rng.randf_range(-wz * 0.85, wz * 0.85)
 		if _in_tower_zone(z2, x2) or _near_turret(x2, _top_at(z2, x2) - 2.0, z2):
@@ -365,7 +365,7 @@ func spearhead() -> void:
 		turret(Vector3(x2, _top_at(z2, x2) - 2.0, z2), 4.5, "flak", 1, 0.5, 14.0, -1.0, "light")
 	turret(Vector3(0, TOP - 2.0, ze), 20.0, "cannon", 2, 2.0, 90.0, 1.0)
 	for k in 240:                                                         # hull detail: thin panels, vents and fins (flat, not blocks)
-		var z3 := rng.randf_range(-800.0, ze - 20.0)
+		var z3 := rng.randf_range(Z0 + 14.0, ze - 20.0)
 		var n3 := int(roundf(_sf(z3)))
 		var w3 := _w(n3)
 		var hx := rng.randf_range(3.0, 12.0)
