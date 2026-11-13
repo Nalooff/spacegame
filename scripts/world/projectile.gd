@@ -24,6 +24,18 @@ func _ready() -> void:
 	deactivate()
 
 
+## The ship that fired, or null if it has been removed since (a bullet outlives its ship: no freed object may be passed on).
+## Microseconds of hit handling allowed per physics frame, summed over all bullets.
+const HIT_BUDGET_US := 8000
+const BLAST_MAX_MODULES := 14
+static var _frame_of_cost: int = -1
+static var _frame_cost_us: int = 0
+
+
+func _shooter_or_null() -> Ship:
+	return shooter if is_instance_valid(shooter) else null
+
+
 func activate(pos: Vector3, vel: Vector3, from_ship: Ship, dmg: float, dtype: StringName = &"kinetic",
 		size: float = 0.3, lifetime: float = LIFETIME, splash_radius: float = 0.0, hue: float = 0.1, pierce_m: float = 0.0, mass_kg: float = 0.0) -> void:
 	pierce = pierce_m
@@ -67,6 +79,9 @@ func _physics_process(dt: float) -> void:
 			airburst()               # a flak shell that found nothing bursts at the end of its life
 		deactivate()
 		return
+	if _frame_of_cost != Engine.get_physics_frames():
+		_frame_of_cost = Engine.get_physics_frames()
+		_frame_cost_us = 0
 	var from := global_position
 	var to := from + velocity * dt
 	var q := PhysicsRayQueryParameters3D.create(from, to, 1)
@@ -83,7 +98,12 @@ func _physics_process(dt: float) -> void:
 		var owner_id: int = body.shape_find_owner(hit["shape"])
 		var shape_node := body.shape_owner_get_owner(owner_id) as CollisionShape3D
 		if shape_node != null and shape_node.has_meta("module"):
+			if _frame_cost_us > HIT_BUDGET_US:
+				deactivate()      # a flood of hits in one frame (a broadside into a huge ship): the rest are absorbed so the game does not freeze
+				return
+			var t0 := Time.get_ticks_usec()
 			through = _hit_module(body, int(shape_node.get_meta("module")), hit)
+			_frame_cost_us += Time.get_ticks_usec() - t0
 	if not through:
 		deactivate()
 
@@ -117,7 +137,7 @@ func _hit_module(body: Ship, mi: int, hit: Dictionary) -> bool:
 		var p := smoothstep(start, maxf(full, start + 4.0), angle)
 		if p > 0.0 and _roll(at) < p:
 			if body.is_multiplayer_authority():
-				var h := DamageHit.weapon(damage_type, mi, spent * Data.GLANCE_DAMAGE * (1.0 - cos_i * 0.5), at, shooter, dir, 0.0)
+				var h := DamageHit.weapon(damage_type, mi, spent * Data.GLANCE_DAMAGE * (1.0 - cos_i * 0.5), at, _shooter_or_null(), dir, 0.0)
 				h.dents = false
 				body.apply_hit(h)
 				body.apply_impulse(v_rel.slide(n) * mass * 0.3, at - body.global_position)
@@ -130,7 +150,7 @@ func _hit_module(body: Ship, mi: int, hit: Dictionary) -> bool:
 	elif damage_type == &"piercing":
 		slope_damage = 0.7 + 0.3 * cos_i                  # AP rounds care less
 	if body.is_multiplayer_authority():
-		body.apply_hit(DamageHit.weapon(damage_type, mi, spent * slope_damage, at, shooter, dir, maxf(pierce, 0.5)))
+		body.apply_hit(DamageHit.weapon(damage_type, mi, spent * slope_damage, at, _shooter_or_null(), dir, maxf(pierce, 0.5)))
 		body.apply_impulse(v_rel * mass * 0.9, at - body.global_position)        # (what is lost as damage, the hull keeps as a push)
 		if splash > 0.0:
 			_explode(body, mi, at)
@@ -186,8 +206,14 @@ func _explode(body: Ship, hit_module: int, at: Vector3) -> void:
 			var w := 1.0 - d / splash
 			near.append(Vector2(mi, w))
 			total += w
+	if near.size() > BLAST_MAX_MODULES:         # only the nearest ones: a blast in a thousand-module ship must not hurt a thousand modules
+		near.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.y > b.y)
+		near.resize(BLAST_MAX_MODULES)
+		total = 0.0
+		for e in near:
+			total += e.y
 	for e in near:
-		var h := DamageHit.weapon(&"explosive", int(e.x), damage * e.y / maxf(total, 1.0), at, shooter, (at - body.global_position).normalized())
+		var h := DamageHit.weapon(&"explosive", int(e.x), damage * e.y / maxf(total, 1.0), at, _shooter_or_null(), (at - body.global_position).normalized())
 		h.dents = false                  # the shell itself dents; its blast only hurts (a dent per module per shell was the slowest thing in the game)
 		body.apply_hit(h)
 

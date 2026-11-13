@@ -302,7 +302,7 @@ func direction(r: Rig, yaw: float, pitch: float) -> Vector3:
 
 ## Authority: turn every usable turret towards `aim_world`. Call every physics frame.
 func track(dt: float) -> void:
-	if not has_aim:
+	if not has_aim or ship == null:
 		return
 	var inv := ship.global_transform.affine_inverse()
 	for r in rigs:

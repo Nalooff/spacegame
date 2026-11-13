@@ -89,6 +89,7 @@ var throttles: PackedFloat32Array = PackedFloat32Array()
 ## What this ship gives off, as seen by other ships' radars (replicated, rounded so that it rarely changes):
 var sig_elec: float = 0.0     # watts of electricity in use  -> electronic radar
 var sig_heat: float = 0.0     # watts of heat (thrusters, weapons ...) -> thermal radar
+var turret_q: PackedByteArray = PackedByteArray()   # replicated: the turret angles, one byte per angle (a float array of a big ship is larger than one UDP packet and the whole transform update was dropped)
 var turret_angles: PackedFloat32Array = PackedFloat32Array()   # [yaw, pitch] per turret, see ShipTurrets
 var alive: bool = true:
 	set(v):
@@ -167,14 +168,10 @@ func _ready() -> void:
 	linear_damp = 0.0
 	angular_damp = 0.0
 	can_sleep = false
-	continuous_cd = true
-	contact_monitor = true      # needed to read collisions in _integrate_forces
 	var pm := PhysicsMaterial.new()
 	pm.friction = Data.HULL_FRICTION
 	pm.bounce = 0.0             # the engine bounce is off: rebounds are added in _integrate_forces (angle, speed and material aware)
 	physics_material_override = pm
-	max_contacts_reported = 8
-
 	var count := design.modules.size()
 	module_max_hp.resize(count)
 	_initial_volume.resize(count)
@@ -182,6 +179,9 @@ func _ready() -> void:
 		module_max_hp[i] = props["modules"][i]["hp"]
 		_initial_volume[i] = props["modules"][i]["volume"]
 		_add_module_shape(i)
+	continuous_cd = design.modules.size() <= 150     # CCD costs tens of seconds with hundreds of shapes; big ships are slow and thick, they do not tunnel
+	contact_monitor = true      # needed to read collisions in _integrate_forces
+	max_contacts_reported = 8
 	if initial_max_hp.size() == count:
 		module_max_hp = initial_max_hp.duplicate()
 	if initial_volume.size() == count:
@@ -196,6 +196,7 @@ func _ready() -> void:
 	_rebuild_systems()
 	$TransformSync.add_visibility_filter(_net_filter)     # no data for peers whose ship is beyond Data.net_range
 	$StateSync.add_visibility_filter(_net_filter)
+	_refresh_net_visibility()    # the synchronizers were public until now: apply the filter at once (a big ship's data must not reach a peer that is still loading)
 	Net.world_peers_changed.connect(_refresh_net_visibility)
 	_setup_flames()
 
@@ -572,9 +573,9 @@ func apply_dent(module: int, p: Vector3, dir: Vector3, depth: float, radius: flo
 		_held_dents.append({"due": _report_clock + hold, "changed": res["changed"]})   # the commander has not heard of this dent yet
 	else:
 		hull.rebuild(res["changed"])
-	_refresh_props()
+	_props_dirty = true         # mass / centre of mass / thrusters: once per frame, not once per dent
 	if is_multiplayer_authority():
-		_crush_check(module, res)
+		_crush_queue.append([module, res])      # the crush / connectivity test is slow on a big ship: done a few per frame, not per shell
 	BusEvent.ship_deformed.emit(self, module)
 
 
@@ -1037,6 +1038,11 @@ var _hp_status: PackedByteArray = PackedByteArray()
 
 ## Mass, centre of mass, thrusters and what works only depend on WHICH modules are gone / dead / alive, not on how hurt they are:
 ## recomputing all that for every bullet (about 2 ms each) was the main cost of a big fight (found with tests/bench_hits.gd).
+var _props_dirty: bool = false
+var _crush_queue: Array = []
+const CRUSH_PER_FRAME := 3
+
+
 func _on_hp_changed() -> void:
 	_on_hp_changed_shapes_only()
 	var status := PackedByteArray()
@@ -1045,7 +1051,8 @@ func _on_hp_changed() -> void:
 		status[i] = 0 if module_hp[i] < 0.0 else (1 if module_hp[i] <= 0.0 else 2)
 	if status != _hp_status:
 		_hp_status = status
-		_refresh_props()    # lost modules: less mass, a new centre of mass, fewer thrusters
+		_props_dirty = true  # lost modules: less mass, a new centre of mass, fewer thrusters - worked out ONCE per physics frame,
+		                     # however many modules an explosion just killed (each recount costs tens of ms on a big ship)
 	_mesh_dirty = true
 
 
@@ -1412,6 +1419,15 @@ func _physics_process(dt: float) -> void:
 		return
 	if is_multiplayer_authority():
 		_flush_damage(dt)
+	if _props_dirty:
+		_props_dirty = false
+		_refresh_props()
+	if not _crush_queue.is_empty():
+		var n := mini(CRUSH_PER_FRAME, _crush_queue.size())
+		for k in n:
+			var e: Array = _crush_queue[k]
+			_crush_check(int(e[0]), e[1])
+		_crush_queue = _crush_queue.slice(mini(n + maxi(_crush_queue.size() - n - 4 * CRUSH_PER_FRAME, 0), _crush_queue.size()))   # a flood: the oldest extras are dropped
 	if _mesh_dirty:
 		_update_mesh()
 	if _function_dirty:
@@ -1432,7 +1448,17 @@ func _physics_process(dt: float) -> void:
 		var angles := turrets.angles()
 		if angles != turret_angles:      # only touch the replicated variable when something moved
 			turret_angles = angles
+			var q := PackedByteArray()
+			q.resize(angles.size())
+			for i in angles.size():
+				q[i] = clampi(roundi((wrapf(angles[i], -PI, PI) + PI) / TAU * 255.0), 0, 255)
+			turret_q = q
 	else:
+		if turret_q.size() > 0:
+			if turret_angles.size() != turret_q.size():
+				turret_angles.resize(turret_q.size())
+			for i in turret_q.size():
+				turret_angles[i] = float(turret_q[i]) / 255.0 * TAU - PI
 		_remote_step()
 		_crew_step(dt)
 		turrets.apply_angles(turret_angles, 0.5)

@@ -84,15 +84,26 @@ func faces_near(p: Vector3, radius: float) -> PackedInt32Array:
 	var sizes := fs.sizes
 	var lo := _key(p - Vector3.ONE * r)
 	var hi := _key(p + Vector3.ONE * r)
-	for x in range(lo.x, hi.x + 1):
-		for y in range(lo.y, hi.y + 1):
-			for z in range(lo.z, hi.z + 1):
-				var list: Variant = grid.get(Vector3i(x, y, z))
-				if list != null:
-					for fi in (list as Array):
-						# faces here are smaller than `cell`, so a face touching the ball has its first vertex within r
-						if sizes[fi] > 0 and vs[ids[starts[fi]]].distance_squared_to(p) <= r2:
-							out.append(fi)
+	var cells := (hi.x - lo.x + 1) * (hi.y - lo.y + 1) * (hi.z - lo.z + 1)
+	if cells > grid.size() * 2:
+		# a huge query box (drift grew after many dents): walk the occupied cells instead of every cell of the box
+		for key in grid:
+			var k: Vector3i = key
+			if k.x < lo.x or k.x > hi.x or k.y < lo.y or k.y > hi.y or k.z < lo.z or k.z > hi.z:
+				continue
+			for fi in (grid[key] as Array):
+				if sizes[fi] > 0 and vs[ids[starts[fi]]].distance_squared_to(p) <= r2:
+					out.append(fi)
+	else:
+		for x in range(lo.x, hi.x + 1):
+			for y in range(lo.y, hi.y + 1):
+				for z in range(lo.z, hi.z + 1):
+					var list: Variant = grid.get(Vector3i(x, y, z))
+					if list != null:
+						for fi in (list as Array):
+							# faces here are smaller than `cell`, so a face touching the ball has its first vertex within r
+							if sizes[fi] > 0 and vs[ids[starts[fi]]].distance_squared_to(p) <= r2:
+								out.append(fi)
 	for fi in big:
 		if fs.sizes[fi] > 0:
 			out.append(fi)

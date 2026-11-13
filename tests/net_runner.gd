@@ -33,5 +33,5 @@ func _process(d: float) -> void:
 			var s := sh as Ship
 			print("[%s] t=%.0f ship %s auth=%s alive=%s pos=%s speed=%.2f hp=%.2f cmd=%.2f" % [role, t, s.name, s.is_multiplayer_authority(),
 				s.alive, s.global_position.snapped(Vector3.ONE * 0.1), s.speed(), s.hull_ratio(), s.commander_ratio()])
-	if t > 24.0:
+	if t > float(OS.get_environment("NET_T") if OS.get_environment("NET_T") != "" else "24"):
 		get_tree().quit()

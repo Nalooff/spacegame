@@ -98,6 +98,7 @@ static func conflicts(d: ShipDesign, hull_ids: Array = []) -> Array[Vector2i]:
 ## (base and sibling barrels) never block it.
 static func barrel_conflicts(d: ShipDesign, hull_ids: Array = []) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
+	var cache := {}   # module -> its hull points (computed once, not once per barrel)
 	for i in d.modules.size():
 		if d.modules[i]["type"] != ModuleCatalog.BARREL:
 			continue
@@ -107,8 +108,9 @@ static func barrel_conflicts(d: ShipDesign, hull_ids: Array = []) -> Array[Vecto
 			var t: String = d.modules[j]["type"]
 			if j == i or t == ModuleCatalog.LOOSE or j == tb or (tb >= 0 and d.barrels_of(tb).has(j)):
 				continue
-			var pts := HullShapes.points(d, hull_ids[j] if j < hull_ids.size() else HullShapes.hull_ids(d, j, 200))
-			for p in pts:
+			if not cache.has(j):
+				cache[j] = HullShapes.points(d, hull_ids[j] if j < hull_ids.size() else HullShapes.hull_ids(d, j, 200))
+			for p in (cache[j] as PackedVector3Array):
 				if contains(z, p):
 					out.append(Vector2i(i, j))
 					break

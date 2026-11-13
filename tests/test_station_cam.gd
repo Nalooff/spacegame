@@ -29,7 +29,7 @@ func _ready() -> void:
 						st = s
 				if st.is_empty():
 					continue
-				var eye: Vector3 = st["pos"]
+				var eye: Vector3 = ship.stations.resolve(st)
 				var naive := ship.stations._eye_above(d, mi, flip)
 				var got := ShipStations.eye_blockage(d, mi, eye, (eye - d.module_centroid(mi)).normalized())
 				var bad := ShipStations.eye_blockage(d, mi, naive, flip.normalized())

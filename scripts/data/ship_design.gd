@@ -1052,7 +1052,11 @@ func validate() -> Array[String]:
 			if not pl.segment_inside(self, pl.nodes[e["a"]]["pos"], pl.nodes[e["b"]]["pos"]):
 				errors.append("A corridor between modules leaves the ship (%s): the modules touch too little. Make them overlap or share a face." % e["key"])
 				break
-		for r in unwalkable_rooms():
+		var cmds := PackedInt32Array()
+		for r in pl.rooms:
+			if modules[r]["type"] == ModuleCatalog.COMMANDER:
+				cmds.append(r)
+		for r in pl.unlinked_rooms(cmds):
 			errors.append("Room %d (%s) has no corridor to a commander: nobody could ever walk there. Draw a corridor in the plan." % [r, modules[r]["type"]])
 	for m in ModuleGraph.unreachable(self):
 		errors.append("Module %d (%s) is not connected to a commander (share a vertex with a module that is). It would fall off." % [m, modules[m]["type"]])

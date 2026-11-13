@@ -64,9 +64,6 @@ properties/1/replication_mode = 1
 properties/2/path = NodePath(".:sync_vel")
 properties/2/spawn = true
 properties/2/replication_mode = 1
-properties/3/path = NodePath(".:turret_angles")
-properties/3/spawn = false
-properties/3/replication_mode = 2
 
 [sub_resource type="SceneReplicationConfig" id="Rep_state"]
 properties/0/path = NodePath(".:module_hp")
@@ -108,6 +105,9 @@ properties/11/replication_mode = 2
 properties/12/path = NodePath(".:haz_hole")
 properties/12/spawn = true
 properties/12/replication_mode = 2
+properties/13/path = NodePath(".:turret_q")
+properties/13/spawn = false
+properties/13/replication_mode = 2
 
 [node name="Ship" type="RigidBody3D" groups=["ships"]]
 collision_layer = 1

@@ -101,6 +101,11 @@ static func build(d: ShipDesign, hull_ids: Array = []) -> ModuleGraph:
 ## A dent moved the surface of module `mi`: test its CONTACT links again (shared-vertex links stay).
 ## A module that no longer touches anything that carries it is cut off by the next structure check.
 ## `hull_ids[i]` = collision-hull point ids of module i (as in build).
+var _blo: PackedVector3Array = PackedVector3Array()   # remembered bounding boxes of the modules
+var _bhi: PackedVector3Array = PackedVector3Array()
+var _bok: PackedByteArray = PackedByteArray()
+
+
 func refresh(d: ShipDesign, hull_ids: Array, mi: int) -> void:
 	if mi < 0 or mi >= adj.size() or (hull_ids[mi] as PackedInt32Array).is_empty():
 		return
@@ -110,6 +115,14 @@ func refresh(d: ShipDesign, hull_ids: Array, mi: int) -> void:
 	for v in mine:
 		lo = lo.min(v)
 		hi = hi.max(v)
+	if _blo.size() != adj.size():
+		_blo.resize(adj.size())
+		_bhi.resize(adj.size())
+		_bok.resize(adj.size())
+		_bok.fill(0)
+	_blo[mi] = lo
+	_bhi[mi] = hi
+	_bok[mi] = 1
 	var m := Vector3.ONE * CONTACT_MARGIN
 	var now := {}
 	for b in adj.size():
@@ -120,15 +133,21 @@ func refresh(d: ShipDesign, hull_ids: Array, mi: int) -> void:
 			continue
 		if (hull_ids[b] as PackedInt32Array).is_empty():
 			continue
-		var other := HullShapes.points(d, hull_ids[b])
-		var olo := Vector3(INF, INF, INF)
-		var ohi := Vector3(-INF, -INF, -INF)
-		for v in other:
-			olo = olo.min(v)
-			ohi = ohi.max(v)
+		if _bok[b] == 0:                                   # bounds are remembered (a dent only pushes inward: stale ones are just a bit big)
+			var bl := Vector3(INF, INF, INF)
+			var bh := Vector3(-INF, -INF, -INF)
+			for v in HullShapes.points(d, hull_ids[b]):
+				bl = bl.min(v)
+				bh = bh.max(v)
+			_blo[b] = bl
+			_bhi[b] = bh
+			_bok[b] = 1
+		var olo: Vector3 = _blo[b]
+		var ohi: Vector3 = _bhi[b]
 		if lo.x > ohi.x + m.x or olo.x > hi.x + m.x or lo.y > ohi.y + m.y or olo.y > hi.y + m.y \
 				or lo.z > ohi.z + m.z or olo.z > hi.z + m.z:
 			continue
+		var other := HullShapes.points(d, hull_ids[b])
 		if ConvexOverlap.intersects(mine, other, CONTACT_MARGIN):
 			now[b] = true
 	# update both directions

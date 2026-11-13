@@ -32,6 +32,7 @@ var spaces: PackedInt32Array = PackedInt32Array()
 var _index: Dictionary = {}             ## node key -> node index
 var _adj: Array = []
 var _hull_pts: Dictionary = {}          ## module -> decimated hull points (lazy cache for the 'inside the ship' tests)                    ## node index -> Array of edge indices
+var _hull_box: Dictionary = {}
 
 
 # ---------------------------------------------------------------- generation
@@ -233,6 +234,15 @@ func inside_ship(d: ShipDesign, p: Vector3) -> bool:
 			_hull_pts[mi] = HullShapes.points(d, HullShapes.hull_ids(d, mi, 64))
 		var pts: PackedVector3Array = _hull_pts[mi]
 		if pts.is_empty():
+			continue
+		if not _hull_box.has(mi):   # bounding box: most modules are nowhere near the point, skip the exact test
+			var lo := pts[0]
+			var hi := pts[0]
+			for q in pts:
+				lo = lo.min(q)
+				hi = hi.max(q)
+			_hull_box[mi] = AABB(lo, hi - lo).grow(0.1)
+		if not (_hull_box[mi] as AABB).has_point(p):
 			continue
 		if ConvexOverlap.intersects(PackedVector3Array([p]), pts, 0.06):
 			return true

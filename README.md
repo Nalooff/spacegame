@@ -362,3 +362,8 @@ Builder: zoom range, grid, new-shape size and the axis markers scale with the sh
 - Hits on a big ship no longer freeze it: the station-eye search is cached instead of re-run at every dent (it took 250 ms per hit), and ram contact patches are computed once per pair per frame.
 - Flames are only redrawn when the throttles change, and the HUD text refreshes ten times a second instead of every frame.
 - `tests/prof_ram.tscn` and `tests/prof_game.tscn` measure a ram between two capital ships and the per-frame cost of a real game.
+
+## Big-ship tests and performance notes
+- `tests/test_bigships.tscn`: spawns Dreadnought, Spearhead, Hammerhead and Nautilus, checks the spawn frame time, that every turret shot produces a bullet, and that Hammerhead can ram Nautilus without a long stall.
+- `tests/run_net_test.sh`: host + client over real ENet. `HOST_SHIP=Spearhead CLIENT_SHIP=Dreadnought T=150 NET_T=40 bash tests/run_net_test.sh` (ship names without extension).
+- Fixed: hull spatial-index query box growing with every dent (ram freeze), 21 s ship validation on huge ships, station eye search at spawn, turret angles replicated as a float array (now one byte per angle), ship sync data sent to peers that were still loading (remote big ships stayed frozen/invisible).

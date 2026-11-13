@@ -39,6 +39,14 @@ func configure(s: Ship) -> void:
 	rebuild()
 
 
+## The eye position of a station (ship space). It is searched the first time somebody needs it: for a ship with a hundred
+## turrets the search is slow, and nobody sits in most of the stations.
+func resolve(st: Dictionary) -> Vector3:
+	if not st.has("pos"):
+		st["pos"] = _clear_eye(ship.design, int(st["module"]), st["pref"])
+	return st["pos"]
+
+
 ## List the stations from the modules that are still alive. Keeps the player where they were when possible.
 func rebuild() -> void:
 	var keep_module := -1
@@ -58,9 +66,9 @@ func rebuild() -> void:
 			var label := ("Pilot seat (module %d)" if d.can_pilot(mi) else "Gunner bridge (module %d)") % mi
 			if not linked.is_empty():
 				label += "  + turrets %s linked" % str(linked)
-			stations.append({"module": mi, "kind": "pilot", "pos": _clear_eye(d, mi, Vector3.UP), "label": label})
+			stations.append({"module": mi, "kind": "pilot", "pref": Vector3.UP, "label": label})
 		elif t == ModuleCatalog.TURRET and not d.barrels_of(mi).is_empty() and d.controls(mine, mi):
-			stations.append({"module": mi, "kind": "gun", "pos": _clear_eye(d, mi, d.modules[mi]["dir"]), "label": "Gun station (turret %d)" % mi})
+			stations.append({"module": mi, "kind": "gun", "pref": d.modules[mi]["dir"], "label": "Gun station (turret %d)" % mi})
 	current = 0
 	for i in stations.size():
 		if int(stations[i]["module"]) == keep_module:
@@ -150,14 +158,14 @@ func toggle_mode() -> void:
 func travel_time(i: int) -> float:
 	if i < 0 or i >= stations.size() or current >= stations.size():
 		return 0.0
-	return maxf(((stations[i]["pos"] as Vector3) - (stations[current]["pos"] as Vector3)).length() / WALK_SPEED, MIN_WALK_TIME)
+	return maxf((resolve(stations[i]) - resolve(stations[current])).length() / WALK_SPEED, MIN_WALK_TIME)
 
 
 func go_to(i: int) -> void:
 	if walking or i < 0 or i >= stations.size() or i == current:
 		return
-	_from = stations[current]["pos"]
-	_to = stations[i]["pos"]
+	_from = resolve(stations[current])
+	_to = resolve(stations[i])
 	_dur = travel_time(i)
 	_t = 0.0
 	_target = i
@@ -186,7 +194,7 @@ func eye_position() -> Vector3:
 	if walking:
 		return _from.lerp(_to, clampf(_t / _dur, 0.0, 1.0))
 	var s := current_station()
-	return s.get("pos", Vector3.ZERO)
+	return resolve(s) if not s.is_empty() else Vector3.ZERO
 
 
 ## 0..1 progress of the walk.
